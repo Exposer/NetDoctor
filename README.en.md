@@ -12,7 +12,7 @@ Three ways to use it, all backed by the same diagnostic logic:
 | Web UI | Clickable buttons, zero dependencies (python3 only) | `./NetDoctor.command` |
 | Native SwiftUI app | Everyday use, live latency in the menu bar | `NetDoctorApp/build-app.sh` |
 
-A `Brewfile` is included to install common third-party tools (mtr, nmap, iperf3, wireshark, …) in one go. See the [CHANGELOG](CHANGELOG.md) for release history.
+A `Brewfile` is included to install common third-party tools (mtr, nmap, iperf3, wireshark, …) in one go. See the [CHANGELOG](CHANGELOG.en.md) for release history.
 
 ## Web UI
 ```bash
