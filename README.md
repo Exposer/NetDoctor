@@ -2,7 +2,7 @@
 
 **中文** | [English](README.en.md)
 
-**一句话**:遇到“网上不去/网页打不开/视频卡”,打开 NetDoctor,先点“一键体检”,它会从网关、外网 IP、DNS 到 HTTP 逐层检查,告诉你问题出在哪一层。
+**一句话**:遇到“网上不去/网页打不开/视频卡”,打开 NetDoctor,先点 **Quick check**(一键体检),它会从网关、外网 IP、DNS 到 HTTP 逐层检查,告诉你问题出在哪一层。
 
 三种使用方式,背后是同一套诊断逻辑:
 
@@ -12,15 +12,15 @@
 | 网页界面 | 想点按钮,零依赖(仅需 python3) | `./NetDoctor.command` |
 | 原生 SwiftUI 应用 | 日常常驻,菜单栏实时看延迟 | `NetDoctorApp/build-app.sh` |
 
-另附 `Brewfile`,一次装好 mtr、nmap、iperf3、wireshark 等常用第三方工具。版本变更见 [CHANGELOG](CHANGELOG.md)。
+界面按钮和菜单为英文,下文以英文原名标注。另附 `Brewfile`,一次装好 mtr、nmap、iperf3、wireshark 等常用第三方工具。版本变更见 [CHANGELOG](CHANGELOG.md)。
 
 ## 图形界面
 ```bash
 ./NetDoctor.command        # 双击或运行,自动打开浏览器界面
 ./make-app.sh            # 可选:生成 NetDoctor.app,拖进“应用程序”
 ```
-左侧选工具,填参数,点“运行”,输出实时显示,可停止/复制/保存。
-需要管理员权限的功能(连接/监听、刷新 DNS,以及 Wi-Fi/路由的完整信息)会弹出系统密码框。
+左侧选工具(如 **Quick check**、**DNS compare**、**Live latency**),填参数,点 **Run**,输出实时显示,可 **Stop** / **Copy** / **Save**。
+需要管理员权限的功能(**Connections**、**Flush DNS**,以及 **Wi-Fi** / **Route / path** 勾选 *Administrator rights* 后的完整信息)会弹出系统密码框。
 安全:只监听 127.0.0.1,带随机令牌,校验 Host 头,参数白名单且不经 shell。
 
 ## 命令行
@@ -28,7 +28,7 @@
 ```bash
 brew bundle --file=Brewfile        # 安装第三方工具
 sudo ln -s "$PWD/netdoctor" /usr/local/bin/netdoctor   # 可选:全局使用
-netdoctor quick                      # 先跑一键体检
+netdoctor quick                      # 先跑 quick(一键体检)
 netdoctor tools                      # 查看装了哪些
 ```
 
@@ -64,5 +64,5 @@ xcode-select --install        # 已装可跳过
 cd NetDoctorApp && ./build-app.sh   # UNIVERSAL=1 ./build-app.sh 生成 Intel+Apple 芯片通用版
 open NetDoctor.app
 ```
-功能:全部诊断工具、实时输出、停止/复制/保存、实时延迟折线图、菜单栏常驻延迟显示。
+功能:全部诊断工具、实时输出、**Stop** / **Copy** / **Save**、**Live latency** 折线图、菜单栏(Open main window / Start monitoring / Quit)常驻延迟显示。
 开发调试:`cd NetDoctorApp && NETDOCTOR_PATH=../netdoctor swift run`
