@@ -4,10 +4,10 @@ import SwiftUI
 struct Sample: Identifiable {
     let id = UUID()
     let time: Date
-    let ms: Double?   // nil = 丢包/超时
+    let ms: Double?   // nil = loss / timeout
 }
 
-/// 每秒 ping 一次目标,保留最近 N 个样本。
+/// Pings the target once a second and keeps the latest N samples.
 final class LatencyMonitor: ObservableObject {
     @Published var samples: [Sample] = []
     @Published var target = "1.1.1.1"
@@ -32,7 +32,7 @@ final class LatencyMonitor: ObservableObject {
     }
     var menuTitle: String {
         guard running else { return "—" }
-        if let l = samples.last { return l.ms.map { String(format: "%.0f ms", $0) } ?? "丢包" }
+        if let l = samples.last { return l.ms.map { String(format: "%.0f ms", $0) } ?? "Loss" }
         return "…"
     }
 

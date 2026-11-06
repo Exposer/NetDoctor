@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// 一个工具的运行状态:输入、输出、进程。
+/// Run state of one tool: inputs, output, process.
 final class Runner: ObservableObject {
     let tool: Tool
     @Published var values: [String: String] = [:]
@@ -23,7 +23,7 @@ final class Runner: ObservableObject {
         useAdmin = tool.admin == .required
     }
 
-    // MARK: 定位 netdoctor 脚本
+    // MARK: Locate the netdoctor script
     static var scriptPath: String? {
         let fm = FileManager.default
         var candidates: [String] = []
@@ -50,28 +50,28 @@ final class Runner: ObservableObject {
         for i in tool.inputs {
             let v = (values[i.name] ?? "").trimmingCharacters(in: .whitespaces)
             if v.isEmpty {
-                if i.required { throw NSError(domain: "netdoctor", code: 1, userInfo: [NSLocalizedDescriptionKey: "请填写:\(i.label)"]) }
+                if i.required { throw NSError(domain: "netdoctor", code: 1, userInfo: [NSLocalizedDescriptionKey: "Please fill in: \(i.label)"]) }
                 break
             }
             if v.hasPrefix("-") || v.count > 300 || v.unicodeScalars.contains(where: { !Self.allowed.contains($0) }) {
-                throw NSError(domain: "netdoctor", code: 2, userInfo: [NSLocalizedDescriptionKey: "参数不合法:\(i.label)"])
+                throw NSError(domain: "netdoctor", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid parameter: \(i.label)"])
             }
             args.append(v)
         }
         return args
     }
 
-    // MARK: 运行
+    // MARK: Run
     func run() {
         guard !running else { return }
         output = AttributedString(); plain = ""; parser = AnsiParser(); pending = Data(); stopped = false
         guard let script = Runner.scriptPath else {
-            status = "找不到 netdoctor 脚本"; return
+            status = "netdoctor script not found"; return
         }
         let args: [String]
         do { args = try buildArgs() } catch { status = error.localizedDescription; return }
 
-        running = true; status = "运行中…"; startedAt = Date()
+        running = true; status = "Running…"; startedAt = Date()
         if useAdmin || tool.admin == .required {
             runAdmin(script: script, args: args)
         } else {
@@ -94,14 +94,14 @@ final class Runner: ObservableObject {
             DispatchQueue.main.async { self?.ingest(d) }
         }
         p.terminationHandler = { [weak self] proc in
-            // 等待最后的数据读完
+            // wait for the last data to be read
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                 pipe.fileHandleForReading.readabilityHandler = nil
                 self?.finish(code: proc.terminationStatus)
             }
         }
         do { try p.run(); process = p }
-        catch { running = false; status = "启动失败:\(error.localizedDescription)" }
+        catch { running = false; status = "Failed to start: \(error.localizedDescription)" }
     }
 
     private func runAdmin(script: String, args: [String]) {
@@ -111,7 +111,7 @@ final class Runner: ObservableObject {
             + ([script, tool.id] + args).map(q).joined(separator: " ") + " 2>&1"
         let esc = inner.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         let src = "do shell script \"\(esc)\" with administrator privileges"
-        append("(等待系统弹出管理员密码框…)\n")
+        append("(Waiting for the system administrator password prompt…)\n")
         DispatchQueue.global().async { [weak self] in
             var err: NSDictionary?
             let script = NSAppleScript(source: src)
@@ -121,7 +121,7 @@ final class Runner: ObservableObject {
                 if err == nil, let s = res?.stringValue {
                     self.append(s + "\n"); self.finish(code: 0)
                 } else {
-                    let msg = (err?["NSAppleScriptErrorMessage"] as? String) ?? "已取消"
+                    let msg = (err?["NSAppleScriptErrorMessage"] as? String) ?? "Cancelled"
                     self.append("\u{1B}[31m\(msg)\u{1B}[0m\n"); self.finish(code: 1)
                 }
             }
@@ -138,7 +138,7 @@ final class Runner: ObservableObject {
         p.terminate()
     }
 
-    // MARK: 输出处理(按行刷新,避免多字节字符与转义序列被切断)
+    // MARK: Output handling (flush by line so multi-byte characters and escape sequences are not cut)
     private func ingest(_ d: Data) {
         pending.append(d)
         guard let nl = pending.lastIndex(of: 0x0A) else { return }
@@ -157,14 +157,14 @@ final class Runner: ObservableObject {
         if !pending.isEmpty { append(String(decoding: pending, as: UTF8.self)); pending = Data() }
         running = false; process = nil
         let t = String(format: "%.1f", Date().timeIntervalSince(startedAt))
-        status = stopped ? "已停止" : (code == 0 ? "完成,用时 \(t)s" : "结束(退出码 \(code)),用时 \(t)s")
+        status = stopped ? "Stopped" : (code == 0 ? "Done in \(t)s" : "Finished (exit code \(code)) in \(t)s")
     }
 
-    // MARK: 复制 / 保存
+    // MARK: Copy / Save
     func copy() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(plain, forType: .string)
-        status = "已复制"
+        status = "Copied"
     }
 
     func save() {
@@ -172,7 +172,7 @@ final class Runner: ObservableObject {
         panel.nameFieldStringValue = "netdoctor-\(tool.id)-\(Int(Date().timeIntervalSince1970)).txt"
         if panel.runModal() == .OK, let url = panel.url {
             try? plain.write(to: url, atomically: true, encoding: .utf8)
-            status = "已保存:\(url.lastPathComponent)"
+            status = "Saved: \(url.lastPathComponent)"
         }
     }
 }

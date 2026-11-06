@@ -1,5 +1,5 @@
 #!/bin/bash
-# 构建 NetDoctor.app (只需 Xcode 命令行工具: xcode-select --install)
+# Build NetDoctor.app (only needs the Xcode command line tools: xcode-select --install)
 set -euo pipefail
 cd "$(dirname "$0")"
 ARCHS=""; [ "${UNIVERSAL:-}" = 1 ] && ARCHS="--arch arm64 --arch x86_64"
@@ -26,5 +26,5 @@ cat > "$APP/Contents/Info.plist" <<'X'
 </dict></plist>
 X
 codesign --force --deep -s - "$APP" >/dev/null 2>&1 || true
-echo "已生成 $(pwd)/$APP"
-echo "运行: open $APP    安装: cp -R $APP /Applications/"
+echo "Built $(pwd)/$APP"
+echo "Run: open $APP    Install: cp -R $APP /Applications/"

@@ -11,13 +11,13 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
-                Section("诊断") {
+                Section("Diagnostics") {
                     ForEach(Tool.all) { t in
                         Label(t.title, systemImage: t.icon).tag(Optional(t.id))
                     }
                 }
-                Section("监控") {
-                    Label("实时延迟", systemImage: "chart.xyaxis.line").tag(Optional("monitor"))
+                Section("Monitoring") {
+                    Label("Live latency", systemImage: "chart.xyaxis.line").tag(Optional("monitor"))
                 }
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 260)
@@ -27,7 +27,7 @@ struct ContentView: View {
             } else if let t = Tool.all.first(where: { $0.id == selection }) {
                 ToolView(runner: store.runner(for: t))
             } else {
-                Text("选择左侧工具").foregroundStyle(.secondary)
+                Text("Select a tool on the left").foregroundStyle(.secondary)
             }
         }
         .frame(minWidth: 820, minHeight: 520)
@@ -57,15 +57,15 @@ struct ToolView: View {
                     }
                 }
                 if tool.admin == .optional {
-                    Toggle("管理员权限(信息更完整)", isOn: $runner.useAdmin).toggleStyle(.checkbox)
+                    Toggle("Administrator rights (fuller details)", isOn: $runner.useAdmin).toggleStyle(.checkbox)
                 } else if tool.admin == .required {
-                    Label("需要管理员权限", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
+                    Label("Requires administrator rights", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
                 }
-                Button(runner.running ? "运行中…" : "运行") { runner.run() }
+                Button(runner.running ? "Running…" : "Run") { runner.run() }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(runner.running)
-                Button("停止") { runner.stop() }.disabled(!runner.running || runner.useAdmin || tool.admin == .required)
+                Button("Stop") { runner.stop() }.disabled(!runner.running || runner.useAdmin || tool.admin == .required)
                 Spacer()
             }
             TerminalView(text: runner.output, running: runner.running)
@@ -73,8 +73,8 @@ struct ToolView: View {
                 if runner.running { ProgressView().controlSize(.small) }
                 Text(runner.status).font(.callout).foregroundStyle(.secondary)
                 Spacer()
-                Button("复制") { runner.copy() }.disabled(runner.plain.isEmpty)
-                Button("保存…") { runner.save() }.disabled(runner.plain.isEmpty)
+                Button("Copy") { runner.copy() }.disabled(runner.plain.isEmpty)
+                Button("Save…") { runner.save() }.disabled(runner.plain.isEmpty)
             }
         }
         .padding(16)
@@ -89,7 +89,7 @@ struct TerminalView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if text.characters.isEmpty {
-                        Text(running ? "" : "点击“运行”开始。建议先跑「一键体检」。")
+                        Text(running ? "" : "Click “Run” to start. Try “Quick check” first.")
                             .font(.system(size: 12.5, design: .monospaced))
                             .foregroundColor(Color(white: 0.5))
                     } else {
@@ -114,33 +114,33 @@ struct MonitorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Label("实时延迟", systemImage: "chart.xyaxis.line").font(.title2.bold())
-                Text("每秒 ping 一次,红点表示丢包。菜单栏同步显示当前延迟。").foregroundStyle(.secondary)
+                Label("Live latency", systemImage: "chart.xyaxis.line").font(.title2.bold())
+                Text("Pings once a second; red lines mark packet loss. The menu bar shows the current latency.").foregroundStyle(.secondary)
             }
             HStack {
-                TextField("目标", text: $m.target).textFieldStyle(.roundedBorder).frame(width: 220)
-                Menu("预设") { ForEach(presets, id: \.self) { p in Button(p) { m.target = p; m.clear() } } }
+                TextField("Target", text: $m.target).textFieldStyle(.roundedBorder).frame(width: 220)
+                Menu("Presets") { ForEach(presets, id: \.self) { p in Button(p) { m.target = p; m.clear() } } }
                     .frame(width: 80)
-                Button(m.running ? "停止" : "开始") { m.running ? m.stop() : m.start() }
+                Button(m.running ? "Stop" : "Start") { m.running ? m.stop() : m.start() }
                     .buttonStyle(.borderedProminent)
-                Button("清空") { m.clear() }
+                Button("Clear") { m.clear() }
                 Spacer()
             }
             HStack(spacing: 12) {
-                stat("当前", m.last.map { String(format: "%.0f ms", $0) } ?? "—")
-                stat("平均", m.avg.map { String(format: "%.1f ms", $0) } ?? "—")
-                stat("最小/最大", m.minMs.map { String(format: "%.0f / %.0f ms", $0, m.maxMs ?? 0) } ?? "—")
-                stat("抖动", m.jitter.map { String(format: "%.1f ms", $0) } ?? "—")
-                stat("丢包", String(format: "%.1f%%", m.lossPercent), warn: m.lossPercent > 0)
+                stat("Now", m.last.map { String(format: "%.0f ms", $0) } ?? "—")
+                stat("Average", m.avg.map { String(format: "%.1f ms", $0) } ?? "—")
+                stat("Min / Max", m.minMs.map { String(format: "%.0f / %.0f ms", $0, m.maxMs ?? 0) } ?? "—")
+                stat("Jitter", m.jitter.map { String(format: "%.1f ms", $0) } ?? "—")
+                stat("Loss", String(format: "%.1f%%", m.lossPercent), warn: m.lossPercent > 0)
             }
             Chart {
                 ForEach(m.samples) { s in
                     if let ms = s.ms {
-                        LineMark(x: .value("时间", s.time), y: .value("ms", ms))
+                        LineMark(x: .value("Time", s.time), y: .value("ms", ms))
                             .foregroundStyle(Color.accentColor)
                             .interpolationMethod(.monotone)
                     } else {
-                        RuleMark(x: .value("时间", s.time)).foregroundStyle(Color.red.opacity(0.6))
+                        RuleMark(x: .value("Time", s.time)).foregroundStyle(Color.red.opacity(0.6))
                     }
                 }
             }

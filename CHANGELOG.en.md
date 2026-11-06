@@ -4,6 +4,11 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- All in-app text is now in English: `netdoctor` CLI output, the web UI, the SwiftUI app, the build scripts and the `Brewfile` comments.
+
 ## [1.0.0] - 2026-11-06
 
 First release.

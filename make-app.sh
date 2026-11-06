@@ -1,5 +1,5 @@
 #!/bin/bash
-# 生成可放进“应用程序”的 NetDoctor.app (双击启动, 无终端窗口)
+# Build a NetDoctor.app you can drop into /Applications (double-click to launch, no terminal window)
 set -e; D="$(cd "$(dirname "$0")" && pwd)"; A="$D/NetDoctor.app/Contents"
 rm -rf "$D/NetDoctor.app"; mkdir -p "$A/MacOS" "$A/Resources"
 cp "$D/netdoctor" "$D/netdoctor-gui.py" "$A/Resources/"
@@ -14,4 +14,4 @@ cat > "$A/Info.plist" <<'X'
 <key>CFBundleIdentifier</key><string>local.netdoctor</string><key>CFBundlePackageType</key><string>APPL</string><key>CFBundleVersion</key><string>1.0</string></dict></plist>
 X
 chmod +x "$A/MacOS/NetDoctor" "$A/Resources/netdoctor"
-echo "已生成 $D/NetDoctor.app  (首次打开: 右键 → 打开)"
+echo "Built $D/NetDoctor.app  (first launch: right-click → Open)"

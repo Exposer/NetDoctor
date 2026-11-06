@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 把带 ANSI 颜色码的文本转成 AttributedString,并保留跨块的样式状态。
+/// Converts text with ANSI colour codes into an AttributedString, keeping style state across chunks.
 struct AnsiParser {
     private var bold = false
     private var dim = false
