@@ -73,6 +73,19 @@ ZH = {
     "Failed to start": "启动失败",
     "[exit code %d]": "[退出码 %d]",
     "Quit": "退出",
+    "History": "历史记录",
+    "Search…": "搜索…",
+    "No history yet": "暂无历史记录",
+    "No matches": "没有匹配项",
+    "Clear all": "清空",
+    "Clear all history?": "清空全部历史记录?",
+    "Re-run": "重新运行",
+    "Delete": "删除",
+    "Done": "完成",
+    "(output truncated)": "(输出已截断)",
+    "Viewing history": "正在查看历史记录",
+    "Show / hide history": "显示 / 隐藏历史记录",
+    "Stored in this browser only (last 50 runs).": "仅保存在此浏览器中(最近 50 次)。",
     "Shortcuts": "快捷键",
     "Keyboard shortcuts": "键盘快捷键",
     "Close": "关闭",
@@ -227,13 +240,23 @@ input[type=text]{padding:7px 9px;border:1px solid var(--line);border-radius:7px;
 .bar{display:flex;gap:8px;align-items:center}.sp{flex:1}
 kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;margin-right:3px;white-space:nowrap}
 #help{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9}
+#hist{position:fixed;top:0;right:0;bottom:0;width:min(400px,100%);background:var(--card);color:var(--fg);border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(0,0,0,.25);display:none;flex-direction:column;z-index:8}
+#hist.on{display:flex}#hist header{display:flex;gap:8px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}#hist header h3{margin:0;font-size:16px;flex:1}
+#hist input{margin:10px 14px 4px;min-width:0}#hist .note{margin:0 14px 6px;font-size:11px;color:var(--mut)}
+#hlist{flex:1;overflow:auto;padding:4px 8px 12px}
+.hi{display:flex;gap:8px;align-items:flex-start;padding:8px 8px;border-radius:9px;cursor:pointer}.hi:hover{background:var(--bg)}.hi.sel{outline:2px solid var(--acc)}
+.hi .m{flex:1;min-width:0}.hi .n{font-weight:600}.hi .a{color:var(--mut);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.hi .w{color:var(--mut);font-size:11px}
+.hi .x{display:flex;flex-direction:column;gap:4px}.hi .x button{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;font:inherit;font-size:11px;padding:2px 7px;cursor:pointer}
+.bd{font-size:11px;border-radius:99px;padding:0 7px;margin-left:6px;color:#fff;white-space:nowrap}.bd.ok{background:#2fa84f}.bd.stopped{background:#b58105}.bd.failed{background:#d1342a}
 #help.on{display:flex}#help .box{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:18px 22px;max-width:520px;width:calc(100% - 32px);max-height:85vh;overflow:auto}
 #help h3{margin:0 0 10px;font-size:16px}#help table{width:100%;border-collapse:collapse}#help td{padding:5px 0;vertical-align:top}#help td:first-child{width:46%}
 </style><script>try{var th=localStorage.getItem('nd_theme');if(th==='light'||th==='dark')document.documentElement.dataset.theme=th}catch(e){}</script></head><body>
-<nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="toggleHelp()" id="helpbtn" style="margin-top:14px;color:var(--mut)">⌨ <span data-i="Shortcuts">Shortcuts</span></button><button onclick="toggleTheme()" id="theme" style="color:var(--mut)"></button><button onclick="toggleLang()" id="lang" style="color:var(--mut)"></button><button onclick="quit()" style="color:var(--mut)">⏻ <span data-i="Quit">Quit</span></button></nav>
+<nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="toggleHist()" id="histbtn" style="margin-top:14px;color:var(--mut)">🕘 <span data-i="History">History</span></button><button onclick="toggleHelp()" id="helpbtn" style="color:var(--mut)">⌨ <span data-i="Shortcuts">Shortcuts</span></button><button onclick="toggleTheme()" id="theme" style="color:var(--mut)"></button><button onclick="toggleLang()" id="lang" style="color:var(--mut)"></button><button onclick="quit()" style="color:var(--mut)">⏻ <span data-i="Quit">Quit</span></button></nav>
 <main><div class="card"><h2 id="t"></h2><p id="d"></p><form id="f"></form></div>
 <div class="bar"><span class="sp" id="st" style="color:var(--mut)"></span><button class="btn sec" onclick="copy()" data-i="Copy">Copy</button><button class="btn sec" onclick="save()" data-i="Save">Save</button><button class="btn sec" id="stop" onclick="stop()" data-i="Stop" disabled>Stop</button></div>
 <pre id="out"></pre></main>
+<aside id="hist"><header><h3>🕘 <span data-i="History">History</span></h3><button class="btn sec" onclick="clearHist()" data-i="Clear all">Clear all</button><button class="btn sec" onclick="toggleHist(false)" data-i="Close">Close</button></header>
+<input type="text" id="hq" oninput="renderHist()"><p class="note" data-i="Stored in this browser only (last 50 runs).">Stored in this browser only (last 50 runs).</p><div id="hlist"></div></aside>
 <div id="help" onclick="if(event.target===this)toggleHelp(false)"><div class="box"><h3 id="helph"></h3><table id="helpt"></table><p style="margin:12px 0 0;text-align:right"><button class="btn sec" onclick="toggleHelp(false)" data-i="Close">Close</button></p></div></div>
 <script>
 const TOKEN="__TOKEN__",CMDS=__CMDS__,ZH=__ZH__;let cur=null,ctl=null,raw="",idle=true,lang="en";
@@ -251,7 +274,7 @@ function applyLang(){document.documentElement.lang=lang=='zh'?'zh-CN':'en';docum
 document.querySelectorAll('[data-i]').forEach(e=>e.textContent=t(e.dataset.i));
 CMDS.forEach(c=>{$('#b_'+c.id+' .nl').textContent=t(c.label)});
 $('#lang').textContent='🌐 '+(lang=='zh'?'English':'中文');if(idle)$('#out').textContent=t(INTRO);
-applyTheme();$('#stop').title='Esc';$('#lang').title='l';$('#theme').title='t';$('#helpbtn').title='?';if(cur)pick(cur.id,true,true)}
+applyTheme();if($('#hist').classList.contains('on'))renderHist();$('#stop').title='Esc';$('#histbtn').title='h';$('#lang').title='l';$('#theme').title='t';$('#helpbtn').title='?';if(cur)pick(cur.id,true,true)}
 function toggleLang(){lang=lang=='zh'?'en':'zh';try{localStorage.setItem('nd_lang',lang)}catch(e){}applyLang()}
 function pick(id,keep,nofocus){const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
 $('#t').textContent=cur.icon+' '+t(cur.label);$('#d').textContent=t(cur.desc);const f=$('#f');f.innerHTML='';
@@ -262,21 +285,44 @@ f.onsubmit=e=>{e.preventDefault();run()};const first=f.querySelector('input[type
 function ansi(s){const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;');let open=0,o='';
 return esc(s).replace(/\x1b\[(\d+)m/g,(m,c)=>{let r='';if(c=='0'||c=='22'){r='</span>'.repeat(open);open=0;return r}
 const k={1:'b',31:'r',32:'g',33:'y',2:'d'}[c];if(!k)return '';open++;return `<span class="${k}">`})+'</span>'.repeat(open)}
-async function run(){const values={};let admin=false;$('#f').querySelectorAll('input').forEach(i=>{if(i.name=='_admin')admin=i.checked;else values[i.name]=i.value});
+async function run(){let state='ok';const values={};let admin=false;$('#f').querySelectorAll('input').forEach(i=>{if(i.name=='_admin')admin=i.checked;else values[i.name]=i.value});
 ctl=new AbortController();raw='';idle=false;$('#out').textContent='';$('#run').disabled=true;$('#stop').disabled=false;$('#st').textContent=t('Running…');const t0=Date.now();
-try{const r=await fetch('/run',{method:'POST',headers:{'X-Token':TOKEN},body:JSON.stringify({cmd:cur.id,values,admin,lang}),signal:ctl.signal});
+try{const r=await fetch('/run',{method:'POST',headers:{'X-Token':TOKEN},body:JSON.stringify({cmd:cur.id,values,admin,lang}),signal:ctl.signal});if(!r.ok)state='failed';
 const rd=r.body.getReader(),dc=new TextDecoder();for(;;){const {done,value}=await rd.read();if(done)break;raw+=dc.decode(value,{stream:true});$('#out').innerHTML=ansi(raw);$('#out').scrollTop=1e9}
-$('#st').textContent=fmt('Done in %ss',((Date.now()-t0)/1000).toFixed(1))}catch(e){$('#st').textContent=e.name=='AbortError'?t('Stopped'):t('Failed')+': '+e}
-$('#run').disabled=false;$('#stop').disabled=true}
+$('#st').textContent=fmt('Done in %ss',((Date.now()-t0)/1000).toFixed(1))}catch(e){state=e.name=='AbortError'?'stopped':'failed';$('#st').textContent=e.name=='AbortError'?t('Stopped'):t('Failed')+': '+e}
+$('#run').disabled=false;$('#stop').disabled=true;
+const mc=raw.match(/\[(?:exit code|退出码) (\d+)\]/);if(mc&&mc[1]!='0'&&state=='ok')state='failed';
+addHist({cmd:cur.id,values,admin,state,sec:+((Date.now()-t0)/1000).toFixed(1),out:raw})}
 function stop(){ctl&&ctl.abort()}
 const plain=()=>raw.replace(/\x1b\[\d+m/g,'');
 function copy(){navigator.clipboard.writeText(plain());$('#st').textContent=t('Copied')}
 function save(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([plain()]));a.download=`netdoctor-${cur?cur.id:'out'}-${Date.now()}.txt`;a.click()}
 async function quit(){if(confirm(t('Quit the NetDoctor service?'))){await fetch('/quit',{method:'POST',headers:{'X-Token':TOKEN}}).catch(()=>{});document.body.innerHTML='<p style="margin:40px">'+t('Quit. You can close this page.')+'</p>'}}
+const HKEY='nd_history',HMAX=50,OMAX=60000;
+let hist=[],hsel=null;try{hist=JSON.parse(localStorage.getItem(HKEY)||'[]')}catch(e){}
+function saveHist(){for(;;){try{localStorage.setItem(HKEY,JSON.stringify(hist));return}catch(e){if(!hist.length)return;hist.pop()}}}
+function addHist(h){if(h.out.length>OMAX)h.out='…'+t('(output truncated)')+'\n'+h.out.slice(-OMAX);
+h.id=Date.now()+'-'+Math.random().toString(36).slice(2,6);h.ts=Date.now();hist.unshift(h);hist=hist.slice(0,HMAX);hsel=h.id;saveHist();if($('#hist').classList.contains('on'))renderHist()}
+const esc=x=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function renderHist(){const q=$('#hq').value.trim().toLowerCase();$('#hq').placeholder=t('Search…');
+const rows=hist.filter(h=>{if(!q)return true;const c=CMDS.find(c=>c.id==h.cmd),lab=c?c.label:h.cmd;return (t(lab)+' '+lab+' '+Object.values(h.values||{}).join(' ')).toLowerCase().includes(q)});
+$('#hlist').innerHTML=rows.length?rows.map(h=>{const c=CMDS.find(c=>c.id==h.cmd)||{icon:'•',label:h.cmd};
+const args=Object.values(h.values||{}).filter(Boolean).join(' ')+(h.admin?' 🔒':'');
+const when=new Date(h.ts).toLocaleString(lang=='zh'?'zh-CN':'en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+const lbl={ok:'Done',stopped:'Stopped',failed:'Failed'}[h.state]||'Done';
+return `<div class="hi${h.id==hsel?' sel':''}" onclick="viewHist('${h.id}')"><span>${c.icon}</span><div class="m"><div class="n">${esc(t(c.label))}<span class="bd ${h.state}">${esc(t(lbl))}</span></div><div class="a">${esc(args)||'&nbsp;'}</div><div class="w">${esc(when)} · ${h.sec}s</div></div><div class="x"><button onclick="event.stopPropagation();rerunHist('${h.id}')">${esc(t('Re-run'))}</button><button onclick="event.stopPropagation();delHist('${h.id}')">${esc(t('Delete'))}</button></div></div>`}).join(''):`<p style="color:var(--mut);padding:8px">${esc(t(hist.length?'No matches':'No history yet'))}</p>`}
+function toggleHist(on){const h=$('#hist');const open=on===undefined?!h.classList.contains('on'):on;h.classList.toggle('on',open);if(open){renderHist()}}
+function viewHist(id){const h=hist.find(x=>x.id==id);if(!h)return;hsel=id;pick(h.cmd,false,true);
+document.querySelectorAll('#f input').forEach(i=>{if(i.name=='_admin'){if(!i.disabled)i.checked=!!h.admin}else if(h.values&&h.values[i.name]!==undefined)i.value=h.values[i.name]});
+raw=h.out;idle=false;$('#out').innerHTML=ansi(raw);$('#out').scrollTop=0;
+$('#st').textContent=t('Viewing history')+': '+new Date(h.ts).toLocaleString(lang=='zh'?'zh-CN':'en-US');renderHist()}
+function rerunHist(id){viewHist(id);if(!$('#run').disabled)run()}
+function delHist(id){hist=hist.filter(h=>h.id!=id);saveHist();renderHist()}
+function clearHist(){if(hist.length&&confirm(t('Clear all history?'))){hist=[];hsel=null;saveHist();renderHist()}}
 const MOD=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
 const SC=[[[MOD+' + Enter'],'Run the current tool'],[['Esc'],'Stop a running command; otherwise leave the input box'],
 [['j','↓'],'Previous / next tool'],[['1'],'Jump to tool 1–9'],[['/'],'Focus the first input'],[['Enter'],'Run (when not typing)'],
-[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['?'],'Show / hide this help']];
+[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
 SC[2][0]=['j / ↓  ·  k / ↑'];SC[3][0]=['1 … 9'];
 function toggleHelp(on){const h=$('#help');const open=on===undefined?!h.classList.contains('on'):on;
 if(open){$('#helph').textContent='⌨ '+t('Keyboard shortcuts');$('#helpt').innerHTML=SC.map(([k,d])=>`<tr><td>${k.map(x=>'<kbd>'+x.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</kbd>').join('')}</td><td>${t(d)}</td></tr>`).join('')}
@@ -284,11 +330,12 @@ h.classList.toggle('on',open)}
 function go(delta,abs){const i=CMDS.findIndex(c=>c.id==(cur&&cur.id));const n=abs!==undefined?abs:Math.max(0,Math.min(CMDS.length-1,i+delta));if(CMDS[n]){pick(CMDS[n].id,false,true);$('#b_'+CMDS[n].id).scrollIntoView({block:'nearest'})}}
 document.addEventListener('keydown',e=>{
 const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&e.target.type!='checkbox';
-const helpOpen=$('#help').classList.contains('on');
-if(e.key=='Escape'){if(helpOpen){toggleHelp(false)}else if(!$('#stop').disabled){stop()}else if(typing){e.target.blur()}else return;e.preventDefault();return}
+const helpOpen=$('#help').classList.contains('on'),histOpen=$('#hist').classList.contains('on');
+if(e.key=='Escape'){if(helpOpen){toggleHelp(false)}else if(histOpen&&$('#stop').disabled){toggleHist(false)}else if(!$('#stop').disabled){stop()}else if(typing){e.target.blur()}else return;e.preventDefault();return}
 if((e.metaKey||e.ctrlKey)&&e.key=='Enter'){if(!$('#run').disabled){e.preventDefault();run()}return}
 if(e.metaKey||e.ctrlKey||e.altKey||typing)return;
 if(helpOpen){if(e.key=='?'){toggleHelp(false);e.preventDefault()}return}
+if(histOpen&&e.key!='h'&&e.key!='?')return;
 const k=e.key;let used=true;
 if(k=='?')toggleHelp(true);
 else if(k=='j'||k=='ArrowDown')go(1);
@@ -298,6 +345,7 @@ else if(k=='/'){const f=$('#f input[type=text]');f?f.focus():used=false}
 else if(k=='Enter'&&e.target.tagName!='BUTTON'){if(!$('#run').disabled)run()}
 else if(k=='c'){if(raw)copy()}
 else if(k=='s'){if(raw)save()}
+else if(k=='h')toggleHist();
 else if(k=='l')toggleLang();
 else if(k=='t')toggleTheme();
 else used=false;
@@ -306,9 +354,12 @@ pick('quick');applyLang();
 </script></body></html>"""
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--port", type=int, default=0); ap.add_argument("--no-open", action="store_true")
+    ap = argparse.ArgumentParser(); ap.add_argument("--port", type=int, default=8765, help="0 = random free port; falls back to random if busy"); ap.add_argument("--no-open", action="store_true")
     a = ap.parse_args()
-    srv = ThreadingHTTPServer(("127.0.0.1", a.port), H)
+    try:
+        srv = ThreadingHTTPServer(("127.0.0.1", a.port), H)
+    except OSError:  # port busy (e.g. a second instance): use any free port
+        srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
     url = "http://127.0.0.1:%d/" % srv.server_address[1]
     print("NetDoctor GUI:", url, "(Ctrl-C to quit)")
     if not a.no_open: threading.Timer(0.5, lambda: webbrowser.open(url)).start()

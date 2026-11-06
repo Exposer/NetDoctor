@@ -21,7 +21,8 @@ A `Brewfile` is included to install common third-party tools (mtr, nmap, iperf3,
 ```
 Pick a tool on the left, fill in the parameters, click "Run". The UI follows your browser language; the 🌐 button at the bottom left switches between English and 中文. The theme follows the system appearance by default; the 🖥/☀️/🌙 button next to it lets you pick Auto / Light / Dark. Output streams live and can be stopped, copied or saved.
 Features that need administrator rights (connections/listeners, flush DNS, and the full Wi-Fi/route details) show the system password prompt.
-Keyboard shortcuts (press `?` for the full list): `⌘/Ctrl+Enter` run, `Esc` stop, `j`/`k` change tool, `1`–`9` jump, `/` focus input, `c` copy, `s` save, `l` language, `t` theme.
+History: every run is saved automatically (latest 50, full output included). Open it with the 🕘 sidebar button or `h`; search, view, **Re-run** or delete entries. It is stored only in your browser. The web UI listens on port 8765 by default (a free port is used if it is busy); change it with `--port`.
+Keyboard shortcuts (press `?` for the full list): `⌘/Ctrl+Enter` run, `Esc` stop, `j`/`k` change tool, `1`–`9` jump, `/` focus input, `c` copy, `s` save, `h` history, `l` language, `t` theme.
 Without a terminal, steps that need `sudo` never block on a password prompt: use the "Administrator rights" option to get the system password dialog, otherwise they are skipped or degrade (e.g. mtr falls back to traceroute).
 Security: listens on 127.0.0.1 only, uses a random token, checks the Host header, whitelists arguments, and never passes them through a shell.
 

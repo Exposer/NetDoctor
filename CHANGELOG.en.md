@@ -4,6 +4,14 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Web UI: run history. Every run (including stopped and failed ones) is saved with its tool, parameters, status, duration and full output — the latest 50. Open the panel with the 🕘 sidebar button or the `h` key; search, click to view, **Re-run**, delete or clear. Stored only in the browser (localStorage).
+
+### Changed
+- The web UI now defaults to port 8765 (falling back to a free port if it is busy), so history, theme and language choices survive restarting the server. `--port 0` still gives a random port.
+
 ## [1.1.2] - 2026-11-06
 
 ### Added
