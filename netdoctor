@@ -15,6 +15,8 @@ warn(){ printf '%s[WARN]%s %s\n' "$Y" "$N" "$*"; }
 
 default_if()  { route -n get default 2>/dev/null | awk '/interface:/{print $2}'; }
 gateway()     { route -n get default 2>/dev/null | awk '/gateway:/{print $2}'; }
+# 提权: 已是 root 直接执行; 有终端时正常询问密码; 无终端(GUI 调用)用 -n 避免卡在密码提示
+priv() { if [ "$(id -u)" = 0 ]; then "$@"; elif [ -t 0 ]; then sudo "$@"; else sudo -n "$@"; fi; }
 wifi_if()     { networksetup -listallhardwareports 2>/dev/null | awk '/Wi-Fi|AirPort/{getline; print $2; exit}'; }
 
 usage() {
@@ -99,7 +101,7 @@ cmd_wifi() {
   networksetup -getairportnetwork "$w" 2>/dev/null
   if has wdutil; then
     echo "$(L "(wdutil needs sudo to show full details)" "(wdutil 需 sudo 才能看到完整信息)")"
-    sudo wdutil info 2>/dev/null | awk '/SSID|BSSID|RSSI|Noise|Tx Rate|Channel|PHY Mode|Security|Country/' | head -20
+    priv wdutil info 2>/dev/null | awk '/SSID|BSSID|RSSI|Noise|Tx Rate|Channel|PHY Mode|Security|Country/' | head -20
   fi
   hdr "$(L "system_profiler summary" "system_profiler 摘要")"
   system_profiler SPAirPortDataType 2>/dev/null | awk '/Current Network Information/{f=1} f&&/PHY Mode|Channel|Security|Signal|Transmit Rate|Country/{print} /Other Local Wi-Fi/{exit}'
@@ -126,7 +128,12 @@ cmd_route() {
   local h=${1:-}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor route <host>" "用法: netdoctor route <主机>")"; return 1; }
   hdr "$(L "Route selection (which interface/VPN the traffic uses)" "路由选择 (流量走哪块网卡/VPN)")"; route -n get "$h" 2>&1 | awk '/destination|gateway|interface/'
   hdr "$(L "Path" "路径")"
-  if has mtr; then sudo mtr -rwbzc 20 "$h"; else traceroute -w 2 -q 1 -m 20 "$h"; warn "$(L "brew install mtr gives per-hop loss statistics" "brew install mtr 可得到逐跳丢包统计")"; fi
+  if has mtr && priv mtr -rwbzc 20 "$h"; then :
+  else
+    has mtr && warn "$(L "mtr needs admin rights; falling back to traceroute" "mtr 需要管理员权限, 已改用 traceroute")"
+    traceroute -w 2 -q 1 -m 20 "$h"
+    has mtr || warn "$(L "brew install mtr gives per-hop loss statistics" "brew install mtr 可得到逐跳丢包统计")"
+  fi
 }
 
 cmd_ping() { local h=${1:-}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor ping <host> [count]" "用法: netdoctor ping <主机> [次数]")"; return 1; }; ping -c "${2:-20}" "$h"; }
@@ -165,10 +172,13 @@ cmd_http() {
 
 cmd_tls() {
   local h=${1:-}; local p=${2:-443}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor tls <host> [port]" "用法: netdoctor tls <主机> [端口]")"; return 1; }
-  local out; out=$(echo | openssl s_client -connect "$h:$p" -servername "$h" -brief 2>&1)
-  echo "$out" | head -12
-  echo | openssl s_client -connect "$h:$p" -servername "$h" 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null
-  has testssl && echo "$(L "Full audit: testssl $h:$p" "完整体检: testssl $h:$p")"
+  local out; out=$(echo | openssl s_client -connect "$h:$p" -servername "$h" 2>&1)
+  echo "$out" | grep -E 'Protocol|Cipher|Verif|verify|depth=|errno|error' | head -12
+  local cert; cert=$(echo "$out" | openssl x509 2>/dev/null)
+  if [ -z "$cert" ]; then bad "$(L "No certificate received ($h:$p unreachable or not a TLS service)" "未取得证书 ($h:$p 不可达或非 TLS 服务)")"; return 1; fi
+  echo "$cert" | openssl x509 -noout -subject -issuer -dates
+  echo "$cert" | openssl x509 -noout -text | grep -A1 'Subject Alternative Name' | sed 's/^ */SAN: /;/Subject Alternative/d'
+  if has testssl; then echo "$(L "Full audit: testssl $h:$p" "完整体检: testssl $h:$p")"; fi
 }
 
 cmd_mtu() {
@@ -182,12 +192,15 @@ cmd_mtu() {
   bad "$(L "All failed; the target may block ICMP" "均失败; 目标可能禁 ICMP")"
 }
 
-cmd_speed() { has networkQuality && networkQuality -v || { bad "$(L "Requires macOS 12+" "需要 macOS 12+")"; has speedtest-cli && speedtest-cli; }; }
+cmd_speed() {
+  if has networkQuality; then networkQuality -v || bad "$(L "networkQuality failed" "networkQuality 执行失败")"
+  else bad "$(L "Requires macOS 12+ (networkQuality)" "需要 macOS 12+ (networkQuality)")"; has speedtest-cli && speedtest-cli; fi
+}
 
 cmd_conns() {
-  hdr "$(L "Listening ports" "监听端口")"; sudo lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR==1||1' | head -40
-  hdr "$(L "Established connections" "已建立连接")"; sudo lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null | head -40
-  has nettop && echo "$(L "Live per-process traffic: nettop -P -d    |   bandwhich (needs sudo)" "实时按进程流量: nettop -P -d    |   bandwhich (需 sudo)")"
+  hdr "$(L "Listening ports" "监听端口")"; priv lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | head -40
+  hdr "$(L "Established connections" "已建立连接")"; priv lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null | head -40
+  if has nettop; then echo "$(L "Live per-process traffic: nettop -P -d    |   bandwhich (needs sudo)" "实时按进程流量: nettop -P -d    |   bandwhich (需 sudo)")"; fi
 }
 
 cmd_proxy() {
@@ -205,10 +218,10 @@ cmd_capture() {
   local f=${1:-}; local out="$HOME/Desktop/cap-$(date +%Y%m%d-%H%M%S).pcap"
   echo "$(L "Capturing → $out  (Ctrl-C to stop; open with Wireshark)" "抓包 → $out  (Ctrl-C 结束; 用 Wireshark 打开)")"
   echo "$(L "Filter examples: 'host 1.2.3.4'  'port 53'  'tcp port 443 and host x.com'" "过滤器示例: 'host 1.2.3.4'  'port 53'  'tcp port 443 and host x.com'")"
-  if [ -n "$f" ]; then sudo tcpdump -i "$(default_if)" -nn -s0 -w "$out" "$f"; else sudo tcpdump -i "$(default_if)" -nn -s0 -w "$out"; fi
+  if [ -n "$f" ]; then priv tcpdump -i "$(default_if)" -nn -s0 -w "$out" "$f"; else priv tcpdump -i "$(default_if)" -nn -s0 -w "$out"; fi
 }
 
-cmd_fixdns() { sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder && ok "$(L "DNS cache flushed" "DNS 缓存已刷新")"; }
+cmd_fixdns() { priv dscacheutil -flushcache && priv killall -HUP mDNSResponder && ok "$(L "DNS cache flushed" "DNS 缓存已刷新")"; }
 
 cmd_tools() {
   hdr "$(L "Built-in" "系统自带")"

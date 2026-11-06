@@ -2,7 +2,7 @@
 """NetDoctor GUI - local web interface (standard library only, listens on 127.0.0.1 only).
 Usage: python3 netdoctor-gui.py [--port 8765] [--no-open]
 """
-import argparse, json, os, re, secrets, shlex, subprocess, sys, threading, webbrowser
+import argparse, json, os, re, secrets, select, shlex, socket, subprocess, sys, threading, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -99,10 +99,19 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             self.wfile.write(("Failed to start: %s\n" % e).encode()); return
         try:
+            fd = p.stdout.fileno()
             while True:
-                chunk = p.stdout.read1(4096) if hasattr(p.stdout, "read1") else p.stdout.read(4096)
-                if not chunk: break
-                self.wfile.write(chunk); self.wfile.flush()
+                r, _, _ = select.select([fd, self.connection], [], [], 1.0)
+                if self.connection in r:  # 浏览器断开 (点了停止/关了页面) -> 结束子进程
+                    try:
+                        if not self.connection.recv(1, socket.MSG_PEEK): break
+                    except OSError: break
+                if fd in r:
+                    chunk = os.read(fd, 4096)
+                    if not chunk: break
+                    self.wfile.write(chunk); self.wfile.flush()
+            if p.poll() is None and not p.stdout.closed:
+                p.kill()
             rc = p.wait()
             self.wfile.write(("\n\x1b[2m[exit code %d]\x1b[0m\n" % rc).encode())
         except (BrokenPipeError, ConnectionResetError):

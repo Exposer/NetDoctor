@@ -7,8 +7,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "NetDoctor",
-            path: "Sources/NetDoctor",
-            swiftSettings: [.swiftLanguageVersion(.v5)]
+            path: "Sources/NetDoctor"
         )
     ]
 )
