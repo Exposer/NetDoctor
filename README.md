@@ -1,5 +1,17 @@
 # NetDoctor — macOS 网络诊断工具集
 
+**一句话**:遇到“网上不去/网页打不开/视频卡”,打开 NetDoctor,先点“一键体检”,它会从网关、外网 IP、DNS 到 HTTP 逐层检查,告诉你问题出在哪一层。
+
+三种使用方式,背后是同一套诊断逻辑:
+
+| 形态 | 适合 | 入口 |
+|---|---|---|
+| 命令行 | 终端用户、SSH、脚本 | `./netdoctor quick` |
+| 网页界面 | 想点按钮,零依赖(仅需 python3) | `./NetDoctor.command` |
+| 原生 SwiftUI 应用 | 日常常驻,菜单栏实时看延迟 | `NetDoctorApp/build-app.sh` |
+
+另附 `Brewfile`,一次装好 mtr、nmap、iperf3、wireshark 等常用第三方工具。版本变更见 [CHANGELOG](CHANGELOG.md)。
+
 ## 图形界面
 ```bash
 ./NetDoctor.command        # 双击或运行,自动打开浏览器界面
