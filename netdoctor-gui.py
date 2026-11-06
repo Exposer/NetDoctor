@@ -73,6 +73,9 @@ ZH = {
     "Failed to start": "启动失败",
     "[exit code %d]": "[退出码 %d]",
     "Quit": "退出",
+    "Auto": "自动",
+    "Light": "浅色",
+    "Dark": "深色",
     "Copy": "复制",
     "Save": "保存",
     "Stop": "停止",
@@ -191,7 +194,9 @@ class H(BaseHTTPRequestHandler):
 HTML = r"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NetDoctor Network Diagnostics</title><style>
 :root{--bg:#f5f5f7;--card:#fff;--fg:#1d1d1f;--mut:#6e6e73;--line:#e0e0e5;--acc:#0071e3;--term:#14161a;--termfg:#d8dde6}
-@media(prefers-color-scheme:dark){:root{--bg:#1c1c1e;--card:#2c2c2e;--fg:#f5f5f7;--mut:#98989d;--line:#3a3a3c;--acc:#0a84ff;--term:#0b0c0e}}
+:root{color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--bg:#1c1c1e;--card:#2c2c2e;--fg:#f5f5f7;--mut:#98989d;--line:#3a3a3c;--acc:#0a84ff;--term:#0b0c0e}}
+:root[data-theme=dark]{color-scheme:dark;--bg:#1c1c1e;--card:#2c2c2e;--fg:#f5f5f7;--mut:#98989d;--line:#3a3a3c;--acc:#0a84ff;--term:#0b0c0e}
 *{box-sizing:border-box}body{margin:0;font:14px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;background:var(--bg);color:var(--fg);display:flex;height:100vh}
 nav{width:210px;background:var(--card);border-right:1px solid var(--line);overflow:auto;padding:12px 8px;flex:none}
 nav h1{font-size:15px;margin:4px 10px 12px}nav button{display:flex;gap:8px;width:100%;text-align:left;border:0;background:none;color:var(--fg);padding:8px 10px;border-radius:8px;font:inherit;cursor:pointer}
@@ -206,8 +211,8 @@ input[type=text]{padding:7px 9px;border:1px solid var(--line);border-radius:7px;
 #out{flex:1;min-height:0;background:var(--term);color:var(--termfg);border-radius:12px;padding:14px;overflow:auto;white-space:pre-wrap;word-break:break-all;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;margin:0}
 .b{font-weight:700}.g{color:#32d74b}.r{color:#ff453a}.y{color:#ffd60a}.d{opacity:.55}
 .bar{display:flex;gap:8px;align-items:center}.sp{flex:1}
-</style></head><body>
-<nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="toggleLang()" id="lang" style="margin-top:14px;color:var(--mut)"></button><button onclick="quit()" style="color:var(--mut)">⏻ <span data-i="Quit">Quit</span></button></nav>
+</style><script>try{var th=localStorage.getItem('nd_theme');if(th==='light'||th==='dark')document.documentElement.dataset.theme=th}catch(e){}</script></head><body>
+<nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="toggleTheme()" id="theme" style="margin-top:14px;color:var(--mut)"></button><button onclick="toggleLang()" id="lang" style="color:var(--mut)"></button><button onclick="quit()" style="color:var(--mut)">⏻ <span data-i="Quit">Quit</span></button></nav>
 <main><div class="card"><h2 id="t"></h2><p id="d"></p><form id="f"></form></div>
 <div class="bar"><span class="sp" id="st" style="color:var(--mut)"></span><button class="btn sec" onclick="copy()" data-i="Copy">Copy</button><button class="btn sec" onclick="save()" data-i="Save">Save</button><button class="btn sec" id="stop" onclick="stop()" data-i="Stop" disabled>Stop</button></div>
 <pre id="out"></pre></main>
@@ -217,13 +222,17 @@ const $=s=>document.querySelector(s);
 try{lang=localStorage.getItem('nd_lang')||(/^zh/i.test(navigator.language)?'zh':'en')}catch(e){lang=/^zh/i.test(navigator.language)?'zh':'en'}
 const t=s=>lang=='zh'&&ZH[s]?ZH[s]:s;
 const fmt=(k,v)=>t(k).replace('%s',v);
+let theme='auto';try{const v=localStorage.getItem('nd_theme');if(v==='light'||v==='dark')theme=v}catch(e){}
+const THEMES={auto:'🖥 Auto',light:'☀️ Light',dark:'🌙 Dark'};
+function applyTheme(){const r=document.documentElement;if(theme=='auto')delete r.dataset.theme;else r.dataset.theme=theme;const [i,n]=THEMES[theme].split(' ');$('#theme').textContent=i+' '+t(n)}
+function toggleTheme(){theme={auto:'light',light:'dark',dark:'auto'}[theme];try{theme=='auto'?localStorage.removeItem('nd_theme'):localStorage.setItem('nd_theme',theme)}catch(e){}applyTheme()}
 const INTRO='Pick a tool on the left and click “Run”. Start with “Quick check”.';
 CMDS.forEach(c=>{const b=document.createElement('button');b.innerHTML=`<span>${c.icon}</span><span class="nl"></span>`;b.onclick=()=>pick(c.id);b.id='b_'+c.id;$('#list').append(b)});
 function applyLang(){document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
 document.querySelectorAll('[data-i]').forEach(e=>e.textContent=t(e.dataset.i));
 CMDS.forEach(c=>{$('#b_'+c.id+' .nl').textContent=t(c.label)});
 $('#lang').textContent='🌐 '+(lang=='zh'?'English':'中文');if(idle)$('#out').textContent=t(INTRO);
-if(cur)pick(cur.id,true)}
+applyTheme();if(cur)pick(cur.id,true)}
 function toggleLang(){lang=lang=='zh'?'en':'zh';try{localStorage.setItem('nd_lang',lang)}catch(e){}applyLang()}
 function pick(id,keep){const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
 $('#t').textContent=cur.icon+' '+t(cur.label);$('#d').textContent=t(cur.desc);const f=$('#f');f.innerHTML='';

@@ -19,7 +19,7 @@
 ./NetDoctor.command        # 双击或运行,自动打开浏览器界面
 ./make-app.sh            # 可选:生成 NetDoctor.app,拖进“应用程序”
 ```
-左侧选工具(如 **Quick check**、**DNS compare**),填参数,点 **Run**,输出实时显示,可 **Stop** / **Copy** / **Save**。界面语言跟随浏览器,左下角 🌐 可切换中文 / English。
+左侧选工具(如 **Quick check**、**DNS compare**),填参数,点 **Run**,输出实时显示,可 **Stop** / **Copy** / **Save**。界面语言跟随浏览器,左下角 🌐 可切换中文 / English;主题默认跟随系统外观,也可用旁边的 🖥/☀️/🌙 按钮手动选择自动 / 浅色 / 深色。
 需要管理员权限的功能(**Connections**、**Flush DNS**,以及 **Wi-Fi** / **Route / path** 勾选 *Administrator rights* 后的完整信息)会弹出系统密码框。
 没有终端时,需要 `sudo` 的步骤不会卡在密码提示:勾选 *Administrator rights* 会弹出系统密码框,否则会被跳过或降级(例如 mtr 回退为 traceroute)。
 安全:只监听 127.0.0.1,带随机令牌,校验 Host 头,参数白名单且不经 shell。

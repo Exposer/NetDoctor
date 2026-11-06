@@ -4,6 +4,11 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Web UI: theme switch (Auto / Light / Dark). The 🖥/☀️/🌙 button in the sidebar cycles through them; "Auto" follows the system appearance and the choice is remembered.
+
 ## [1.1.0] - 2026-11-06
 
 ### Changed
