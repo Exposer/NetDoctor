@@ -13,7 +13,7 @@ struct ContentView: View {
             List(selection: $selection) {
                 Section("Diagnostics") {
                     ForEach(Tool.all) { t in
-                        Label(t.title, systemImage: t.icon).tag(Optional(t.id))
+                        Label(LocalizedStringKey(t.title), systemImage: t.icon).tag(Optional(t.id))
                     }
                 }
                 Section("Monitoring") {
@@ -41,13 +41,13 @@ struct ToolView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
-                Label(tool.title, systemImage: tool.icon).font(.title2.bold())
-                Text(tool.summary).foregroundStyle(.secondary)
+                Label(LocalizedStringKey(tool.title), systemImage: tool.icon).font(.title2.bold())
+                Text(LocalizedStringKey(tool.summary)).foregroundStyle(.secondary)
             }
             HStack(alignment: .bottom, spacing: 12) {
                 ForEach(tool.inputs) { i in
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(i.label + (i.required ? " *" : "")).font(.caption).foregroundStyle(.secondary)
+                        (Text(LocalizedStringKey(i.label)) + Text(i.required ? " *" : "")).font(.caption).foregroundStyle(.secondary)
                         TextField(i.placeholder, text: Binding(
                             get: { runner.values[i.name] ?? "" },
                             set: { runner.values[i.name] = $0 }))
@@ -61,7 +61,7 @@ struct ToolView: View {
                 } else if tool.admin == .required {
                     Label("Requires administrator rights", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
                 }
-                Button(runner.running ? "Running…" : "Run") { runner.run() }
+                Button(LocalizedStringKey(runner.running ? "Running…" : "Run")) { runner.run() }
                     .buttonStyle(.borderedProminent)
                     .keyboardShortcut(.return, modifiers: .command)
                     .disabled(runner.running)
@@ -89,7 +89,7 @@ struct TerminalView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     if text.characters.isEmpty {
-                        Text(running ? "" : "Click “Run” to start. Try “Quick check” first.")
+                        Text(LocalizedStringKey(running ? "" : "Click “Run” to start. Try “Quick check” first."))
                             .font(.system(size: 12.5, design: .monospaced))
                             .foregroundColor(Color(white: 0.5))
                     } else {
@@ -121,7 +121,7 @@ struct MonitorView: View {
                 TextField("Target", text: $m.target).textFieldStyle(.roundedBorder).frame(width: 220)
                 Menu("Presets") { ForEach(presets, id: \.self) { p in Button(p) { m.target = p; m.clear() } } }
                     .frame(width: 80)
-                Button(m.running ? "Stop" : "Start") { m.running ? m.stop() : m.start() }
+                Button(LocalizedStringKey(m.running ? "Stop" : "Start")) { m.running ? m.stop() : m.start() }
                     .buttonStyle(.borderedProminent)
                 Button("Clear") { m.clear() }
                 Spacer()
@@ -153,7 +153,7 @@ struct MonitorView: View {
         .padding(16)
     }
 
-    private func stat(_ title: String, _ value: String, warn: Bool = false) -> some View {
+    private func stat(_ title: LocalizedStringKey, _ value: String, warn: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption).foregroundStyle(.secondary)
             Text(value).font(.title3.monospacedDigit().bold()).foregroundColor(warn ? .red : .primary)

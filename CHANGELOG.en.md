@@ -7,7 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Changed
-- All in-app text is now in English: `netdoctor` CLI output, the web UI, the SwiftUI app, the build scripts and the `Brewfile` comments.
+- The web UI, build scripts and `Brewfile` comments are now in English.
+- The SwiftUI app and `netdoctor` CLI output are bilingual (English / Simplified Chinese) and follow the system language; override with `NETDOCTOR_LANG=zh|en`. Strings live in `NetDoctorApp/Resources/*.lproj`.
 
 ## [1.0.0] - 2026-11-06
 

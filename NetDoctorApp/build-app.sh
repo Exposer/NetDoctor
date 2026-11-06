@@ -10,10 +10,17 @@ APP="NetDoctor.app"; rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/NetDoctor"
 cp ../netdoctor "$APP/Contents/Resources/netdoctor"; chmod +x "$APP/Contents/Resources/netdoctor"
+# Localizations (English + Simplified Chinese); the app follows the system language
+for d in Resources/*.lproj; do
+  plutil -lint "$d/Localizable.strings" >/dev/null
+  cp -R "$d" "$APP/Contents/Resources/"
+done
 cat > "$APP/Contents/Info.plist" <<'X'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
+<key>CFBundleDevelopmentRegion</key><string>en</string>
+<key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
 <key>CFBundleName</key><string>NetDoctor</string>
 <key>CFBundleDisplayName</key><string>NetDoctor</string>
 <key>CFBundleExecutable</key><string>NetDoctor</string>

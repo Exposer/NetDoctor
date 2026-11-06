@@ -1,5 +1,8 @@
 import Foundation
 
+/// Looks a UI string up in the app's Localizable.strings (English text is the key).
+func loc(_ key: String) -> String { NSLocalizedString(key, comment: "") }
+
 struct ToolInput: Identifiable {
     let name: String
     let label: String

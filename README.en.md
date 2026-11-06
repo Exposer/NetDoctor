@@ -25,6 +25,8 @@ Security: listens on 127.0.0.1 only, uses a random token, checks the Host header
 
 ## Command line
 
+Output language follows your locale (`LANG`); force it with `NETDOCTOR_LANG=zh` or `NETDOCTOR_LANG=en`.
+
 ```bash
 brew bundle --file=Brewfile                              # install third-party tools
 sudo ln -s "$PWD/netdoctor" /usr/local/bin/netdoctor     # optional: use it globally
@@ -64,7 +66,7 @@ xcode-select --install                 # skip if already installed
 cd NetDoctorApp && ./build-app.sh      # UNIVERSAL=1 ./build-app.sh builds for Intel + Apple silicon
 open NetDoctor.app
 ```
-Features: all diagnostic tools, live output, stop/copy/save, a live latency chart, and latency shown in the menu bar.
+Features: all diagnostic tools, live output, stop/copy/save, a live latency chart, and latency shown in the menu bar. The UI follows the system language (English / Simplified Chinese).
 Development: `cd NetDoctorApp && NETDOCTOR_PATH=../netdoctor swift run`
 
 > The SwiftUI source has not yet been compiled on macOS; if the first build fails, please open an issue.

@@ -12,7 +12,7 @@
 | 网页界面 | 想点按钮,零依赖(仅需 python3) | `./NetDoctor.command` |
 | 原生 SwiftUI 应用 | 日常常驻,菜单栏实时看延迟 | `NetDoctorApp/build-app.sh` |
 
-界面按钮和菜单为英文,下文以英文原名标注。另附 `Brewfile`,一次装好 mtr、nmap、iperf3、wireshark 等常用第三方工具。版本变更见 [CHANGELOG](CHANGELOG.md)。
+原生应用与命令行输出支持中英双语(跟随系统语言,命令行可用 `NETDOCTOR_LANG=zh|en` 强制);网页界面目前为英文,下文以英文原名标注按钮。另附 `Brewfile`,一次装好 mtr、nmap、iperf3、wireshark 等常用第三方工具。版本变更见 [CHANGELOG](CHANGELOG.md)。
 
 ## 图形界面
 ```bash
@@ -64,5 +64,5 @@ xcode-select --install        # 已装可跳过
 cd NetDoctorApp && ./build-app.sh   # UNIVERSAL=1 ./build-app.sh 生成 Intel+Apple 芯片通用版
 open NetDoctor.app
 ```
-功能:全部诊断工具、实时输出、**Stop** / **Copy** / **Save**、**Live latency** 折线图、菜单栏(Open main window / Start monitoring / Quit)常驻延迟显示。
+功能:全部诊断工具、实时输出、停止 / 复制 / 保存、实时延迟折线图、菜单栏常驻延迟显示。界面语言跟随系统(简体中文 / English)。
 开发调试:`cd NetDoctorApp && NETDOCTOR_PATH=../netdoctor swift run`

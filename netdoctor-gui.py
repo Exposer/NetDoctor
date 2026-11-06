@@ -80,7 +80,7 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             return self._send(400, "Error: %s\n" % e, "text/plain; charset=utf-8")
 
-        env = dict(os.environ, NETDOCTOR_COLOR="1", LANG="en_US.UTF-8")
+        env = dict(os.environ, NETDOCTOR_COLOR="1", NETDOCTOR_LANG="en", LANG="en_US.UTF-8")
         env["PATH"] = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:" + env.get("PATH", "")
         self.send_response(200); self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Cache-Control", "no-store"); self.end_headers()

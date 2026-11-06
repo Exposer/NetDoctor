@@ -32,7 +32,7 @@ final class LatencyMonitor: ObservableObject {
     }
     var menuTitle: String {
         guard running else { return "—" }
-        if let l = samples.last { return l.ms.map { String(format: "%.0f ms", $0) } ?? "Loss" }
+        if let l = samples.last { return l.ms.map { String(format: "%.0f ms", $0) } ?? loc("Loss") }
         return "…"
     }
 

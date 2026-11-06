@@ -34,10 +34,17 @@ final class Runner: ObservableObject {
         return candidates.first { fm.isReadableFile(atPath: $0) }
     }
 
+    /// "zh" when the app is running in a Chinese localization, otherwise "en".
+    static var language: String {
+        let l = Bundle.main.preferredLocalizations.first ?? Locale.preferredLanguages.first ?? "en"
+        return l.hasPrefix("zh") ? "zh" : "en"
+    }
+
     static let env: [String: String] = {
         var e = ProcessInfo.processInfo.environment
         e["PATH"] = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:" + (e["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin")
         e["NETDOCTOR_COLOR"] = "1"
+        e["NETDOCTOR_LANG"] = Runner.language
         e["LANG"] = "en_US.UTF-8"
         return e
     }()
@@ -50,11 +57,11 @@ final class Runner: ObservableObject {
         for i in tool.inputs {
             let v = (values[i.name] ?? "").trimmingCharacters(in: .whitespaces)
             if v.isEmpty {
-                if i.required { throw NSError(domain: "netdoctor", code: 1, userInfo: [NSLocalizedDescriptionKey: "Please fill in: \(i.label)"]) }
+                if i.required { throw NSError(domain: "netdoctor", code: 1, userInfo: [NSLocalizedDescriptionKey: String(format: loc("Please fill in: %@"), loc(i.label))]) }
                 break
             }
             if v.hasPrefix("-") || v.count > 300 || v.unicodeScalars.contains(where: { !Self.allowed.contains($0) }) {
-                throw NSError(domain: "netdoctor", code: 2, userInfo: [NSLocalizedDescriptionKey: "Invalid parameter: \(i.label)"])
+                throw NSError(domain: "netdoctor", code: 2, userInfo: [NSLocalizedDescriptionKey: String(format: loc("Invalid parameter: %@"), loc(i.label))])
             }
             args.append(v)
         }
@@ -66,12 +73,12 @@ final class Runner: ObservableObject {
         guard !running else { return }
         output = AttributedString(); plain = ""; parser = AnsiParser(); pending = Data(); stopped = false
         guard let script = Runner.scriptPath else {
-            status = "netdoctor script not found"; return
+            status = loc("netdoctor script not found"); return
         }
         let args: [String]
         do { args = try buildArgs() } catch { status = error.localizedDescription; return }
 
-        running = true; status = "Running…"; startedAt = Date()
+        running = true; status = loc("Running…"); startedAt = Date()
         if useAdmin || tool.admin == .required {
             runAdmin(script: script, args: args)
         } else {
@@ -101,17 +108,17 @@ final class Runner: ObservableObject {
             }
         }
         do { try p.run(); process = p }
-        catch { running = false; status = "Failed to start: \(error.localizedDescription)" }
+        catch { running = false; status = String(format: loc("Failed to start: %@"), error.localizedDescription) }
     }
 
     private func runAdmin(script: String, args: [String]) {
         func q(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
         let home = NSHomeDirectory()
-        let inner = "HOME=\(q(home)) PATH=\(q(Runner.env["PATH"] ?? "")) NETDOCTOR_COLOR=1 /bin/bash "
+        let inner = "HOME=\(q(home)) PATH=\(q(Runner.env["PATH"] ?? "")) NETDOCTOR_COLOR=1 NETDOCTOR_LANG=\(Runner.language) /bin/bash "
             + ([script, tool.id] + args).map(q).joined(separator: " ") + " 2>&1"
         let esc = inner.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         let src = "do shell script \"\(esc)\" with administrator privileges"
-        append("(Waiting for the system administrator password prompt…)\n")
+        append(loc("(Waiting for the system administrator password prompt…)") + "\n")
         DispatchQueue.global().async { [weak self] in
             var err: NSDictionary?
             let script = NSAppleScript(source: src)
@@ -121,7 +128,7 @@ final class Runner: ObservableObject {
                 if err == nil, let s = res?.stringValue {
                     self.append(s + "\n"); self.finish(code: 0)
                 } else {
-                    let msg = (err?["NSAppleScriptErrorMessage"] as? String) ?? "Cancelled"
+                    let msg = (err?["NSAppleScriptErrorMessage"] as? String) ?? loc("Cancelled")
                     self.append("\u{1B}[31m\(msg)\u{1B}[0m\n"); self.finish(code: 1)
                 }
             }
@@ -157,14 +164,14 @@ final class Runner: ObservableObject {
         if !pending.isEmpty { append(String(decoding: pending, as: UTF8.self)); pending = Data() }
         running = false; process = nil
         let t = String(format: "%.1f", Date().timeIntervalSince(startedAt))
-        status = stopped ? "Stopped" : (code == 0 ? "Done in \(t)s" : "Finished (exit code \(code)) in \(t)s")
+        status = stopped ? loc("Stopped") : (code == 0 ? String(format: loc("Done in %@s"), t) : String(format: loc("Finished (exit code %@) in %@s"), String(code), t))
     }
 
     // MARK: Copy / Save
     func copy() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(plain, forType: .string)
-        status = "Copied"
+        status = loc("Copied")
     }
 
     func save() {
@@ -172,7 +179,7 @@ final class Runner: ObservableObject {
         panel.nameFieldStringValue = "netdoctor-\(tool.id)-\(Int(Date().timeIntervalSince1970)).txt"
         if panel.runModal() == .OK, let url = panel.url {
             try? plain.write(to: url, atomically: true, encoding: .utf8)
-            status = "Saved: \(url.lastPathComponent)"
+            status = String(format: loc("Saved: %@"), url.lastPathComponent)
         }
     }
 }

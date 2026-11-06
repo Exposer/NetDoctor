@@ -7,7 +7,8 @@
 ## [未发布]
 
 ### 变更
-- 应用界面文字改为英文:`netdoctor` 命令行输出、网页界面、SwiftUI 应用、构建脚本和 `Brewfile` 注释。
+- 网页界面、构建脚本和 `Brewfile` 注释改为英文。
+- SwiftUI 应用与 `netdoctor` 命令行输出支持中英双语,跟随系统语言(`NETDOCTOR_LANG=zh|en` 可强制指定);字符串位于 `NetDoctorApp/Resources/*.lproj`。
 
 ## [1.0.0] - 2026-11-06
 

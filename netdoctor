@@ -4,6 +4,9 @@ set -u
 VERSION=1.0
 B=$'\033[1m'; G=$'\033[32m'; R=$'\033[31m'; Y=$'\033[33m'; N=$'\033[0m'
 [ -t 1 ] || [ -n "${NETDOCTOR_COLOR:-}" ] || { B=; G=; R=; Y=; N=; }
+# Language: NETDOCTOR_LANG=zh|en, otherwise taken from the locale (LC_ALL / LANG)
+case "${NETDOCTOR_LANG:-${LC_ALL:-${LANG:-}}}" in zh*|ZH*) ZH=1;; *) ZH=0;; esac
+L() { if [ "$ZH" = 1 ]; then printf '%s' "$2"; else printf '%s' "$1"; fi; }
 has() { command -v "$1" >/dev/null 2>&1; }
 hdr() { printf '\n%s== %s ==%s\n' "$B" "$*" "$N"; }
 ok()  { printf '%s[ OK ]%s %s\n' "$G" "$N" "$*"; }
@@ -14,7 +17,29 @@ default_if()  { route -n get default 2>/dev/null | awk '/interface:/{print $2}';
 gateway()     { route -n get default 2>/dev/null | awk '/gateway:/{print $2}'; }
 wifi_if()     { networksetup -listallhardwareports 2>/dev/null | awk '/Wi-Fi|AirPort/{getline; print $2; exit}'; }
 
-usage() { cat <<USAGE
+usage() {
+  if [ "$ZH" = 1 ]; then cat <<USAGE
+netdoctor $VERSION - macOS 网络诊断
+
+用法: netdoctor <命令> [参数]
+  quick                 一键体检: 网卡/网关/DNS/外网/HTTP (先跑这个)
+  wifi                  Wi-Fi 信号、信道、速率、SSID (部分信息需 sudo)
+  dns <域名>            对比 系统/1.1.1.1/8.8.8.8/223.5.5.5 解析结果与耗时
+  route <主机>          路由选择 + traceroute/mtr 路径
+  ping <主机>           持续 ping 并统计丢包/抖动 (默认 20 个包)
+  port <主机> <端口>    TCP 端口连通性
+  http <URL>            curl 分阶段耗时 (DNS/TCP/TLS/首字节/总计)
+  tls <主机> [端口]     证书、协议版本、有效期
+  mtu [主机]            探测路径 MTU (排查大包丢失/VPN 问题)
+  speed                 带宽 + 响应性 (系统自带 networkQuality)
+  conns                 当前连接与监听端口 (按进程)
+  proxy                 系统代理 / 环境变量代理 / VPN 状态
+  capture [过滤器]      tcpdump 抓包到 ~/Desktop (需 sudo)
+  fixdns                刷新 DNS 缓存 (需 sudo)
+  report                把 quick+wifi+dns+proxy 输出保存到文件
+  tools                 检查第三方工具是否已安装
+USAGE
+  else cat <<USAGE
 netdoctor $VERSION - macOS network diagnostics
 
 Usage: netdoctor <command> [args]
@@ -35,36 +60,37 @@ Usage: netdoctor <command> [args]
   report                save quick+wifi+dns+proxy output to a file
   tools                 check whether third-party tools are installed
 USAGE
+  fi
 }
 
 cmd_quick() {
-  hdr "Interface and gateway"
+  hdr "$(L "Interface and gateway" "网卡与网关")"
   local ifc gw; ifc=$(default_if); gw=$(gateway)
-  if [ -z "$ifc" ]; then bad "No default route (not connected?)"; ifconfig | grep -E '^[a-z0-9]+:|inet ' ; return; fi
-  ok "Default interface $ifc  gateway ${gw:-none}"
+  if [ -z "$ifc" ]; then bad "$(L "No default route (not connected?)" "没有默认路由 (未联网?)")"; ifconfig | grep -E '^[a-z0-9]+:|inet ' ; return; fi
+  ok "$(L "Default interface $ifc  gateway ${gw:-none}" "默认网卡 $ifc  网关 ${gw:-无}")"
   ifconfig "$ifc" | awk '/inet |inet6 |ether|status/{print "   "$0}'
-  hdr "Gateway reachability"
+  hdr "$(L "Gateway reachability" "网关连通性")"
   if [ -n "$gw" ]; then
-    ping -c 3 -t 5 "$gw" >/dev/null 2>&1 && ok "Gateway $gw reachable" || bad "Gateway $gw unreachable (Wi-Fi / cable / router problem)"
+    ping -c 3 -t 5 "$gw" >/dev/null 2>&1 && ok "$(L "Gateway $gw reachable" "网关 $gw 可达")" || bad "$(L "Gateway $gw unreachable (Wi-Fi / cable / router problem)" "网关 $gw 不通 (Wi-Fi/网线/路由器问题)")"
   fi
-  hdr "Internet reachability by IP (bypassing DNS)"
+  hdr "$(L "Internet reachability by IP (bypassing DNS)" "外网 IP 连通性 (绕开 DNS)")"
   for ip in 1.1.1.1 8.8.8.8 223.5.5.5; do
     ping -c 2 -t 4 "$ip" >/dev/null 2>&1 && ok "ping $ip" || bad "ping $ip"
   done
   hdr "DNS"
   scutil --dns | awk '/nameserver\[/{print "   "$0}' | sort -u | head -6
   for d in apple.com baidu.com; do
-    if dig +short +time=3 +tries=1 "$d" 2>/dev/null | grep -q .; then ok "Resolve $d"; else bad "Failed to resolve $d"; fi
+    if dig +short +time=3 +tries=1 "$d" 2>/dev/null | grep -q .; then ok "$(L "Resolve $d" "解析 $d")"; else bad "$(L "Failed to resolve $d" "解析 $d 失败")"; fi
   done
   hdr "HTTP/HTTPS"
   for u in https://www.apple.com https://www.baidu.com https://www.google.com; do
     code=$(curl -s -o /dev/null -m 8 -w '%{http_code} %{time_total}s' "$u" 2>/dev/null)
-    case "$code" in 2*|3*) ok "$u  $code";; *) bad "$u  ${code:-timeout}";; esac
+    case "$code" in 2*|3*) ok "$u  $code";; *) bad "$u  ${code:-$(L "timeout" "超时")}";; esac
   done
-  hdr "Public IP"
-  curl -s -m 6 https://api.ip.sb/geoip 2>/dev/null | (has jq && jq -r '"   \(.ip)  \(.country) \(.isp // .organization)"' || cat) || warn "Lookup failed"
+  hdr "$(L "Public IP" "公网出口 IP")"
+  curl -s -m 6 https://api.ip.sb/geoip 2>/dev/null | (has jq && jq -r '"   \(.ip)  \(.country) \(.isp // .organization)"' || cat) || warn "$(L "Lookup failed" "获取失败")"
   echo
-  echo "Reading: gateway down → local link; IP works but names fail → DNS; names work but HTTP fails → proxy/firewall/TLS."
+  echo "$(L "Reading: gateway down → local link; IP works but names fail → DNS; names work but HTTP fails → proxy/firewall/TLS." "判读: 网关不通→本地链路; IP通但域名失败→DNS; 域名通但HTTP失败→代理/防火墙/TLS。")"
 }
 
 cmd_wifi() {
@@ -72,47 +98,58 @@ cmd_wifi() {
   hdr "Wi-Fi ($w)"
   networksetup -getairportnetwork "$w" 2>/dev/null
   if has wdutil; then
-    echo "(wdutil needs sudo to show full details)"
+    echo "$(L "(wdutil needs sudo to show full details)" "(wdutil 需 sudo 才能看到完整信息)")"
     sudo wdutil info 2>/dev/null | awk '/SSID|BSSID|RSSI|Noise|Tx Rate|Channel|PHY Mode|Security|Country/' | head -20
   fi
-  hdr "system_profiler summary"
+  hdr "$(L "system_profiler summary" "system_profiler 摘要")"
   system_profiler SPAirPortDataType 2>/dev/null | awk '/Current Network Information/{f=1} f&&/PHY Mode|Channel|Security|Signal|Transmit Rate|Country/{print} /Other Local Wi-Fi/{exit}'
-  echo "Rules of thumb: RSSI > -60 good, -70 fair, < -75 poor; SNR (RSSI-Noise) should be > 25 to be stable."
-  warn "Nearby Wi-Fi scan: Option-click the Wi-Fi menu bar icon, or use Wireless Diagnostics (Option-click the icon → Open Wireless Diagnostics)"
+  echo "$(L "Rules of thumb: RSSI > -60 good, -70 fair, < -75 poor; SNR (RSSI-Noise) should be > 25 to be stable." "经验值: RSSI > -60 好, -70 一般, < -75 差; SNR(RSSI-Noise) > 25 才稳。")"
+  warn "$(L "Nearby Wi-Fi scan: Option-click the Wi-Fi menu bar icon, or use Wireless Diagnostics (Option-click the icon → Open Wireless Diagnostics)" "附近 Wi-Fi 扫描: 按住 Option 点菜单栏 Wi-Fi 图标, 或用 '无线诊断'(Option+Wi-Fi图标→打开无线诊断)")"
 }
 
 cmd_dns() {
-  local d=${1:-}; [ -z "$d" ] && { echo "Usage: netdoctor dns <domain>"; return 1; }
-  hdr "System resolvers (scutil --dns)"; scutil --dns | awk '/resolver #|nameserver\[|domain|search domain|if_index/{print "  "$0}' | head -24
-  hdr "System resolution (dscacheutil, the real system path)"; dscacheutil -q host -a name "$d"
-  hdr "DNS server comparison"
+  local d=${1:-}; [ -z "$d" ] && { echo "$(L "Usage: netdoctor dns <domain>" "用法: netdoctor dns <域名>")"; return 1; }
+  hdr "$(L "System resolvers (scutil --dns)" "系统解析器 (scutil --dns)")"; scutil --dns | awk '/resolver #|nameserver\[|domain|search domain|if_index/{print "  "$0}' | head -24
+  hdr "$(L "System resolution (dscacheutil, the real system path)" "系统解析 (dscacheutil, 走真实系统路径)")"; dscacheutil -q host -a name "$d"
+  hdr "$(L "DNS server comparison" "各 DNS 服务器对比")"
   for s in "" 1.1.1.1 8.8.8.8 223.5.5.5 119.29.29.29; do
-    label=${s:-system}
+    label=${s:-$(L "system" "系统默认")}
     out=$(dig ${s:+@$s} +tries=1 +time=3 "$d" A 2>&1)
     ans=$(echo "$out" | awk '/^[^;].*IN[ \t]+A[ \t]/{printf "%s ", $NF}')
     t=$(echo "$out" | awk '/Query time/{print $4" ms"}')
-    printf '  %-12s %-10s %s\n' "$label" "${t:-timeout}" "${ans:-(no answer)}"
+    printf '  %-12s %-10s %s\n' "$label" "${t:-$(L "timeout" "超时")}" "${ans:-$(L "(no answer)" "(无结果)")}"
   done
-  echo "Tip: big differences between servers, or a failing system default → ISP hijacking or a DNS config problem; try netdoctor fixdns."
+  echo "$(L "Tip: big differences between servers, or a failing system default → ISP hijacking or a DNS config problem; try netdoctor fixdns." "提示: 各家结果差异大/系统默认失败 → 运营商劫持或 DNS 配置问题; 可 netdoctor fixdns。")"
 }
 
 cmd_route() {
-  local h=${1:-}; [ -z "$h" ] && { echo "Usage: netdoctor route <host>"; return 1; }
-  hdr "Route selection (which interface/VPN the traffic uses)"; route -n get "$h" 2>&1 | awk '/destination|gateway|interface/'
-  hdr "Path"
-  if has mtr; then sudo mtr -rwbzc 20 "$h"; else traceroute -w 2 -q 1 -m 20 "$h"; warn "brew install mtr gives per-hop loss statistics"; fi
+  local h=${1:-}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor route <host>" "用法: netdoctor route <主机>")"; return 1; }
+  hdr "$(L "Route selection (which interface/VPN the traffic uses)" "路由选择 (流量走哪块网卡/VPN)")"; route -n get "$h" 2>&1 | awk '/destination|gateway|interface/'
+  hdr "$(L "Path" "路径")"
+  if has mtr; then sudo mtr -rwbzc 20 "$h"; else traceroute -w 2 -q 1 -m 20 "$h"; warn "$(L "brew install mtr gives per-hop loss statistics" "brew install mtr 可得到逐跳丢包统计")"; fi
 }
 
-cmd_ping() { local h=${1:-}; [ -z "$h" ] && { echo "Usage: netdoctor ping <host> [count]"; return 1; }; ping -c "${2:-20}" "$h"; }
+cmd_ping() { local h=${1:-}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor ping <host> [count]" "用法: netdoctor ping <主机> [次数]")"; return 1; }; ping -c "${2:-20}" "$h"; }
 
 cmd_port() {
-  [ $# -lt 2 ] && { echo "Usage: netdoctor port <host> <port>"; return 1; }
-  nc -vz -G 5 "$1" "$2" 2>&1 && ok "$1:$2 open" || bad "$1:$2 unreachable (closed / firewall / routing)"
+  [ $# -lt 2 ] && { echo "$(L "Usage: netdoctor port <host> <port>" "用法: netdoctor port <主机> <端口>")"; return 1; }
+  nc -vz -G 5 "$1" "$2" 2>&1 && ok "$(L "$1:$2 open" "$1:$2 开放")" || bad "$(L "$1:$2 unreachable (closed / firewall / routing)" "$1:$2 不通 (关闭/防火墙/路由)")"
 }
 
 cmd_http() {
-  local u=${1:-}; [ -z "$u" ] && { echo "Usage: netdoctor http <URL>"; return 1; }
-  curl -sS -o /dev/null -L -m 30 -w '
+  local u=${1:-}; [ -z "$u" ] && { echo "$(L "Usage: netdoctor http <URL>" "用法: netdoctor http <URL>")"; return 1; }
+  local fmt
+  if [ "$ZH" = 1 ]; then fmt='
+  HTTP 状态      %{http_code}  (重定向 %{num_redirects} 次)
+  远端 IP        %{remote_ip}:%{remote_port}
+  DNS 解析       %{time_namelookup}s
+  TCP 连接       %{time_connect}s
+  TLS 握手完成   %{time_appconnect}s
+  首字节(TTFB)   %{time_starttransfer}s
+  总耗时         %{time_total}s
+  下载速度       %{speed_download} B/s
+'
+  else fmt='
   HTTP status     %{http_code}  (%{num_redirects} redirects)
   Remote IP       %{remote_ip}:%{remote_port}
   DNS lookup      %{time_namelookup}s
@@ -121,42 +158,44 @@ cmd_http() {
   First byte      %{time_starttransfer}s
   Total           %{time_total}s
   Download speed  %{speed_download} B/s
-' "$u" || bad "Request failed; investigate with: curl -v $u"
+'
+  fi
+  curl -sS -o /dev/null -L -m 30 -w "$fmt" "$u" || bad "$(L "Request failed; investigate with: curl -v $u" "请求失败, 加 -v 排查: curl -v $u")"
 }
 
 cmd_tls() {
-  local h=${1:-}; local p=${2:-443}; [ -z "$h" ] && { echo "Usage: netdoctor tls <host> [port]"; return 1; }
+  local h=${1:-}; local p=${2:-443}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor tls <host> [port]" "用法: netdoctor tls <主机> [端口]")"; return 1; }
   local out; out=$(echo | openssl s_client -connect "$h:$p" -servername "$h" -brief 2>&1)
   echo "$out" | head -12
   echo | openssl s_client -connect "$h:$p" -servername "$h" 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null
-  has testssl && echo "Full audit: testssl $h:$p"
+  has testssl && echo "$(L "Full audit: testssl $h:$p" "完整体检: testssl $h:$p")"
 }
 
 cmd_mtu() {
   local h=${1:-1.1.1.1} s
-  hdr "Path MTU probe -> $h (DF bit)"
+  hdr "$(L "Path MTU probe -> $h (DF bit)" "路径 MTU 探测 -> $h (DF 位)")"
   for s in 1472 1452 1432 1412 1372 1272 1172; do
     if ping -c 1 -t 3 -D -s "$s" "$h" >/dev/null 2>&1; then
-      ok "Payload $s passed → MTU ≈ $((s+28))"; return; fi
-    printf '  Payload %s lost\n' "$s"
+      ok "$(L "Payload $s passed → MTU ≈ $((s+28))" "载荷 $s 通过 → MTU ≈ $((s+28))")"; return; fi
+    printf "  $(L "Payload %s lost" "载荷 %s 丢失")\n" "$s"
   done
-  bad "All failed; the target may block ICMP"
+  bad "$(L "All failed; the target may block ICMP" "均失败; 目标可能禁 ICMP")"
 }
 
-cmd_speed() { has networkQuality && networkQuality -v || { bad "Requires macOS 12+"; has speedtest-cli && speedtest-cli; }; }
+cmd_speed() { has networkQuality && networkQuality -v || { bad "$(L "Requires macOS 12+" "需要 macOS 12+")"; has speedtest-cli && speedtest-cli; }; }
 
 cmd_conns() {
-  hdr "Listening ports"; sudo lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR==1||1' | head -40
-  hdr "Established connections"; sudo lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null | head -40
-  has nettop && echo "Live per-process traffic: nettop -P -d    |   bandwhich (needs sudo)"
+  hdr "$(L "Listening ports" "监听端口")"; sudo lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR==1||1' | head -40
+  hdr "$(L "Established connections" "已建立连接")"; sudo lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null | head -40
+  has nettop && echo "$(L "Live per-process traffic: nettop -P -d    |   bandwhich (needs sudo)" "实时按进程流量: nettop -P -d    |   bandwhich (需 sudo)")"
 }
 
 cmd_proxy() {
-  hdr "System proxy (scutil --proxy)"; scutil --proxy
-  hdr "Environment-variable proxy"; env | grep -i -E '^(https?|all|no)_proxy=' || echo "  (none)"
-  hdr "VPN / tunnel interfaces"; ifconfig | awk '/^(utun|ppp|ipsec|tun|tap)[0-9]*:/{print $1}'
-  hdr "Configured VPN services"; scutil --nc list 2>/dev/null
-  hdr "Per-service proxy (networksetup)"
+  hdr "$(L "System proxy (scutil --proxy)" "系统代理 (scutil --proxy)")"; scutil --proxy
+  hdr "$(L "Environment-variable proxy" "环境变量代理")"; env | grep -i -E '^(https?|all|no)_proxy=' || echo "$(L "  (none)" "  (无)")"
+  hdr "$(L "VPN / tunnel interfaces" "VPN/隧道网卡")"; ifconfig | awk '/^(utun|ppp|ipsec|tun|tap)[0-9]*:/{print $1}'
+  hdr "$(L "Configured VPN services" "已配置的 VPN 服务")"; scutil --nc list 2>/dev/null
+  hdr "$(L "Per-service proxy (networksetup)" "各网络服务代理 (networksetup)")"
   networksetup -listallnetworkservices 2>/dev/null | tail -n +2 | grep -v '^\*' | while read -r s; do
     echo "- $s: $(networksetup -getwebproxy "$s" | tr '\n' ' ')"
   done
@@ -164,27 +203,27 @@ cmd_proxy() {
 
 cmd_capture() {
   local f=${1:-}; local out="$HOME/Desktop/cap-$(date +%Y%m%d-%H%M%S).pcap"
-  echo "Capturing → $out  (Ctrl-C to stop; open with Wireshark)"
-  echo "Filter examples: 'host 1.2.3.4'  'port 53'  'tcp port 443 and host x.com'"
+  echo "$(L "Capturing → $out  (Ctrl-C to stop; open with Wireshark)" "抓包 → $out  (Ctrl-C 结束; 用 Wireshark 打开)")"
+  echo "$(L "Filter examples: 'host 1.2.3.4'  'port 53'  'tcp port 443 and host x.com'" "过滤器示例: 'host 1.2.3.4'  'port 53'  'tcp port 443 and host x.com'")"
   if [ -n "$f" ]; then sudo tcpdump -i "$(default_if)" -nn -s0 -w "$out" "$f"; else sudo tcpdump -i "$(default_if)" -nn -s0 -w "$out"; fi
 }
 
-cmd_fixdns() { sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder && ok "DNS cache flushed"; }
+cmd_fixdns() { sudo dscacheutil -flushcache && sudo killall -HUP mDNSResponder && ok "$(L "DNS cache flushed" "DNS 缓存已刷新")"; }
 
 cmd_tools() {
-  hdr "Built-in"
+  hdr "$(L "Built-in" "系统自带")"
   for t in ping traceroute netstat lsof nc curl dig scutil networksetup route tcpdump nettop networkQuality wdutil ifconfig arp dscacheutil system_profiler; do
-    has "$t" && ok "$t" || warn "$t missing"; done
-  hdr "Third-party (brew bundle --file=Brewfile)"
+    has "$t" && ok "$t" || warn "$(L "$t missing" "$t 缺失")"; done
+  hdr "$(L "Third-party (brew bundle --file=Brewfile)" "第三方 (brew bundle --file=Brewfile)")"
   for t in mtr iperf3 fping nmap gping trip doggo http tshark termshark ngrep bandwhich iftop testssl speedtest-cli jq; do
-    has "$t" && ok "$t" || warn "$t not installed"; done
+    has "$t" && ok "$t" || warn "$(L "$t not installed" "$t 未安装")"; done
 }
 
 cmd_report() {
   local f="$HOME/Desktop/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt"
   { echo "netdoctor report $(date)"; uname -a; sw_vers
     cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_proxy; } >"$f" 2>&1
-  ok "Saved: $f"
+  ok "$(L "Saved: $f" "已保存: $f")"
 }
 
 c=${1:-help}; [ $# -gt 0 ] && shift

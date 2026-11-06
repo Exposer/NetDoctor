@@ -12,10 +12,10 @@ struct NetDoctorApp: App {
         .commands { CommandGroup(replacing: .newItem) {} }
 
         MenuBarExtra {
-            Text("Target \(monitor.target)")
-            if let a = monitor.avg { Text(String(format: "Avg %.0f ms · Loss %.0f%%", a, monitor.lossPercent)) }
+            Text(String(format: loc("Target %@"), monitor.target))
+            if let a = monitor.avg { Text(String(format: loc("Avg %.0f ms · Loss %.0f%%"), a, monitor.lossPercent)) }
             Divider()
-            Button(monitor.running ? "Stop monitoring" : "Start monitoring") {
+            Button(LocalizedStringKey(monitor.running ? "Stop monitoring" : "Start monitoring")) {
                 monitor.running ? monitor.stop() : monitor.start()
             }
             Button("Open main window") {
