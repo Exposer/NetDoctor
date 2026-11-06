@@ -8,7 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ### Changed
 - Build scripts and `Brewfile` comments are now in English.
+- `netdoctor` picks its language from `NETDOCTOR_LANG` or `LANG`; the web UI always calls it with the language selected on the page.
 - The web UI, SwiftUI app and `netdoctor` CLI output are bilingual (English / Simplified Chinese) and follow the system language; override with `NETDOCTOR_LANG=zh|en`. App strings live in `NetDoctorApp/Resources/*.lproj`; the web UI follows the browser language and has an in-page switch (the choice is remembered).
+
+### Fixed
+- SwiftUI app: removed `swiftLanguageVersion` from `Package.swift`, fixing build failures on newer toolchains.
+- `netdoctor`: added a `priv()` privilege helper that uses `sudo -n` when there is no terminal (web UI / app), so runs no longer hang on a password prompt; `route` falls back from mtr to traceroute with a notice when admin rights are missing.
+- `netdoctor tls`: works with the LibreSSL shipped with macOS; reports a clear error and a non-zero exit code when no certificate is received.
+- `netdoctor speed`: no longer reports a false error when `networkQuality` succeeds; corrected exit codes of several commands.
+- Web UI: the child process is now killed when the browser disconnects (Stop or closing the page), so no stray background processes are left.
 
 ## [1.0.0] - 2026-11-06
 

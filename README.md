@@ -21,6 +21,7 @@
 ```
 左侧选工具(如 **Quick check**、**DNS compare**),填参数,点 **Run**,输出实时显示,可 **Stop** / **Copy** / **Save**。界面语言跟随浏览器,左下角 🌐 可切换中文 / English。
 需要管理员权限的功能(**Connections**、**Flush DNS**,以及 **Wi-Fi** / **Route / path** 勾选 *Administrator rights* 后的完整信息)会弹出系统密码框。
+没有终端时,需要 `sudo` 的步骤不会卡在密码提示:勾选 *Administrator rights* 会弹出系统密码框,否则会被跳过或降级(例如 mtr 回退为 traceroute)。
 安全:只监听 127.0.0.1,带随机令牌,校验 Host 头,参数白名单且不经 shell。
 
 ## 命令行
@@ -65,4 +66,5 @@ cd NetDoctorApp && ./build-app.sh   # UNIVERSAL=1 ./build-app.sh 生成 Intel+Ap
 open NetDoctor.app
 ```
 功能:全部诊断工具、实时输出、停止 / 复制 / 保存、实时延迟折线图、菜单栏常驻延迟显示。界面语言跟随系统(简体中文 / English)。
+如果在你的工具链上构建失败,欢迎提 issue。
 开发调试:`cd NetDoctorApp && NETDOCTOR_PATH=../netdoctor swift run`

@@ -8,7 +8,15 @@
 
 ### 变更
 - 构建脚本和 `Brewfile` 注释改为英文。
+- `netdoctor` 的语言由 `NETDOCTOR_LANG` 或 `LANG` 决定;网页界面固定按所选语言调用。
 - 网页界面、SwiftUI 应用与 `netdoctor` 命令行输出支持中英双语,跟随系统语言(`NETDOCTOR_LANG=zh|en` 可强制指定);应用字符串位于 `NetDoctorApp/Resources/*.lproj`;网页界面跟随浏览器语言,可在页面上手动切换(记住选择)。
+
+### 修复
+- SwiftUI 应用:去掉 `Package.swift` 中的 `swiftLanguageVersion`,修复在新版工具链上构建失败的问题。
+- `netdoctor`:新增 `priv()` 提权助手,无终端(网页 / 应用调用)时用 `sudo -n`,不再卡在密码提示;`route` 在没有权限时从 mtr 回退到 traceroute 并给出提示。
+- `netdoctor tls`:兼容 macOS 自带的 LibreSSL;取不到证书时明确报错并返回非零退出码。
+- `netdoctor speed`:修复 `networkQuality` 成功时误报错误;修正若干命令的退出码。
+- 网页界面:浏览器断开(点“停止”或关闭页面)时结束子进程,避免遗留后台进程。
 
 ## [1.0.0] - 2026-11-06
 

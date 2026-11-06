@@ -21,6 +21,7 @@ A `Brewfile` is included to install common third-party tools (mtr, nmap, iperf3,
 ```
 Pick a tool on the left, fill in the parameters, click "Run". The UI follows your browser language; the 🌐 button at the bottom left switches between English and 中文. Output streams live and can be stopped, copied or saved.
 Features that need administrator rights (connections/listeners, flush DNS, and the full Wi-Fi/route details) show the system password prompt.
+Without a terminal, steps that need `sudo` never block on a password prompt: use the "Administrator rights" option to get the system password dialog, otherwise they are skipped or degrade (e.g. mtr falls back to traceroute).
 Security: listens on 127.0.0.1 only, uses a random token, checks the Host header, whitelists arguments, and never passes them through a shell.
 
 ## Command line
@@ -67,6 +68,5 @@ cd NetDoctorApp && ./build-app.sh      # UNIVERSAL=1 ./build-app.sh builds for I
 open NetDoctor.app
 ```
 Features: all diagnostic tools, live output, stop/copy/save, a live latency chart, and latency shown in the menu bar. The UI follows the system language (English / Simplified Chinese).
+If the build fails on your toolchain, please open an issue.
 Development: `cd NetDoctorApp && NETDOCTOR_PATH=../netdoctor swift run`
-
-> The SwiftUI source has not yet been compiled on macOS; if the first build fails, please open an issue.
