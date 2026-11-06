@@ -73,6 +73,20 @@ ZH = {
     "Failed to start": "启动失败",
     "[exit code %d]": "[退出码 %d]",
     "Quit": "退出",
+    "Shortcuts": "快捷键",
+    "Keyboard shortcuts": "键盘快捷键",
+    "Close": "关闭",
+    "Run the current tool": "运行当前工具",
+    "Stop a running command; otherwise leave the input box": "停止正在运行的命令;否则退出输入框",
+    "Previous / next tool": "上一个 / 下一个工具",
+    "Jump to tool 1–9": "跳到第 1–9 个工具",
+    "Focus the first input": "聚焦第一个输入框",
+    "Run (when not typing)": "运行(不在输入时)",
+    "Copy output": "复制输出",
+    "Save output": "保存输出",
+    "Switch language": "切换语言",
+    "Switch theme": "切换主题",
+    "Show / hide this help": "显示 / 隐藏此帮助",
     "Auto": "自动",
     "Light": "浅色",
     "Dark": "深色",
@@ -211,11 +225,16 @@ input[type=text]{padding:7px 9px;border:1px solid var(--line);border-radius:7px;
 #out{flex:1;min-height:0;background:var(--term);color:var(--termfg);border-radius:12px;padding:14px;overflow:auto;white-space:pre-wrap;word-break:break-all;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;margin:0}
 .b{font-weight:700}.g{color:#32d74b}.r{color:#ff453a}.y{color:#ffd60a}.d{opacity:.55}
 .bar{display:flex;gap:8px;align-items:center}.sp{flex:1}
+kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;margin-right:3px;white-space:nowrap}
+#help{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9}
+#help.on{display:flex}#help .box{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:18px 22px;max-width:520px;width:calc(100% - 32px);max-height:85vh;overflow:auto}
+#help h3{margin:0 0 10px;font-size:16px}#help table{width:100%;border-collapse:collapse}#help td{padding:5px 0;vertical-align:top}#help td:first-child{width:46%}
 </style><script>try{var th=localStorage.getItem('nd_theme');if(th==='light'||th==='dark')document.documentElement.dataset.theme=th}catch(e){}</script></head><body>
-<nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="toggleTheme()" id="theme" style="margin-top:14px;color:var(--mut)"></button><button onclick="toggleLang()" id="lang" style="color:var(--mut)"></button><button onclick="quit()" style="color:var(--mut)">⏻ <span data-i="Quit">Quit</span></button></nav>
+<nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="toggleHelp()" id="helpbtn" style="margin-top:14px;color:var(--mut)">⌨ <span data-i="Shortcuts">Shortcuts</span></button><button onclick="toggleTheme()" id="theme" style="color:var(--mut)"></button><button onclick="toggleLang()" id="lang" style="color:var(--mut)"></button><button onclick="quit()" style="color:var(--mut)">⏻ <span data-i="Quit">Quit</span></button></nav>
 <main><div class="card"><h2 id="t"></h2><p id="d"></p><form id="f"></form></div>
 <div class="bar"><span class="sp" id="st" style="color:var(--mut)"></span><button class="btn sec" onclick="copy()" data-i="Copy">Copy</button><button class="btn sec" onclick="save()" data-i="Save">Save</button><button class="btn sec" id="stop" onclick="stop()" data-i="Stop" disabled>Stop</button></div>
 <pre id="out"></pre></main>
+<div id="help" onclick="if(event.target===this)toggleHelp(false)"><div class="box"><h3 id="helph"></h3><table id="helpt"></table><p style="margin:12px 0 0;text-align:right"><button class="btn sec" onclick="toggleHelp(false)" data-i="Close">Close</button></p></div></div>
 <script>
 const TOKEN="__TOKEN__",CMDS=__CMDS__,ZH=__ZH__;let cur=null,ctl=null,raw="",idle=true,lang="en";
 const $=s=>document.querySelector(s);
@@ -232,14 +251,14 @@ function applyLang(){document.documentElement.lang=lang=='zh'?'zh-CN':'en';docum
 document.querySelectorAll('[data-i]').forEach(e=>e.textContent=t(e.dataset.i));
 CMDS.forEach(c=>{$('#b_'+c.id+' .nl').textContent=t(c.label)});
 $('#lang').textContent='🌐 '+(lang=='zh'?'English':'中文');if(idle)$('#out').textContent=t(INTRO);
-applyTheme();if(cur)pick(cur.id,true)}
+applyTheme();$('#stop').title='Esc';$('#lang').title='l';$('#theme').title='t';$('#helpbtn').title='?';if(cur)pick(cur.id,true,true)}
 function toggleLang(){lang=lang=='zh'?'en':'zh';try{localStorage.setItem('nd_lang',lang)}catch(e){}applyLang()}
-function pick(id,keep){const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
+function pick(id,keep,nofocus){const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
 $('#t').textContent=cur.icon+' '+t(cur.label);$('#d').textContent=t(cur.desc);const f=$('#f');f.innerHTML='';
 cur.inputs.forEach(i=>{const l=document.createElement('label');l.textContent=t(i.label)+(i.req?' *':'');const x=document.createElement('input');x.type='text';x.name=i.name;x.placeholder=i.ph||'';x.value=(keep&&old[i.name]!==undefined)?old[i.name]:(i.def||'');l.append(x);f.append(l)});
 if(cur.admin===true||cur.admin==='optional'){const l=document.createElement('label');l.className='chk';l.innerHTML=`<input type="checkbox" name="_admin" ${cur.admin===true?'checked disabled':''}>${t('Requires administrator rights')}${cur.admin===true?'':' '+t('(fuller details)')}`;f.append(l);if(keep&&old._admin!==undefined&&cur.admin!==true)l.querySelector('input').checked=old._admin}
-const r=document.createElement('button');r.className='btn';r.id='run';r.textContent=t('Run');r.type='submit';f.append(r);
-f.onsubmit=e=>{e.preventDefault();run()};const first=f.querySelector('input[type=text]');first&&first.focus()}
+const r=document.createElement('button');r.className='btn';r.id='run';r.textContent=t('Run');r.title=MOD+'+Enter';r.type='submit';f.append(r);
+f.onsubmit=e=>{e.preventDefault();run()};const first=f.querySelector('input[type=text]');first&&!nofocus&&first.focus()}
 function ansi(s){const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;');let open=0,o='';
 return esc(s).replace(/\x1b\[(\d+)m/g,(m,c)=>{let r='';if(c=='0'||c=='22'){r='</span>'.repeat(open);open=0;return r}
 const k={1:'b',31:'r',32:'g',33:'y',2:'d'}[c];if(!k)return '';open++;return `<span class="${k}">`})+'</span>'.repeat(open)}
@@ -254,6 +273,35 @@ const plain=()=>raw.replace(/\x1b\[\d+m/g,'');
 function copy(){navigator.clipboard.writeText(plain());$('#st').textContent=t('Copied')}
 function save(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([plain()]));a.download=`netdoctor-${cur?cur.id:'out'}-${Date.now()}.txt`;a.click()}
 async function quit(){if(confirm(t('Quit the NetDoctor service?'))){await fetch('/quit',{method:'POST',headers:{'X-Token':TOKEN}}).catch(()=>{});document.body.innerHTML='<p style="margin:40px">'+t('Quit. You can close this page.')+'</p>'}}
+const MOD=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
+const SC=[[[MOD+' + Enter'],'Run the current tool'],[['Esc'],'Stop a running command; otherwise leave the input box'],
+[['j','↓'],'Previous / next tool'],[['1'],'Jump to tool 1–9'],[['/'],'Focus the first input'],[['Enter'],'Run (when not typing)'],
+[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['?'],'Show / hide this help']];
+SC[2][0]=['j / ↓  ·  k / ↑'];SC[3][0]=['1 … 9'];
+function toggleHelp(on){const h=$('#help');const open=on===undefined?!h.classList.contains('on'):on;
+if(open){$('#helph').textContent='⌨ '+t('Keyboard shortcuts');$('#helpt').innerHTML=SC.map(([k,d])=>`<tr><td>${k.map(x=>'<kbd>'+x.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</kbd>').join('')}</td><td>${t(d)}</td></tr>`).join('')}
+h.classList.toggle('on',open)}
+function go(delta,abs){const i=CMDS.findIndex(c=>c.id==(cur&&cur.id));const n=abs!==undefined?abs:Math.max(0,Math.min(CMDS.length-1,i+delta));if(CMDS[n]){pick(CMDS[n].id,false,true);$('#b_'+CMDS[n].id).scrollIntoView({block:'nearest'})}}
+document.addEventListener('keydown',e=>{
+const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&e.target.type!='checkbox';
+const helpOpen=$('#help').classList.contains('on');
+if(e.key=='Escape'){if(helpOpen){toggleHelp(false)}else if(!$('#stop').disabled){stop()}else if(typing){e.target.blur()}else return;e.preventDefault();return}
+if((e.metaKey||e.ctrlKey)&&e.key=='Enter'){if(!$('#run').disabled){e.preventDefault();run()}return}
+if(e.metaKey||e.ctrlKey||e.altKey||typing)return;
+if(helpOpen){if(e.key=='?'){toggleHelp(false);e.preventDefault()}return}
+const k=e.key;let used=true;
+if(k=='?')toggleHelp(true);
+else if(k=='j'||k=='ArrowDown')go(1);
+else if(k=='k'||k=='ArrowUp')go(-1);
+else if(/^[1-9]$/.test(k))go(0,+k-1);
+else if(k=='/'){const f=$('#f input[type=text]');f?f.focus():used=false}
+else if(k=='Enter'&&e.target.tagName!='BUTTON'){if(!$('#run').disabled)run()}
+else if(k=='c'){if(raw)copy()}
+else if(k=='s'){if(raw)save()}
+else if(k=='l')toggleLang();
+else if(k=='t')toggleTheme();
+else used=false;
+if(used)e.preventDefault()});
 pick('quick');applyLang();
 </script></body></html>"""
 
