@@ -19,7 +19,7 @@ A `Brewfile` is included to install common third-party tools (mtr, nmap, iperf3,
 ./NetDoctor.command        # double-click or run; opens the UI in your browser
 ./make-app.sh              # optional: build NetDoctor.app to drop into /Applications
 ```
-Pick a tool on the left, fill in the parameters, click "Run". Output streams live and can be stopped, copied or saved.
+Pick a tool on the left, fill in the parameters, click "Run". The UI follows your browser language; the 🌐 button at the bottom left switches between English and 中文. Output streams live and can be stopped, copied or saved.
 Features that need administrator rights (connections/listeners, flush DNS, and the full Wi-Fi/route details) show the system password prompt.
 Security: listens on 127.0.0.1 only, uses a random token, checks the Host header, whitelists arguments, and never passes them through a shell.
 

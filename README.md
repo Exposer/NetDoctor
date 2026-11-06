@@ -12,14 +12,14 @@
 | 网页界面 | 想点按钮,零依赖(仅需 python3) | `./NetDoctor.command` |
 | 原生 SwiftUI 应用 | 日常常驻,菜单栏实时看延迟 | `NetDoctorApp/build-app.sh` |
 
-原生应用与命令行输出支持中英双语(跟随系统语言,命令行可用 `NETDOCTOR_LANG=zh|en` 强制);网页界面目前为英文,下文以英文原名标注按钮。另附 `Brewfile`,一次装好 mtr、nmap、iperf3、wireshark 等常用第三方工具。版本变更见 [CHANGELOG](CHANGELOG.md)。
+原生应用、网页界面和命令行输出都支持中英双语(跟随系统/浏览器语言;命令行可用 `NETDOCTOR_LANG=zh|en` 强制,网页左下角可手动切换)。下文用英文界面名标注按钮,中文界面对应“一键体检 / 运行 / 停止 / 复制 / 保存”等。另附 `Brewfile`,一次装好 mtr、nmap、iperf3、wireshark 等常用第三方工具。版本变更见 [CHANGELOG](CHANGELOG.md)。
 
 ## 图形界面
 ```bash
 ./NetDoctor.command        # 双击或运行,自动打开浏览器界面
 ./make-app.sh            # 可选:生成 NetDoctor.app,拖进“应用程序”
 ```
-左侧选工具(如 **Quick check**、**DNS compare**、**Live latency**),填参数,点 **Run**,输出实时显示,可 **Stop** / **Copy** / **Save**。
+左侧选工具(如 **Quick check**、**DNS compare**),填参数,点 **Run**,输出实时显示,可 **Stop** / **Copy** / **Save**。界面语言跟随浏览器,左下角 🌐 可切换中文 / English。
 需要管理员权限的功能(**Connections**、**Flush DNS**,以及 **Wi-Fi** / **Route / path** 勾选 *Administrator rights* 后的完整信息)会弹出系统密码框。
 安全:只监听 127.0.0.1,带随机令牌,校验 Host 头,参数白名单且不经 shell。
 
