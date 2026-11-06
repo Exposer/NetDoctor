@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""NetDiag GUI - 本机网页界面 (仅标准库, 仅监听 127.0.0.1)。
-用法: python3 netdiag-gui.py [--port 8765] [--no-open]
+"""NetDoctor GUI - 本机网页界面 (仅标准库, 仅监听 127.0.0.1)。
+用法: python3 netdoctor-gui.py [--port 8765] [--no-open]
 """
 import argparse, json, os, re, secrets, shlex, subprocess, sys, threading, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-NETDIAG = os.path.join(HERE, "netdiag")
+NETDOCTOR = os.path.join(HERE, "netdoctor")
 TOKEN = secrets.token_urlsafe(16)
 
 # admin: True=必须管理员权限, "optional"=可勾选, False=不需要
@@ -80,19 +80,19 @@ class H(BaseHTTPRequestHandler):
         except Exception as e:
             return self._send(400, "错误: %s\n" % e, "text/plain; charset=utf-8")
 
-        env = dict(os.environ, NETDIAG_COLOR="1", LANG="en_US.UTF-8")
+        env = dict(os.environ, NETDOCTOR_COLOR="1", LANG="en_US.UTF-8")
         env["PATH"] = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:" + env.get("PATH", "")
         self.send_response(200); self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Cache-Control", "no-store"); self.end_headers()
         if use_admin and sys.platform == "darwin":
-            inner = "HOME=%s PATH=%s NETDIAG_COLOR=1 %s 2>&1" % (
+            inner = "HOME=%s PATH=%s NETDOCTOR_COLOR=1 %s 2>&1" % (
                 shlex.quote(os.path.expanduser("~")), shlex.quote(env["PATH"]),
-                " ".join(shlex.quote(x) for x in [NETDIAG, spec["id"]] + args))
+                " ".join(shlex.quote(x) for x in [NETDOCTOR, spec["id"]] + args))
             inner = inner.replace("\\", "\\\\").replace('"', '\\"')
             cmd = ["osascript", "-e", 'do shell script "%s" with administrator privileges' % inner]
             self.wfile.write("(等待系统弹出管理员密码框…)\n".encode()); self.wfile.flush()
         else:
-            cmd = [NETDIAG, spec["id"]] + args
+            cmd = [NETDOCTOR, spec["id"]] + args
         try:
             p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, env=env, bufsize=0)
@@ -112,7 +112,7 @@ class H(BaseHTTPRequestHandler):
                 p.kill()
 
 HTML = r"""<!doctype html><html lang="zh"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NetDiag 网络诊断</title><style>
+<title>NetDoctor 网络诊断</title><style>
 :root{--bg:#f5f5f7;--card:#fff;--fg:#1d1d1f;--mut:#6e6e73;--line:#e0e0e5;--acc:#0071e3;--term:#14161a;--termfg:#d8dde6}
 @media(prefers-color-scheme:dark){:root{--bg:#1c1c1e;--card:#2c2c2e;--fg:#f5f5f7;--mut:#98989d;--line:#3a3a3c;--acc:#0a84ff;--term:#0b0c0e}}
 *{box-sizing:border-box}body{margin:0;font:14px -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;background:var(--bg);color:var(--fg);display:flex;height:100vh}
@@ -130,7 +130,7 @@ input[type=text]{padding:7px 9px;border:1px solid var(--line);border-radius:7px;
 .b{font-weight:700}.g{color:#32d74b}.r{color:#ff453a}.y{color:#ffd60a}.d{opacity:.55}
 .bar{display:flex;gap:8px;align-items:center}.sp{flex:1}
 </style></head><body>
-<nav><h1>🛰️ NetDiag</h1><div id="list"></div><button onclick="quit()" style="margin-top:14px;color:var(--mut)">⏻ 退出</button></nav>
+<nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="quit()" style="margin-top:14px;color:var(--mut)">⏻ 退出</button></nav>
 <main><div class="card"><h2 id="t"></h2><p id="d"></p><form id="f"></form></div>
 <div class="bar"><span class="sp" id="st" style="color:var(--mut)"></span><button class="btn sec" onclick="copy()">复制</button><button class="btn sec" onclick="save()">保存</button><button class="btn sec" id="stop" onclick="stop()" disabled>停止</button></div>
 <pre id="out">选择左侧工具,点“运行”。建议先跑「一键体检」。</pre></main>
@@ -156,8 +156,8 @@ $('#run').disabled=false;$('#stop').disabled=true}
 function stop(){ctl&&ctl.abort()}
 const plain=()=>raw.replace(/\x1b\[\d+m/g,'');
 function copy(){navigator.clipboard.writeText(plain());$('#st').textContent='已复制'}
-function save(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([plain()]));a.download=`netdiag-${cur?cur.id:'out'}-${Date.now()}.txt`;a.click()}
-async function quit(){if(confirm('退出 NetDiag 服务?')){await fetch('/quit',{method:'POST',headers:{'X-Token':TOKEN}}).catch(()=>{});document.body.innerHTML='<p style="margin:40px">已退出,可关闭此页面。</p>'}}
+function save(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([plain()]));a.download=`netdoctor-${cur?cur.id:'out'}-${Date.now()}.txt`;a.click()}
+async function quit(){if(confirm('退出 NetDoctor 服务?')){await fetch('/quit',{method:'POST',headers:{'X-Token':TOKEN}}).catch(()=>{});document.body.innerHTML='<p style="margin:40px">已退出,可关闭此页面。</p>'}}
 pick('quick');
 </script></body></html>"""
 
@@ -166,7 +166,7 @@ def main():
     a = ap.parse_args()
     srv = ThreadingHTTPServer(("127.0.0.1", a.port), H)
     url = "http://127.0.0.1:%d/" % srv.server_address[1]
-    print("NetDiag GUI:", url, "(Ctrl-C 退出)")
+    print("NetDoctor GUI:", url, "(Ctrl-C 退出)")
     if not a.no_open: threading.Timer(0.5, lambda: webbrowser.open(url)).start()
     try: srv.serve_forever()
     except KeyboardInterrupt: pass

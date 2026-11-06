@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# netdiag - macOS 网络诊断统一入口 (兼容 macOS 自带 bash 3.2)
+# netdoctor - macOS 网络诊断统一入口 (兼容 macOS 自带 bash 3.2)
 set -u
 VERSION=1.0
 B=$'\033[1m'; G=$'\033[32m'; R=$'\033[31m'; Y=$'\033[33m'; N=$'\033[0m'
-[ -t 1 ] || [ -n "${NETDIAG_COLOR:-}" ] || { B=; G=; R=; Y=; N=; }
+[ -t 1 ] || [ -n "${NETDOCTOR_COLOR:-}" ] || { B=; G=; R=; Y=; N=; }
 has() { command -v "$1" >/dev/null 2>&1; }
 hdr() { printf '\n%s== %s ==%s\n' "$B" "$*" "$N"; }
 ok()  { printf '%s[ OK ]%s %s\n' "$G" "$N" "$*"; }
@@ -15,9 +15,9 @@ gateway()     { route -n get default 2>/dev/null | awk '/gateway:/{print $2}'; }
 wifi_if()     { networksetup -listallhardwareports 2>/dev/null | awk '/Wi-Fi|AirPort/{getline; print $2; exit}'; }
 
 usage() { cat <<USAGE
-netdiag $VERSION - macOS 网络诊断
+netdoctor $VERSION - macOS 网络诊断
 
-用法: netdiag <命令> [参数]
+用法: netdoctor <命令> [参数]
   quick                 一键体检: 网卡/网关/DNS/外网/HTTP (先跑这个)
   wifi                  Wi-Fi 信号、信道、速率、SSID (部分信息需 sudo)
   dns <域名>            对比 系统/1.1.1.1/8.8.8.8/223.5.5.5 解析结果与耗时
@@ -82,7 +82,7 @@ cmd_wifi() {
 }
 
 cmd_dns() {
-  local d=${1:-}; [ -z "$d" ] && { echo "用法: netdiag dns <域名>"; return 1; }
+  local d=${1:-}; [ -z "$d" ] && { echo "用法: netdoctor dns <域名>"; return 1; }
   hdr "系统解析器 (scutil --dns)"; scutil --dns | awk '/resolver #|nameserver\[|domain|search domain|if_index/{print "  "$0}' | head -24
   hdr "系统解析 (dscacheutil, 走真实系统路径)"; dscacheutil -q host -a name "$d"
   hdr "各 DNS 服务器对比"
@@ -93,25 +93,25 @@ cmd_dns() {
     t=$(echo "$out" | awk '/Query time/{print $4" ms"}')
     printf '  %-12s %-10s %s\n' "$label" "${t:-超时}" "${ans:-(无结果)}"
   done
-  echo "提示: 各家结果差异大/系统默认失败 → 运营商劫持或 DNS 配置问题; 可 netdiag fixdns。"
+  echo "提示: 各家结果差异大/系统默认失败 → 运营商劫持或 DNS 配置问题; 可 netdoctor fixdns。"
 }
 
 cmd_route() {
-  local h=${1:-}; [ -z "$h" ] && { echo "用法: netdiag route <主机>"; return 1; }
+  local h=${1:-}; [ -z "$h" ] && { echo "用法: netdoctor route <主机>"; return 1; }
   hdr "路由选择 (流量走哪块网卡/VPN)"; route -n get "$h" 2>&1 | awk '/destination|gateway|interface/'
   hdr "路径"
   if has mtr; then sudo mtr -rwbzc 20 "$h"; else traceroute -w 2 -q 1 -m 20 "$h"; warn "brew install mtr 可得到逐跳丢包统计"; fi
 }
 
-cmd_ping() { local h=${1:-}; [ -z "$h" ] && { echo "用法: netdiag ping <主机> [次数]"; return 1; }; ping -c "${2:-20}" "$h"; }
+cmd_ping() { local h=${1:-}; [ -z "$h" ] && { echo "用法: netdoctor ping <主机> [次数]"; return 1; }; ping -c "${2:-20}" "$h"; }
 
 cmd_port() {
-  [ $# -lt 2 ] && { echo "用法: netdiag port <主机> <端口>"; return 1; }
+  [ $# -lt 2 ] && { echo "用法: netdoctor port <主机> <端口>"; return 1; }
   nc -vz -G 5 "$1" "$2" 2>&1 && ok "$1:$2 开放" || bad "$1:$2 不通 (关闭/防火墙/路由)"
 }
 
 cmd_http() {
-  local u=${1:-}; [ -z "$u" ] && { echo "用法: netdiag http <URL>"; return 1; }
+  local u=${1:-}; [ -z "$u" ] && { echo "用法: netdoctor http <URL>"; return 1; }
   curl -sS -o /dev/null -L -m 30 -w '
   HTTP 状态      %{http_code}  (重定向 %{num_redirects} 次)
   远端 IP        %{remote_ip}:%{remote_port}
@@ -125,7 +125,7 @@ cmd_http() {
 }
 
 cmd_tls() {
-  local h=${1:-}; local p=${2:-443}; [ -z "$h" ] && { echo "用法: netdiag tls <主机> [端口]"; return 1; }
+  local h=${1:-}; local p=${2:-443}; [ -z "$h" ] && { echo "用法: netdoctor tls <主机> [端口]"; return 1; }
   local out; out=$(echo | openssl s_client -connect "$h:$p" -servername "$h" -brief 2>&1)
   echo "$out" | head -12
   echo | openssl s_client -connect "$h:$p" -servername "$h" 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName 2>/dev/null
@@ -181,8 +181,8 @@ cmd_tools() {
 }
 
 cmd_report() {
-  local f="$HOME/Desktop/netdiag-report-$(date +%Y%m%d-%H%M%S).txt"
-  { echo "netdiag report $(date)"; uname -a; sw_vers
+  local f="$HOME/Desktop/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt"
+  { echo "netdoctor report $(date)"; uname -a; sw_vers
     cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_proxy; } >"$f" 2>&1
   ok "已保存: $f"
 }

@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "NetDiag",
+    name: "NetDoctor",
     platforms: [.macOS(.v13)],
     targets: [
         .executableTarget(
-            name: "NetDiag",
-            path: "Sources/NetDiag",
+            name: "NetDoctor",
+            path: "Sources/NetDoctor",
             swiftSettings: [.swiftLanguageVersion(.v5)]
         )
     ]

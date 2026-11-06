@@ -1,12 +1,12 @@
 import SwiftUI
 
 @main
-struct NetDiagApp: App {
+struct NetDoctorApp: App {
     @StateObject private var monitor = LatencyMonitor()
     @Environment(\.openWindow) private var openWindow
 
     var body: some Scene {
-        WindowGroup("NetDiag 网络诊断", id: "main") {
+        WindowGroup("NetDoctor 网络诊断", id: "main") {
             ContentView().environmentObject(monitor)
         }
         .commands { CommandGroup(replacing: .newItem) {} }

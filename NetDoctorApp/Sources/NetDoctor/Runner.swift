@@ -23,21 +23,21 @@ final class Runner: ObservableObject {
         useAdmin = tool.admin == .required
     }
 
-    // MARK: 定位 netdiag 脚本
+    // MARK: 定位 netdoctor 脚本
     static var scriptPath: String? {
         let fm = FileManager.default
         var candidates: [String] = []
-        if let env = ProcessInfo.processInfo.environment["NETDIAG_PATH"] { candidates.append(env) }
-        if let r = Bundle.main.resourceURL?.appendingPathComponent("netdiag").path { candidates.append(r) }
-        candidates.append(fm.currentDirectoryPath + "/netdiag")
-        candidates.append(fm.currentDirectoryPath + "/../netdiag")
+        if let env = ProcessInfo.processInfo.environment["NETDOCTOR_PATH"] { candidates.append(env) }
+        if let r = Bundle.main.resourceURL?.appendingPathComponent("netdoctor").path { candidates.append(r) }
+        candidates.append(fm.currentDirectoryPath + "/netdoctor")
+        candidates.append(fm.currentDirectoryPath + "/../netdoctor")
         return candidates.first { fm.isReadableFile(atPath: $0) }
     }
 
     static let env: [String: String] = {
         var e = ProcessInfo.processInfo.environment
         e["PATH"] = "/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:" + (e["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin")
-        e["NETDIAG_COLOR"] = "1"
+        e["NETDOCTOR_COLOR"] = "1"
         e["LANG"] = "en_US.UTF-8"
         return e
     }()
@@ -50,11 +50,11 @@ final class Runner: ObservableObject {
         for i in tool.inputs {
             let v = (values[i.name] ?? "").trimmingCharacters(in: .whitespaces)
             if v.isEmpty {
-                if i.required { throw NSError(domain: "netdiag", code: 1, userInfo: [NSLocalizedDescriptionKey: "请填写:\(i.label)"]) }
+                if i.required { throw NSError(domain: "netdoctor", code: 1, userInfo: [NSLocalizedDescriptionKey: "请填写:\(i.label)"]) }
                 break
             }
             if v.hasPrefix("-") || v.count > 300 || v.unicodeScalars.contains(where: { !Self.allowed.contains($0) }) {
-                throw NSError(domain: "netdiag", code: 2, userInfo: [NSLocalizedDescriptionKey: "参数不合法:\(i.label)"])
+                throw NSError(domain: "netdoctor", code: 2, userInfo: [NSLocalizedDescriptionKey: "参数不合法:\(i.label)"])
             }
             args.append(v)
         }
@@ -66,7 +66,7 @@ final class Runner: ObservableObject {
         guard !running else { return }
         output = AttributedString(); plain = ""; parser = AnsiParser(); pending = Data(); stopped = false
         guard let script = Runner.scriptPath else {
-            status = "找不到 netdiag 脚本"; return
+            status = "找不到 netdoctor 脚本"; return
         }
         let args: [String]
         do { args = try buildArgs() } catch { status = error.localizedDescription; return }
@@ -107,7 +107,7 @@ final class Runner: ObservableObject {
     private func runAdmin(script: String, args: [String]) {
         func q(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
         let home = NSHomeDirectory()
-        let inner = "HOME=\(q(home)) PATH=\(q(Runner.env["PATH"] ?? "")) NETDIAG_COLOR=1 /bin/bash "
+        let inner = "HOME=\(q(home)) PATH=\(q(Runner.env["PATH"] ?? "")) NETDOCTOR_COLOR=1 /bin/bash "
             + ([script, tool.id] + args).map(q).joined(separator: " ") + " 2>&1"
         let esc = inner.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         let src = "do shell script \"\(esc)\" with administrator privileges"
@@ -169,7 +169,7 @@ final class Runner: ObservableObject {
 
     func save() {
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = "netdiag-\(tool.id)-\(Int(Date().timeIntervalSince1970)).txt"
+        panel.nameFieldStringValue = "netdoctor-\(tool.id)-\(Int(Date().timeIntervalSince1970)).txt"
         if panel.runModal() == .OK, let url = panel.url {
             try? plain.write(to: url, atomically: true, encoding: .utf8)
             status = "已保存:\(url.lastPathComponent)"
