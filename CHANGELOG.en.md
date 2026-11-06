@@ -4,7 +4,7 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.2] - 2026-11-06
 
 ### Added
 - Web UI: keyboard shortcuts. `⌘/Ctrl+Enter` runs, `Esc` stops, `j`/`k` or the arrow keys change tool, `1`–`9` jump to a tool, `/` focuses the input, `c` copies, `s` saves, `l` switches language, `t` switches theme and `?` shows the shortcut list. Single-key shortcuts are ignored while typing in an input.
