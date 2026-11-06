@@ -4,7 +4,7 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),版本号遵循语义化版本。
 
-## [未发布]
+## [1.1.0] - 2026-11-06
 
 ### 变更
 - 构建脚本和 `Brewfile` 注释改为英文。

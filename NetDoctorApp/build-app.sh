@@ -26,8 +26,8 @@ cat > "$APP/Contents/Info.plist" <<'X'
 <key>CFBundleExecutable</key><string>NetDoctor</string>
 <key>CFBundleIdentifier</key><string>local.netdoctor.app</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.0</string>
-<key>CFBundleVersion</key><string>1</string>
+<key>CFBundleShortVersionString</key><string>1.1.0</string>
+<key>CFBundleVersion</key><string>2</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
