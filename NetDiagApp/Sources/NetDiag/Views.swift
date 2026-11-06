@@ -1,0 +1,164 @@
+import SwiftUI
+import Charts
+
+private let termBg = Color(red: 0.07, green: 0.08, blue: 0.10)
+
+struct ContentView: View {
+    @StateObject private var store = RunnerStore()
+    @EnvironmentObject var monitor: LatencyMonitor
+    @State private var selection: String? = "quick"
+
+    var body: some View {
+        NavigationSplitView {
+            List(selection: $selection) {
+                Section("诊断") {
+                    ForEach(Tool.all) { t in
+                        Label(t.title, systemImage: t.icon).tag(Optional(t.id))
+                    }
+                }
+                Section("监控") {
+                    Label("实时延迟", systemImage: "chart.xyaxis.line").tag(Optional("monitor"))
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 260)
+        } detail: {
+            if selection == "monitor" {
+                MonitorView()
+            } else if let t = Tool.all.first(where: { $0.id == selection }) {
+                ToolView(runner: store.runner(for: t))
+            } else {
+                Text("选择左侧工具").foregroundStyle(.secondary)
+            }
+        }
+        .frame(minWidth: 820, minHeight: 520)
+    }
+}
+
+struct ToolView: View {
+    @ObservedObject var runner: Runner
+    private var tool: Tool { runner.tool }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(tool.title, systemImage: tool.icon).font(.title2.bold())
+                Text(tool.summary).foregroundStyle(.secondary)
+            }
+            HStack(alignment: .bottom, spacing: 12) {
+                ForEach(tool.inputs) { i in
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(i.label + (i.required ? " *" : "")).font(.caption).foregroundStyle(.secondary)
+                        TextField(i.placeholder, text: Binding(
+                            get: { runner.values[i.name] ?? "" },
+                            set: { runner.values[i.name] = $0 }))
+                            .textFieldStyle(.roundedBorder)
+                            .frame(minWidth: 160, maxWidth: 280)
+                            .onSubmit { runner.run() }
+                    }
+                }
+                if tool.admin == .optional {
+                    Toggle("管理员权限(信息更完整)", isOn: $runner.useAdmin).toggleStyle(.checkbox)
+                } else if tool.admin == .required {
+                    Label("需要管理员权限", systemImage: "lock").font(.caption).foregroundStyle(.secondary)
+                }
+                Button(runner.running ? "运行中…" : "运行") { runner.run() }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(runner.running)
+                Button("停止") { runner.stop() }.disabled(!runner.running || runner.useAdmin || tool.admin == .required)
+                Spacer()
+            }
+            TerminalView(text: runner.output, running: runner.running)
+            HStack {
+                if runner.running { ProgressView().controlSize(.small) }
+                Text(runner.status).font(.callout).foregroundStyle(.secondary)
+                Spacer()
+                Button("复制") { runner.copy() }.disabled(runner.plain.isEmpty)
+                Button("保存…") { runner.save() }.disabled(runner.plain.isEmpty)
+            }
+        }
+        .padding(16)
+    }
+}
+
+struct TerminalView: View {
+    let text: AttributedString
+    let running: Bool
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    if text.characters.isEmpty {
+                        Text(running ? "" : "点击“运行”开始。建议先跑「一键体检」。")
+                            .font(.system(size: 12.5, design: .monospaced))
+                            .foregroundColor(Color(white: 0.5))
+                    } else {
+                        Text(text).textSelection(.enabled)
+                    }
+                    Color.clear.frame(height: 1).id("bottom")
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+            }
+            .background(termBg)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .onChange(of: text.characters.count) { _ in proxy.scrollTo("bottom", anchor: .bottom) }
+        }
+    }
+}
+
+struct MonitorView: View {
+    @EnvironmentObject var m: LatencyMonitor
+    private let presets = ["1.1.1.1", "8.8.8.8", "223.5.5.5", "114.114.114.114"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("实时延迟", systemImage: "chart.xyaxis.line").font(.title2.bold())
+                Text("每秒 ping 一次,红点表示丢包。菜单栏同步显示当前延迟。").foregroundStyle(.secondary)
+            }
+            HStack {
+                TextField("目标", text: $m.target).textFieldStyle(.roundedBorder).frame(width: 220)
+                Menu("预设") { ForEach(presets, id: \.self) { p in Button(p) { m.target = p; m.clear() } } }
+                    .frame(width: 80)
+                Button(m.running ? "停止" : "开始") { m.running ? m.stop() : m.start() }
+                    .buttonStyle(.borderedProminent)
+                Button("清空") { m.clear() }
+                Spacer()
+            }
+            HStack(spacing: 12) {
+                stat("当前", m.last.map { String(format: "%.0f ms", $0) } ?? "—")
+                stat("平均", m.avg.map { String(format: "%.1f ms", $0) } ?? "—")
+                stat("最小/最大", m.minMs.map { String(format: "%.0f / %.0f ms", $0, m.maxMs ?? 0) } ?? "—")
+                stat("抖动", m.jitter.map { String(format: "%.1f ms", $0) } ?? "—")
+                stat("丢包", String(format: "%.1f%%", m.lossPercent), warn: m.lossPercent > 0)
+            }
+            Chart {
+                ForEach(m.samples) { s in
+                    if let ms = s.ms {
+                        LineMark(x: .value("时间", s.time), y: .value("ms", ms))
+                            .foregroundStyle(Color.accentColor)
+                            .interpolationMethod(.monotone)
+                    } else {
+                        RuleMark(x: .value("时间", s.time)).foregroundStyle(Color.red.opacity(0.6))
+                    }
+                }
+            }
+            .chartYAxisLabel("ms")
+            .frame(minHeight: 240)
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+            Spacer(minLength: 0)
+        }
+        .padding(16)
+    }
+
+    private func stat(_ title: String, _ value: String, warn: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.title3.monospacedDigit().bold()).foregroundColor(warn ? .red : .primary)
+        }
+        .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color(nsColor: .controlBackgroundColor)))
+    }
+}

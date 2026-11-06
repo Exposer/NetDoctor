@@ -1,0 +1,4 @@
+.build/
+NetDiag.app/
+.DS_Store
+__pycache__/
