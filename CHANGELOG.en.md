@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
+- Web UI: a **Live latency** page, matching the SwiftUI app. It pings the target once a second (pick 1.1.1.1, 8.8.8.8, 223.5.5.5, 114.114.114.114 or type your own), shows now / average / min-max / jitter / loss and draws a chart of the last 120 samples with packet loss marked in red. Open it from the 📈 sidebar entry or with `m`; it stops automatically when you leave the page.
 - Web UI: run history. Every run (including stopped and failed ones) is saved with its tool, parameters, status, duration and full output — the latest 50. Open the panel with the 🕘 sidebar button or the `h` key; search, click to view, **Re-run**, delete or clear. Stored only in the browser (localStorage).
 
 ### Changed

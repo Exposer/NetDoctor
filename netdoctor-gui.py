@@ -73,6 +73,18 @@ ZH = {
     "Failed to start": "启动失败",
     "[exit code %d]": "[退出码 %d]",
     "Quit": "退出",
+    "Live latency": "实时延迟",
+    "Pings once a second; red lines mark packet loss.": "每秒 ping 一次,红线表示丢包。",
+    "Target": "目标",
+    "Presets": "预设",
+    "Start": "开始",
+    "Clear": "清空",
+    "Now": "当前",
+    "Average": "平均",
+    "Min / Max": "最小 / 最大",
+    "Jitter": "抖动",
+    "Loss": "丢包",
+    "Open live latency": "打开实时延迟",
     "History": "历史记录",
     "Search…": "搜索…",
     "No history yet": "暂无历史记录",
@@ -125,6 +137,19 @@ def tr(lang, s):
 
 ARG_RE = re.compile(r"^[A-Za-z0-9._:/?&=%@~+,\[\]-]{1,300}$")
 
+HOST_RE = re.compile(r"^[A-Za-z0-9._:-]{1,253}$")
+
+def ping_once(host):
+    """One ping; returns round-trip time in ms, or None on loss/timeout/missing ping."""
+    flags = ["-c", "1", "-t", "2"] if sys.platform == "darwin" else ["-c", "1", "-W", "2"]
+    try:
+        out = subprocess.run(["ping"] + flags + [host], stdin=subprocess.DEVNULL, capture_output=True,
+                             text=True, timeout=4).stdout
+    except Exception:
+        return None
+    m = re.search(r"time[=<]([0-9.]+)", out)
+    return float(m.group(1)) if m else None
+
 def build_args(spec, values, lang="en"):
     args = []
     for i in spec["inputs"]:
@@ -164,6 +189,15 @@ class H(BaseHTTPRequestHandler):
             return self._send(403, "forbidden")
         if self.path == "/quit":
             self._send(200, "bye"); threading.Thread(target=self.server.shutdown, daemon=True).start(); return
+        if self.path == "/ping":
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                host = str((json.loads(self.rfile.read(n) or b"{}")).get("host") or "").strip()
+            except Exception:
+                host = ""
+            if not HOST_RE.match(host) or host.startswith("-"):
+                return self._send(400, json.dumps({"error": "invalid host"}), "application/json")
+            return self._send(200, json.dumps({"ms": ping_once(host)}), "application/json")
         if self.path != "/run": return self._send(404, "not found")
         lang = "en"
         try:
@@ -238,6 +272,13 @@ input[type=text]{padding:7px 9px;border:1px solid var(--line);border-radius:7px;
 #out{flex:1;min-height:0;background:var(--term);color:var(--termfg);border-radius:12px;padding:14px;overflow:auto;white-space:pre-wrap;word-break:break-all;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;margin:0}
 .b{font-weight:700}.g{color:#32d74b}.r{color:#ff453a}.y{color:#ffd60a}.d{opacity:.55}
 .bar{display:flex;gap:8px;align-items:center}.sp{flex:1}
+main.mon>:not(#mon){display:none}main:not(.mon)>#mon{display:none}
+#mon{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
+#mon .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+#mon .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+#mon .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+#mon .stat small{display:block;color:var(--mut);font-size:11px}#mon .stat b{font:600 18px ui-monospace,Menlo,monospace}
+#mchart{width:100%;flex:1;min-height:220px;background:var(--card);border:1px solid var(--line);border-radius:12px}
 kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:1px 6px;margin-right:3px;white-space:nowrap}
 #help{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:9}
 #hist{position:fixed;top:0;right:0;bottom:0;width:min(400px,100%);background:var(--card);color:var(--fg);border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(0,0,0,.25);display:none;flex-direction:column;z-index:8}
@@ -254,7 +295,12 @@ kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);b
 <nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="toggleHist()" id="histbtn" style="margin-top:14px;color:var(--mut)">🕘 <span data-i="History">History</span></button><button onclick="toggleHelp()" id="helpbtn" style="color:var(--mut)">⌨ <span data-i="Shortcuts">Shortcuts</span></button><button onclick="toggleTheme()" id="theme" style="color:var(--mut)"></button><button onclick="toggleLang()" id="lang" style="color:var(--mut)"></button><button onclick="quit()" style="color:var(--mut)">⏻ <span data-i="Quit">Quit</span></button></nav>
 <main><div class="card"><h2 id="t"></h2><p id="d"></p><form id="f"></form></div>
 <div class="bar"><span class="sp" id="st" style="color:var(--mut)"></span><button class="btn sec" onclick="copy()" data-i="Copy">Copy</button><button class="btn sec" onclick="save()" data-i="Save">Save</button><button class="btn sec" id="stop" onclick="stop()" data-i="Stop" disabled>Stop</button></div>
-<pre id="out"></pre></main>
+<pre id="out"></pre>
+<section id="mon"><div class="card"><h2>📈 <span data-i="Live latency">Live latency</span></h2><p data-i="Pings once a second; red lines mark packet loss.">Pings once a second; red lines mark packet loss.</p>
+<div class="row"><label><span data-i="Target">Target</span><input type="text" id="mhost" value="1.1.1.1" list="mpre" spellcheck="false"><datalist id="mpre"><option value="1.1.1.1"><option value="8.8.8.8"><option value="223.5.5.5"><option value="114.114.114.114"></datalist></label>
+<button class="btn" id="mgo" onclick="monToggle()" data-i="Start">Start</button><button class="btn sec" onclick="monClear()" data-i="Clear">Clear</button></div></div>
+<div class="stats"><div class="stat"><small data-i="Now">Now</small><b id="s_now">—</b></div><div class="stat"><small data-i="Average">Average</small><b id="s_avg">—</b></div><div class="stat"><small data-i="Min / Max">Min / Max</small><b id="s_mm">—</b></div><div class="stat"><small data-i="Jitter">Jitter</small><b id="s_jit">—</b></div><div class="stat"><small data-i="Loss">Loss</small><b id="s_loss">—</b></div></div>
+<canvas id="mchart"></canvas></section></main>
 <aside id="hist"><header><h3>🕘 <span data-i="History">History</span></h3><button class="btn sec" onclick="clearHist()" data-i="Clear all">Clear all</button><button class="btn sec" onclick="toggleHist(false)" data-i="Close">Close</button></header>
 <input type="text" id="hq" oninput="renderHist()"><p class="note" data-i="Stored in this browser only (last 50 runs).">Stored in this browser only (last 50 runs).</p><div id="hlist"></div></aside>
 <div id="help" onclick="if(event.target===this)toggleHelp(false)"><div class="box"><h3 id="helph"></h3><table id="helpt"></table><p style="margin:12px 0 0;text-align:right"><button class="btn sec" onclick="toggleHelp(false)" data-i="Close">Close</button></p></div></div>
@@ -270,13 +316,39 @@ function applyTheme(){const r=document.documentElement;if(theme=='auto')delete r
 function toggleTheme(){theme={auto:'light',light:'dark',dark:'auto'}[theme];try{theme=='auto'?localStorage.removeItem('nd_theme'):localStorage.setItem('nd_theme',theme)}catch(e){}applyTheme()}
 const INTRO='Pick a tool on the left and click “Run”. Start with “Quick check”.';
 CMDS.forEach(c=>{const b=document.createElement('button');b.innerHTML=`<span>${c.icon}</span><span class="nl"></span>`;b.onclick=()=>pick(c.id);b.id='b_'+c.id;$('#list').append(b)});
-function applyLang(){document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
+{const b=document.createElement('button');b.id='b_mon';b.innerHTML='<span>📈</span><span class="nl"></span>';b.onclick=showMon;$('#list').append(b)}
+const MAXS=120;let msamples=[],mtimer=null,mbusy=false;
+function showMon(){const m=document.querySelector('main');m.classList.add('mon');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_mon'));cur=null;drawMon()}
+function monToggle(){if(mtimer){monStop()}else{monStart()}}
+function monStart(){if(mtimer)return;$('#mgo').textContent=t('Stop');mtimer=setInterval(monTick,1000);monTick()}
+function monStop(){if(mtimer){clearInterval(mtimer);mtimer=null}$('#mgo').textContent=t('Start')}
+function monClear(){msamples=[];drawMon()}
+async function monTick(){if(mbusy)return;mbusy=true;const host=$('#mhost').value.trim();
+let v=null;try{const r=await fetch('/ping',{method:'POST',headers:{'X-Token':TOKEN},body:JSON.stringify({host})});if(!r.ok){monStop();mbusy=false;return}v=(await r.json()).ms}catch(e){}
+mbusy=false;if(!mtimer)return;msamples.push(v);if(msamples.length>MAXS)msamples.shift();drawMon()}
+function drawMon(){const vals=msamples.filter(x=>x!==null),n=msamples.length;
+const f=(x,d)=>x===undefined||x===null||!isFinite(x)?'—':x.toFixed(d)+' ms';
+const avg=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;let jit=null;if(vals.length>1){let d=0;for(let i=1;i<vals.length;i++)d+=Math.abs(vals[i]-vals[i-1]);jit=d/(vals.length-1)}
+const last=n?msamples[n-1]:undefined;$('#s_now').textContent=n?(last===null?t('Loss'):f(last,0)):'—';$('#s_avg').textContent=f(avg,1);
+$('#s_mm').textContent=vals.length?Math.min(...vals).toFixed(0)+' / '+Math.max(...vals).toFixed(0)+' ms':'—';$('#s_jit').textContent=f(jit,1);
+$('#s_loss').textContent=n?((n-vals.length)/n*100).toFixed(1)+'%':'—';$('#s_loss').style.color=n&&vals.length<n?'#d1342a':'';
+const cv=$('#mchart');if(!cv.clientWidth)return;const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;cv.width=w*dpr;cv.height=h*dpr;
+const g=cv.getContext('2d');g.scale(dpr,dpr);const cs=getComputedStyle(document.documentElement),mut=cs.getPropertyValue('--mut').trim(),line=cs.getPropertyValue('--line').trim(),acc=cs.getPropertyValue('--acc').trim();
+const L=46,B=8,T=10,R=10,pw=w-L-R,ph=h-T-B,top=Math.max(10,...vals)*1.15;
+g.font='11px ui-monospace,Menlo,monospace';g.fillStyle=mut;g.strokeStyle=line;g.lineWidth=1;
+for(let i=0;i<=4;i++){const y=T+ph-ph*i/4;g.beginPath();g.moveTo(L,y);g.lineTo(w-R,y);g.stroke();g.fillText((top*i/4).toFixed(0),6,y+4)}
+const X=i=>L+pw-(n-1-i)*pw/(MAXS-1);
+g.strokeStyle='rgba(209,52,42,.7)';msamples.forEach((v,i)=>{if(v===null){g.beginPath();g.moveTo(X(i),T);g.lineTo(X(i),T+ph);g.stroke()}});
+g.strokeStyle=acc;g.lineWidth=2;g.lineJoin='round';g.beginPath();let pen=false;
+msamples.forEach((v,i)=>{if(v===null){pen=false;return}const y=T+ph-ph*v/top;if(pen)g.lineTo(X(i),y);else{g.moveTo(X(i),y);pen=true}});g.stroke()}
+window.addEventListener('resize',()=>{if(document.querySelector('main').classList.contains('mon'))drawMon()});
+function applyLang(){$('#b_mon .nl').textContent=t('Live latency');if(!mtimer)$('#mgo').textContent=t('Start');else $('#mgo').textContent=t('Stop');document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
 document.querySelectorAll('[data-i]').forEach(e=>e.textContent=t(e.dataset.i));
 CMDS.forEach(c=>{$('#b_'+c.id+' .nl').textContent=t(c.label)});
 $('#lang').textContent='🌐 '+(lang=='zh'?'English':'中文');if(idle)$('#out').textContent=t(INTRO);
 applyTheme();if($('#hist').classList.contains('on'))renderHist();$('#stop').title='Esc';$('#histbtn').title='h';$('#lang').title='l';$('#theme').title='t';$('#helpbtn').title='?';if(cur)pick(cur.id,true,true)}
 function toggleLang(){lang=lang=='zh'?'en':'zh';try{localStorage.setItem('nd_lang',lang)}catch(e){}applyLang()}
-function pick(id,keep,nofocus){const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
+function pick(id,keep,nofocus){monStop();document.querySelector('main').classList.remove('mon');const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
 $('#t').textContent=cur.icon+' '+t(cur.label);$('#d').textContent=t(cur.desc);const f=$('#f');f.innerHTML='';
 cur.inputs.forEach(i=>{const l=document.createElement('label');l.textContent=t(i.label)+(i.req?' *':'');const x=document.createElement('input');x.type='text';x.name=i.name;x.placeholder=i.ph||'';x.value=(keep&&old[i.name]!==undefined)?old[i.name]:(i.def||'');l.append(x);f.append(l)});
 if(cur.admin===true||cur.admin==='optional'){const l=document.createElement('label');l.className='chk';l.innerHTML=`<input type="checkbox" name="_admin" ${cur.admin===true?'checked disabled':''}>${t('Requires administrator rights')}${cur.admin===true?'':' '+t('(fuller details)')}`;f.append(l);if(keep&&old._admin!==undefined&&cur.admin!==true)l.querySelector('input').checked=old._admin}
@@ -322,7 +394,7 @@ function clearHist(){if(hist.length&&confirm(t('Clear all history?'))){hist=[];h
 const MOD=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
 const SC=[[[MOD+' + Enter'],'Run the current tool'],[['Esc'],'Stop a running command; otherwise leave the input box'],
 [['j','↓'],'Previous / next tool'],[['1'],'Jump to tool 1–9'],[['/'],'Focus the first input'],[['Enter'],'Run (when not typing)'],
-[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
+[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['m'],'Open live latency'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
 SC[2][0]=['j / ↓  ·  k / ↑'];SC[3][0]=['1 … 9'];
 function toggleHelp(on){const h=$('#help');const open=on===undefined?!h.classList.contains('on'):on;
 if(open){$('#helph').textContent='⌨ '+t('Keyboard shortcuts');$('#helpt').innerHTML=SC.map(([k,d])=>`<tr><td>${k.map(x=>'<kbd>'+x.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</kbd>').join('')}</td><td>${t(d)}</td></tr>`).join('')}
@@ -345,6 +417,7 @@ else if(k=='/'){const f=$('#f input[type=text]');f?f.focus():used=false}
 else if(k=='Enter'&&e.target.tagName!='BUTTON'){if(!$('#run').disabled)run()}
 else if(k=='c'){if(raw)copy()}
 else if(k=='s'){if(raw)save()}
+else if(k=='m')showMon();
 else if(k=='h')toggleHist();
 else if(k=='l')toggleLang();
 else if(k=='t')toggleTheme();
