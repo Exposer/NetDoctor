@@ -1,7 +1,7 @@
 #!/bin/bash
 # Print the GitHub release notes for a version to stdout.
 #
-#   scripts/release-notes.sh 1.4.0 [path/to/NetDoctor-1.4.0-macOS-universal.zip]
+#   scripts/release-notes.sh 1.4.1 [path/to/NetDoctor-1.4.1-macOS-universal.zip]
 #
 # The body is the English CHANGELOG section of that version, preceded by a download / install block
 # (with the zip's SHA-256 when the zip is given) and followed by links to both changelogs.
