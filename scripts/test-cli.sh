@@ -358,6 +358,15 @@ ex "exposure: unknown daemon port is only listed"  "reachable from the network" 
 ex "exposure: high ports are folded"               "1 high ports (49152+)" 0 "55146 all rapportd" fw=on
 ex "exposure: firewall off with exposure"          "firewall is OFF" 0 "22 all ?" fw=off
 ex "exposure: firewall unknown"                    "could not read the firewall state" 0 "5000 all ControlCe" fw=unknown
+ex "exposure: Redis on a high port is still serious"  "data store"  1 "50000 all redis-server" fw=on
+ex "exposure: node on a high port is still flagged"   "development server" 0 "60000 all node" fw=on
+ex "exposure: a high port of an unknown process is folded" "1 high ports (49152+)" 0 "50000 all ?" fw=on
+ex "exposure: folded high ports do not count as exposed" "no ports below 49152" 0 "50000 all rapportd" fw=on
+printf '%s\n' 'tcp6       0      0  fe80::1%lo0.80         *.*                    LISTEN' > "$T/ns_lo.txt"
+lib "exposure: link-local on lo0 is local" 0 "80 local" "exposure_parse < $T/ns_lo.txt"
+LS="$T/lsof.txt"; printf '%s\n' 'COMMAND   PID USER   FD   TYPE DEVICE SIZE/OFF NODE NAME' 'node     101 max   20u  IPv4 0x1      0t0  TCP 127.0.0.1:3000 (LISTEN)' 'python3  202 max   21u  IPv4 0x2      0t0  TCP *:3000 (LISTEN)' 'cupsd    303 max   22u  IPv6 0x3      0t0  TCP [::1]:631 (LISTEN)' > "$LS"
+lib "exposure: the externally reachable listener names the port" 0 "3000 python3" "exposure_procs < $LS"
+lib "exposure: loopback-only port keeps its process name"         0 "631 cupsd"    "exposure_procs < $LS"
 ex "exposure: nothing exposed"                     "no ports below 49152" 0 "631 local cupsd" fw=on
 SD=$'0:36:43.593  Add        3   7 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3  15 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3   7 .                    _udp.local.          _sleep-proxy\n0:36:43.593  Rmv        3   7 .                    _tcp.local.          _gone'
 printf '%s\n' "$SD" > "$T/meta.txt"

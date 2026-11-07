@@ -34,7 +34,7 @@ struct NetDoctorApp: App {
                 openWindow(id: "main")
             }
             Menu("Automatic speed test") {
-                Picker("Automatic speed test", selection: $speed.intervalHours) {
+                Picker("Automatic speed test", selection: Binding(get: { speed.intervalHours }, set: { speed.requestInterval($0) })) {
                     ForEach(SpeedCheck.intervals, id: \.self) { Text(SpeedCheck.intervalLabel($0)).tag($0) }
                 }.pickerStyle(.inline)
             }

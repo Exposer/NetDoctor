@@ -168,7 +168,7 @@
 "Every day" = "Every day";
 "Last 30 days" = "Last 30 days";
 "Testing…" = "Testing…";
-"A speed test uses a lot of data (often several hundred MB, on a fast line a few GB). Automatic tests are off by default and are skipped on an iPhone hotspot." = "A speed test uses a lot of data (often several hundred MB, on a fast line a few GB). Automatic tests are off by default and are skipped on an iPhone hotspot.";
+"A speed test uses a lot of data (often several hundred MB, on a fast line a few GB). Automatic tests are off by default and are skipped on metered connections such as a phone hotspot." = "A speed test uses a lot of data (often several hundred MB, on a fast line a few GB). Automatic tests are off by default and are skipped on metered connections such as a phone hotspot.";
 "No speed tests recorded yet. Turn on the automatic test, or run one now." = "No speed tests recorded yet. Turn on the automatic test, or run one now.";
 "No speed tests in this period." = "No speed tests in this period.";
 "Latest download" = "Latest download";
@@ -184,7 +184,11 @@
 "Upload" = "Upload";
 "Delete all recorded speed tests?" = "Delete all recorded speed tests?";
 "Show speed history" = "Show speed history";
-"Skipped: connected through an iPhone hotspot" = "Skipped: connected through an iPhone hotspot";
+"Skipped: this connection is metered (phone hotspot or Low Data Mode)" = "Skipped: this connection is metered (phone hotspot or Low Data Mode)";
 "Could not run the speed test (macOS 12+ is required)" = "Could not run the speed test (macOS 12+ is required)";
 "Speed test: down %.0f Mbps, up %.0f Mbps" = "Speed test: down %.0f Mbps, up %.0f Mbps";
 "The speed test failed (no connection, or Apple's test server is not reachable)" = "The speed test failed (no connection, or Apple's test server is not reachable)";
+"Turn on automatic speed tests?" = "Turn on automatic speed tests?";
+"Each test uses a lot of data (often several hundred MB, a few GB on a fast line) and the first one starts now. Tests are skipped on metered connections such as a phone hotspot or Low Data Mode." = "Each test uses a lot of data (often several hundred MB, a few GB on a fast line) and the first one starts now. Tests are skipped on metered connections such as a phone hotspot or Low Data Mode.";
+"Turn on" = "Turn on";
+"Cancel" = "Cancel";

@@ -108,6 +108,30 @@ final class SpeedHistoryTests: XCTestCase {
 
     // MARK: metered connections
 
+    func testAndroidHotspotIsRecognised() {
+        XCTAssertTrue(SpeedStats.isPhoneHotspot(gateway: "192.168.43.1"))
+        XCTAssertFalse(SpeedStats.isPhoneHotspot(gateway: "192.168.4.1"))
+    }
+
+    // MARK: when the next automatic test fires
+
+    func testNextRunIsOneIntervalAfterTheLastTest() {
+        // the app was relaunched 5 h after the last test: the next test is still due 1 h from now, not 6 h
+        let now = t0.addingTimeInterval(5 * 3600)
+        XCTAssertEqual(SpeedStats.nextRun(last: t0, now: now, intervalHours: 6), t0.addingTimeInterval(6 * 3600))
+    }
+
+    func testNextRunNeverLiesInThePast() {
+        // overdue (the last run failed or was skipped): retry later instead of looping immediately
+        let now = t0.addingTimeInterval(10 * 3600)
+        XCTAssertEqual(SpeedStats.nextRun(last: t0, now: now, intervalHours: 6, retryAfter: 600), now.addingTimeInterval(600))
+        XCTAssertGreaterThan(SpeedStats.nextRun(last: t0, now: now, intervalHours: 6), now)
+    }
+
+    func testNextRunWithoutHistoryIsOneIntervalFromNow() {
+        XCTAssertEqual(SpeedStats.nextRun(last: nil, now: t0, intervalHours: 3), t0.addingTimeInterval(3 * 3600))
+    }
+
     func testIPhoneHotspotIsRecognised() {
         XCTAssertTrue(SpeedStats.isPhoneHotspot(gateway: "172.20.10.1"))
         XCTAssertFalse(SpeedStats.isPhoneHotspot(gateway: "192.168.1.1"))

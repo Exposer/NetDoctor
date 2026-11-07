@@ -1,4 +1,6 @@
 import Foundation
+import Network
+import AppKit
 
 /// One finished speed test (`networkQuality`). Speeds are in Mbps, `rpm` is the responsiveness (round trips per
 /// minute under load: >= 1000 is good, < 300 is poor), `rtt` the idle latency in ms. Both are nil when macOS did
@@ -67,9 +69,17 @@ struct SpeedStats: Equatable {
         return now.timeIntervalSince(last) >= TimeInterval(intervalHours * 3600 - 60)
     }
 
-    /// An iPhone Personal Hotspot always hands out 172.20.10.x with the phone at 172.20.10.1: a metered
-    /// connection, where a scheduled speed test must not run.
-    static func isPhoneHotspot(gateway: String) -> Bool { gateway.hasPrefix("172.20.10.") }
+    /// When the next automatic test should fire: one interval after the last test (so relaunching the app does not
+    /// push it back), but never in the past: when it is already overdue (a failed or skipped run) try again
+    /// after `retryAfter`.
+    static func nextRun(last: Date?, now: Date, intervalHours: Int, retryAfter: TimeInterval = 1800) -> Date {
+        let due = (last ?? now).addingTimeInterval(TimeInterval(intervalHours * 3600))
+        return due > now ? due : now.addingTimeInterval(retryAfter)
+    }
+
+    /// Default gateways of phone hotspots: an iPhone Personal Hotspot hands out 172.20.10.x, Android hotspots
+    /// usually 192.168.43.x. Both are metered connections, where a scheduled speed test must not run.
+    static func isPhoneHotspot(gateway: String) -> Bool { gateway.hasPrefix("172.20.10.") || gateway.hasPrefix("192.168.43.") }
 }
 
 /// The recorded speed tests, kept on disk (Application Support) for 30 days.
@@ -136,6 +146,21 @@ final class SpeedCheck: ObservableObject {
         }
     }
 
+    /// Changing the interval from the UI. Turning the automatic test on from "Off" asks first: a test uses a lot
+    /// of data and starts right away.
+    func requestInterval(_ hours: Int) {
+        guard hours != intervalHours else { return }
+        if intervalHours == 0, hours > 0 {
+            let a = NSAlert()
+            a.messageText = loc("Turn on automatic speed tests?")
+            a.informativeText = loc("Each test uses a lot of data (often several hundred MB, a few GB on a fast line) and the first one starts now. Tests are skipped on metered connections such as a phone hotspot or Low Data Mode.")
+            a.addButton(withTitle: loc("Turn on"))
+            a.addButton(withTitle: loc("Cancel"))
+            guard a.runModal() == .alertFirstButtonReturn else { objectWillChange.send(); return }
+        }
+        intervalHours = hours
+    }
+
     private var timer: Timer?
     private let history = SpeedHistory.shared
 
@@ -156,10 +181,25 @@ final class SpeedCheck: ObservableObject {
     private func reschedule() {
         timer?.invalidate(); timer = nil
         guard intervalHours > 0 else { return }
-        let t = Timer(timeInterval: TimeInterval(intervalHours * 3600), repeats: true) { [weak self] _ in self?.run(scheduled: true) }
+        // One shot at "last test + interval", re-armed when a run finishes: a repeating timer started at launch would
+        // be pushed back by every relaunch (and drifts over sleep / wake).
+        let due = SpeedStats.nextRun(last: history.records.last?.time, now: Date(), intervalHours: intervalHours)
+        let t = Timer(fire: due, interval: 0, repeats: false) { [weak self] _ in self?.run(scheduled: true) }
         t.tolerance = 60
         RunLoop.main.add(t, forMode: .common)
         timer = t
+    }
+
+    /// Network.framework knows about Personal Hotspot and cellular ("expensive") and Low Data Mode ("constrained").
+    private static func pathIsMetered() -> Bool {
+        let monitor = NWPathMonitor()
+        let sem = DispatchSemaphore(value: 0)
+        var metered = false
+        monitor.pathUpdateHandler = { path in metered = path.isExpensive || path.isConstrained; sem.signal() }
+        monitor.start(queue: DispatchQueue(label: "netdoctor.speed.path"))
+        _ = sem.wait(timeout: .now() + 2)
+        monitor.cancel()
+        return metered
     }
 
     private static func defaultGateway() -> String {
@@ -182,8 +222,8 @@ final class SpeedCheck: ObservableObject {
         guard FileManager.default.isExecutableFile(atPath: tool) else { summary = loc("Could not run the speed test (macOS 12+ is required)"); return }
         running = true; summary = loc("Testing…")
         DispatchQueue.global().async {
-            if scheduled, SpeedStats.isPhoneHotspot(gateway: SpeedCheck.defaultGateway()) {
-                DispatchQueue.main.async { self.running = false; self.summary = loc("Skipped: connected through an iPhone hotspot") }
+            if scheduled, SpeedCheck.pathIsMetered() || SpeedStats.isPhoneHotspot(gateway: SpeedCheck.defaultGateway()) {
+                DispatchQueue.main.async { self.running = false; self.summary = loc("Skipped: this connection is metered (phone hotspot or Low Data Mode)"); self.reschedule() }
                 return
             }
             let p = Process()
@@ -199,6 +239,7 @@ final class SpeedCheck: ObservableObject {
             }
             DispatchQueue.main.async {
                 self.running = false
+                defer { self.reschedule() }      // the next automatic test is one interval after this one
                 if let r = record {
                     self.history.add(r)
                     self.summary = String(format: loc("Speed test: down %.0f Mbps, up %.0f Mbps"), r.down, r.up)

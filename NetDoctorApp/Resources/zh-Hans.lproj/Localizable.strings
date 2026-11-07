@@ -168,7 +168,7 @@
 "Every day" = "每天";
 "Last 30 days" = "最近 30 天";
 "Testing…" = "正在测速…";
-"A speed test uses a lot of data (often several hundred MB, on a fast line a few GB). Automatic tests are off by default and are skipped on an iPhone hotspot." = "一次测速会用掉很多流量(通常几百 MB,高速线路可达几 GB)。自动测速默认关闭,连接 iPhone 热点时会自动跳过。";
+"A speed test uses a lot of data (often several hundred MB, on a fast line a few GB). Automatic tests are off by default and are skipped on metered connections such as a phone hotspot." = "一次测速会用掉很多流量(通常几百 MB,高速线路可达几 GB)。自动测速默认关闭,在手机热点等计费网络上会自动跳过。";
 "No speed tests recorded yet. Turn on the automatic test, or run one now." = "还没有测速记录。打开自动测速,或立即测一次。";
 "No speed tests in this period." = "这段时间内没有测速记录。";
 "Latest download" = "最近下载";
@@ -184,7 +184,11 @@
 "Upload" = "上传";
 "Delete all recorded speed tests?" = "删除所有测速记录?";
 "Show speed history" = "显示速度历史";
-"Skipped: connected through an iPhone hotspot" = "已跳过: 当前通过 iPhone 热点联网";
+"Skipped: this connection is metered (phone hotspot or Low Data Mode)" = "已跳过: 当前是计费网络 (手机热点或低数据模式)";
 "Could not run the speed test (macOS 12+ is required)" = "无法测速 (需要 macOS 12+)";
 "Speed test: down %.0f Mbps, up %.0f Mbps" = "测速: 下载 %.0f Mbps, 上传 %.0f Mbps";
 "The speed test failed (no connection, or Apple's test server is not reachable)" = "测速失败 (没有网络, 或连不上 Apple 的测速服务器)";
+"Turn on automatic speed tests?" = "要开启自动测速吗?";
+"Each test uses a lot of data (often several hundred MB, a few GB on a fast line) and the first one starts now. Tests are skipped on metered connections such as a phone hotspot or Low Data Mode." = "每次测速会用掉很多流量(通常几百 MB,高速线路可达几 GB),第一次会马上开始。在手机热点、低数据模式等计费网络上会自动跳过。";
+"Turn on" = "开启";
+"Cancel" = "取消";

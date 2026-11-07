@@ -31,7 +31,7 @@ struct SpeedHistoryView: View {
                     .foregroundStyle(.secondary)
             }
             HStack(spacing: 12) {
-                Picker("Automatic speed test", selection: $check.intervalHours) {
+                Picker("Automatic speed test", selection: Binding(get: { check.intervalHours }, set: { check.requestInterval($0) })) {
                     ForEach(SpeedCheck.intervals, id: \.self) { Text(SpeedCheck.intervalLabel($0)).tag($0) }
                 }
                 .frame(maxWidth: 300)
@@ -44,7 +44,7 @@ struct SpeedHistoryView: View {
                     }
                 Spacer()
             }
-            Text("A speed test uses a lot of data (often several hundred MB, on a fast line a few GB). Automatic tests are off by default and are skipped on an iPhone hotspot.")
+            Text("A speed test uses a lot of data (often several hundred MB, on a fast line a few GB). Automatic tests are off by default and are skipped on metered connections such as a phone hotspot.")
                 .font(.caption).foregroundStyle(.secondary)
             if !check.summary.isEmpty { Text(check.summary).font(.callout).foregroundStyle(.secondary) }
             if history.records.isEmpty {

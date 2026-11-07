@@ -1435,7 +1435,7 @@ exposure_parse() {
       port=substr(a,i+1); addr=substr(a,1,i-1)
       if (port !~ /^[0-9]+$/) next
       if (addr=="*" || addr=="0.0.0.0" || addr=="::") sc=3
-      else if (addr ~ /^127\./ || addr=="::1") sc=1
+      else if (addr ~ /^127\./ || addr=="::1" || addr ~ /%lo[0-9]*$/) sc=1
       else sc=2
       if (sc>best[port]) best[port]=sc
     }
@@ -1444,7 +1444,12 @@ exposure_parse() {
 
 # stdin: lsof -nP -iTCP -sTCP:LISTEN 的输出 -> 每行 "端口 进程名" (只能看到有权限看的进程)
 exposure_procs() {
-  awk 'NR>1 && /LISTEN/ { n=$(NF-1); sub(/.*:/,"",n); c=$1; gsub(/\\x20/," ",c); if (n ~ /^[0-9]+$/ && !(n in seen)) { seen[n]=1; print n, c } }'
+  awk 'NR>1 && /LISTEN/ { a=$(NF-1); n=a; sub(/.*:/,"",n); c=$1; gsub(/\\x20/," ",c)
+    if (n !~ /^[0-9]+$/) next
+    wild = (a !~ /^(127\.|\[::1\])/)      # 同一端口可能有 127.0.0.1 和 * 两个监听者, 对外可达的那个才是要标的
+    if (!(n in who) || (wild && !(n in w))) { who[n]=c; if (wild) w[n]=1 }
+  }
+  END { for (n in who) print n, who[n] }'
 }
 
 # 防火墙状态: on / off / unknown
@@ -1463,8 +1468,7 @@ exposure_assess() {
     [ -z "$port" ] && continue
     proc=${proc:-?}
     if [ "$scope" = local ]; then nlocal=$((nlocal+1)); continue; fi
-    if [ "$port" -ge 49152 ]; then ndyn=$((ndyn+1)); [ "$proc" != "?" ] && case " $dynprocs " in *" $proc "*) ;; *) dynprocs="$dynprocs $proc";; esac; continue; fi
-    nexp=$((nexp+1)); lvl=""; msg=""
+    lvl=""; msg=""
     case "$port" in
       2375|2376) lvl=bad; msg="$(L "the Docker API is open to the network: anyone who can reach it can take over this Mac. Bind it to 127.0.0.1 or use TLS." "Docker API 对网络开放: 任何能连上的人都能控制这台 Mac。改成只监听 127.0.0.1, 或启用 TLS。")";;
       6379)      lvl=bad; msg="$(L "Redis is open to the network (no password by default). Bind it to 127.0.0.1." "Redis 对网络开放 (默认没有密码)。改成只监听 127.0.0.1。")";;
@@ -1479,8 +1483,15 @@ exposure_assess() {
       3283)      lvl=warn; msg="$(L "Remote Management (Apple Remote Desktop) is on." "远程管理 (Apple Remote Desktop) 已开启。")";;
       3389)      lvl=warn; msg="$(L "RDP is open to the network." "RDP 对网络开放。")";;
       3306|5432|1433) lvl=warn; msg="$(L "a database is open to the network. Bind it to 127.0.0.1 unless other machines need it." "数据库对网络开放。除非别的机器要用, 否则改成只监听 127.0.0.1。")";;
-      *) case "$proc" in node|python*|Python|ruby|java|php*|deno|bun|vite|next-server*|go|air|uvicorn|gunicorn|flask) lvl=warn; msg="$(L "a development server is reachable by everyone on the network. Bind it to 127.0.0.1 unless you want that." "开发服务器对网络上所有人开放。除非有意, 否则改成只监听 127.0.0.1。")";; esac;;
+      *) case "$proc" in
+           redis*|mongo*|memcache*|dockerd|elasticse*) lvl=bad; msg="$(L "a data store / the Docker daemon ($proc) is open to the network, usually without a password. Bind it to 127.0.0.1." "数据库 / Docker 守护进程 ($proc) 对网络开放, 通常没有密码。改成只监听 127.0.0.1。")";;
+           mysqld|postgres*) lvl=warn; msg="$(L "a database ($proc) is open to the network. Bind it to 127.0.0.1 unless other machines need it." "数据库 ($proc) 对网络开放。除非别的机器要用, 否则改成只监听 127.0.0.1。")";;
+           node|python*|Python|ruby|java|php*|deno|bun|vite|next-server*|go|air|uvicorn|gunicorn|flask) lvl=warn; msg="$(L "a development server is reachable by everyone on the network. Bind it to 127.0.0.1 unless you want that." "开发服务器对网络上所有人开放。除非有意, 否则改成只监听 127.0.0.1。")";;
+         esac;;
     esac
+    # 高位端口 (49152+) 通常是 macOS 系统服务, 折叠成一行; 但进程名认得是数据库 / Docker / 开发服务器的不折叠 (它们开在高位端口一样危险)
+    if [ -z "$lvl" ] && [ "$port" -ge 49152 ]; then ndyn=$((ndyn+1)); [ "$proc" != "?" ] && case " $dynprocs " in *" $proc "*) ;; *) dynprocs="$dynprocs $proc";; esac; continue; fi
+    nexp=$((nexp+1))
     if [ -n "$lvl" ]; then
       if [ "$lvl" = bad ]; then bad "$port/tcp $proc — $msg"; nbad=$((nbad+1)); else warn "$port/tcp $proc — $msg"; nwarn=$((nwarn+1)); fi
     else
