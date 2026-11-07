@@ -21,7 +21,7 @@ A `Brewfile` is included to install common third-party tools (mtr, nmap, iperf3,
 ./NetDoctor.command        # double-click or run; opens the UI in your browser
 ./make-app.sh              # optional: build NetDoctor.app to drop into /Applications
 ```
-Pick a tool on the left, fill in the parameters, click "Run". The UI follows your browser language; the 🌐 button at the bottom left switches between English and 中文. The theme follows the system appearance by default; the 🖥/☀️/🌙 button next to it lets you pick Auto / Light / Dark. Output streams live and can be stopped, copied or saved.
+Pick a tool on the left, fill in the parameters, click "Run". The UI follows your browser language; the 🌐 button at the bottom left switches between English and 中文. The theme follows the system appearance by default; the 🖥/☀️/🌙 button next to it lets you pick Auto / Light / Dark. Output streams live and can be stopped, copied, saved or copied as Markdown (handy for tickets and chat).
 Features that need administrator rights (connections/listeners, flush DNS, and the full Wi-Fi/route details) show the system password prompt.
 Watchlist: open the 📋 **Watchlist** entry (or press `f`) to ping every favorite and see its status and trend; tick **Notify** for desktop notifications when a host goes down or recovers (the tab title shows `⚠ N`).
 Wi-Fi signal: open the 📶 **Wi-Fi signal** entry (or press `w`) for live signal and noise curves (macOS only).
