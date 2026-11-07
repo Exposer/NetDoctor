@@ -7,6 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
+- `netdoctor ipv6` is now a full IPv6 diagnosis (CLI, and the IPv6 check in the web UI / app): besides the address, AAAA and IPv4-vs-IPv6 comparison it now checks that the IPv6 router (default route) answers, that the internet is reachable by address, that 1400-byte packets get through (path-MTU black hole), HTTPS to a real site over IPv6, TCP connect time against IPv4, and the IPv6 DNS servers in use, and gives a clear verdict: no IPv6 at all / only local (ULA) IPv6 (harmless), an address but no route (RA problem), router silent, ISP IPv6 broken upstream, MTU black hole, IPv6 filtered or DNS without AAAA, IPv6 much slower than IPv4 — each with a fix (for example `networksetup -setv6off`). Exit code is 1 on a bad-level fault.
 - `netdoctor channels` and a **Wi-Fi channels** tool (CLI, web UI, app): scans nearby Wi-Fi and counts the neighbouring networks that overlap your current channel by spectrum rather than by channel number (adjacent channels count on 2.4 GHz; 5 / 6 GHz use width-aligned blocks; a network at -65 dBm or stronger counts double). When a clearly quieter channel exists it recommends one, with a DFS warning, a hint to move to 5 GHz, and to drop 40 MHz to 20 MHz on a crowded 2.4 GHz band. Uses `system_profiler` (about 15 s, no sudo); without Location permission neighbour names are hidden, so it counts but does not list them.
 
 ## [1.4.0] - 2026-11-07

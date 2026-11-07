@@ -88,7 +88,7 @@
 "TCP ping" = "TCP ping";
 "TCP connect latency to a port — for when ping is blocked" = "TCP connect latency to a port — for when ping is blocked";
 "IPv6 check" = "IPv6 check";
-"Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path" = "Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path";
+"Diagnose IPv6: address, router, internet, large packets and websites, compared with IPv4" = "Diagnose IPv6: address, router, internet, large packets and websites, compared with IPv4";
 "Captive portal" = "Captive portal";
 "Wi-Fi connected but no web access? Detect a login page" = "Wi-Fi connected but no web access? Detect a login page";
 "22,80,443 or 1-1024" = "22,80,443 or 1-1024";

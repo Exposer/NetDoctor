@@ -46,7 +46,7 @@ struct Tool: Identifiable, Hashable {
                       ToolInput(name: "port", label: "Port", placeholder: "443", required: true),
                       ToolInput(name: "count", label: "Count", placeholder: "10", defaultValue: "10")]),
         Tool(id: "ipv6", title: "IPv6 check", icon: "6.circle",
-             summary: "Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path"),
+             summary: "Diagnose IPv6: address, router, internet, large packets and websites, compared with IPv4"),
         Tool(id: "captive", title: "Captive portal", icon: "wifi.exclamationmark",
              summary: "Wi-Fi connected but no web access? Detect a login page"),
         Tool(id: "lan", title: "LAN scan", icon: "network",

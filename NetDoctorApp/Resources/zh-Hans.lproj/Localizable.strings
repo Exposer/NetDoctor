@@ -88,7 +88,7 @@
 "TCP ping" = "TCP 延迟";
 "TCP connect latency to a port — for when ping is blocked" = "测量到某个端口的 TCP 连接延迟,适用于 ping 被屏蔽时";
 "IPv6 check" = "IPv6 检测";
-"Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path" = "对比 IPv4 / IPv6 连通性,发现异常的 IPv6 链路";
+"Diagnose IPv6: address, router, internet, large packets and websites, compared with IPv4" = "诊断 IPv6: 地址、路由器、外网、大包和网站访问, 并与 IPv4 对比";
 "Captive portal" = "强制门户";
 "Wi-Fi connected but no web access? Detect a login page" = "连上 Wi-Fi 却打不开网页?检测登录跳转页";
 "22,80,443 or 1-1024" = "22,80,443 或 1-1024";

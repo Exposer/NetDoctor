@@ -313,6 +313,21 @@ lib "channels: 5 GHz overlap follows the 80 MHz block" 0 "CUR 5 36 80 3 3" "wifi
 SP3="$T/sp3.txt"; printf '%s\n' '          Current Network Information:' '            x:' '              Channel: 36 (5GHz, 80MHz)' > "$SP3"
 lib "channels: quiet channel" 0 "Your channel is quiet" "wifi_scan_parse < $SP3 | channels_assess | channels_verdict"
 lib "channels: not connected" 1 "not connected to a Wi-Fi" "printf '' | channels_assess | channels_verdict"
+# ---- IPv6 verdict ----
+v6() { local name=$1 want=$2 rc=$3; shift 3; lib "$name" "$rc" "$want" "ipv6_assess $*"; }
+v6 "ipv6: no IPv6 at all"            "provides no IPv6 at all"     0 glob=0 gw=0
+v6 "ipv6: only local IPv6 (ULA)"     "only local IPv6"             0 glob=0 ula=1 gw=1
+v6 "ipv6: address but no route"      "no IPv6 default route"       1 glob=1 gw=0
+v6 "ipv6: router silent"             "does not answer"             1 glob=1 gw=1 gwok=0
+v6 "ipv6: upstream broken"           "fault is upstream"           1 glob=1 gw=1 gwok=1 ipok=0
+v6 "ipv6: upstream fix advice"       "networksetup -setv6off"      1 glob=1 gw=1 gwok=1 ipok=0
+v6 "ipv6: MTU black hole"            "path-MTU black hole"         1 glob=1 gw=1 gwok=1 ipok=1 bigok=0
+v6 "ipv6: HTTPS blocked over v6"     "HTTPS over IPv6 to a real site fails" 0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=0 aaaa=1
+v6 "ipv6: DNS gives no AAAA"         "gives no IPv6 (AAAA)"        0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=0 aaaa=0
+v6 "ipv6: slow compared with IPv4"   "much slower to connect"      0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 t4=20 t6=450
+v6 "ipv6: a small gap is not slow"   "IPv6 is healthy"             0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 t4=20 t6=200
+v6 "ipv6: healthy"                   "IPv6 is healthy"             0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 v4ok=1
+v6 "ipv6: IPv6-only network"          "IPv6-only connectivity"     0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 v4ok=0
 SD=$'0:36:43.593  Add        3   7 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3  15 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3   7 .                    _udp.local.          _sleep-proxy\n0:36:43.593  Rmv        3   7 .                    _tcp.local.          _gone'
 printf '%s\n' "$SD" > "$T/meta.txt"
 lib "bonjour: service types (dedupe, Rmv ignored)" 0 "_ssh._tcp" "bonjour_types $T/meta.txt"
