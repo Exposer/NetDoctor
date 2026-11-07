@@ -75,6 +75,8 @@ netdoctor tools                                          # see which tools are i
 | Speed test | `netdoctor speed` (networkQuality); on a LAN use `iperf3 -s` / `iperf3 -c` |
 | Odd DNS behavior | `netdoctor fixdns` |
 | Want the tool to fix it | `netdoctor fix` (diagnoses, then renews DHCP / flushes DNS / syncs the clock / opens the login page as the verdict calls for; asks before each step and re-checks afterwards) |
+| "It worked yesterday" | Save a `netdoctor report` while it works and another when it breaks, then run `netdoctor compare` (picks the two newest, ignores timing noise, lists changes in gateway / IP / DNS / verdicts) |
+| Want to watch whether the connection drops | `netdoctor watch` (pings 1.1.1.1 for 60 s by default; tells you at once when it drops, bell included, and summarises loss, jitter and outages at the end; `netdoctor watch host 300` sets host and seconds) |
 | Need to send results to someone / keep a record | `netdoctor report` (saves diagnosis, overview, DHCP, quick check, Wi-Fi, DNS, IPv6 and proxy info to a Desktop file; `netdoctor report html` makes a collapsible web page; `netdoctor report redact` hides the public IP, MAC address, Wi-Fi name and other personal info) |
 
 ## Handy built-in commands

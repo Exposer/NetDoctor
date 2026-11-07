@@ -361,6 +361,55 @@ expect "report: unknown option"  1 "Unknown option"  /bin/bash $ND report nonsen
 # redaction still applies to the text before it becomes HTML
 lib "report html: redacted values never reach the page" 0 "" 'REDACT_LITERALS="203.0.113.9"; printf "%s\n" "== X ==" "Public IP: 203.0.113.9 and 203.0.113.9" | redact_filter | report_to_html t n s en | grep -c 203.0.113.9 | grep -qx 0'
 
+# ---- 11. watch ------------------------------------------------------------------------------------------
+ws() { printf '%b' "$1" | PATH="$T/bin:$PATH" NETDOCTOR_SOURCE_ONLY=1 /bin/bash -c ". $ND; watch_summary 1.1.1.1" 2>&1 | strip; }
+wcheck() { local out; out=$(ws "$2"); if printf '%s' "$out" | grep -qF -- "$3"; then pass; else fail "$1" "wanted '$3', got: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)"; fi; }
+wcheck "watch: counts and loss"        '100 10\n101 12\n102 -\n103 20\n' "4 pings, 1 lost (25.0%)"
+wcheck "watch: min/avg/max"            '100 10\n101 20\n' "min/avg/max = 10.0/15.0/20.0 ms"
+wcheck "watch: jitter"                 '100 10\n101 20\n102 10\n' "jitter 10.0 ms"
+wcheck "watch: no outage"              '100 10\n101 -\n102 -\n103 12\n' "No outage"
+wcheck "watch: 2 lost in a row is not an outage" '100 10\n101 -\n102 -\n103 12\n' "No outage"
+wcheck "watch: outage duration"        '100 10\n101 -\n102 -\n103 -\n104 -\n105 9\n' "from +1 s, lasted 4 s"
+wcheck "watch: outage still down"      '100 10\n101 -\n102 -\n103 -\n' "still down at the end"
+wcheck "watch: two outages"            '100 10\n101 -\n102 -\n103 -\n104 9\n105 -\n106 -\n107 -\n108 9\n' "2 outage(s)"
+wcheck "watch: all lost has no latency line" '100 -\n101 -\n102 -\n' "3 pings, 3 lost (100.0%)"
+out=$(ws '100 -\n101 -\n102 -\n'); printf '%s' "$out" | grep -qF "Latency" && fail "watch: all lost must not print latency" || pass
+wcheck "watch: no samples"             '' "No samples."
+out=$(printf '100 10\n' | NETDOCTOR_LANG=zh PATH="$T/bin:$PATH" NETDOCTOR_SOURCE_ONLY=1 /bin/bash -c ". $ND; watch_summary h" 2>&1)
+printf '%s' "$out" | grep -qF "没有断线" && pass || fail "watch: Chinese summary"
+expect "watch: bad host"         1 "Invalid host"        /bin/bash $ND watch 'x;ls' 10
+expect "watch: seconds too small" 1 "from 5 to 3600"     /bin/bash $ND watch 1.1.1.1 2
+expect "watch: seconds not a number" 1 "from 5 to 3600"  /bin/bash $ND watch 1.1.1.1 abc
+# a live run with a fake ping that fails three times, then answers: alert, recovery and the summary
+mkdir -p "$T/wp"; : > "$T/wp.n"
+printf '#!/bin/sh\necho x >> "%s"\nn=$(wc -l < "%s")\n[ "$n" -le 3 ] && exit 1\necho "64 bytes from 1.1.1.1: icmp_seq=0 ttl=57 time=7.5 ms"\n' "$T/wp.n" "$T/wp.n" > "$T/wp/ping"; chmod +x "$T/wp/ping"
+out=$(PATH="$T/wp:$PATH" /bin/bash $ND watch 1.1.1.1 7 </dev/null 2>&1 | strip)
+printf '%s' "$out" | grep -qF "Connection lost" && pass || fail "watch: alerts after 3 lost pings" "$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)"
+printf '%s' "$out" | grep -qF "Back online after" && pass || fail "watch: reports the recovery"
+printf '%s' "$out" | grep -qF "1 outage(s)" && pass || fail "watch: summary counts the outage" "$(printf '%s' "$out" | tail -4 | tr '\n' ' ')"
+printf '%s' "$out" | grep -qF "min/avg/max = 7.5/7.5/7.5" && pass || fail "watch: latency parsed from ping output"
+
+# ---- 12. compare ----------------------------------------------------------------------------------------
+CD="$T/cmp"; mkdir -p "$CD/home/Desktop"
+printf 'netdoctor report Sat Nov  7 08:00:00 PST 2026\n== Diagnosis ==\n[ OK ] 2/6 Gateway 192.168.0.1: reachable (avg 1.139 ms)\n[ OK ] 4/6 DNS: works\n[WARN] 6/6 Proxy / VPN: tunnels: utun4\nSignal / Noise: -47 dBm / -88 dBm\n  8.8.8.8      11 ms      x\n[ OK ] https://www.apple.com  200 0.116464s\n' > "$CD/a.txt"
+printf 'netdoctor report Sat Nov  7 09:30:41 PST 2026\n== Diagnosis ==\n[ OK ] 2/6 Gateway 192.168.0.1: reachable (avg 3.912 ms)\n[ OK ] 4/6 DNS: works\n[WARN] 6/6 Proxy / VPN: tunnels: utun4\nSignal / Noise: -52 dBm / -90 dBm\n  8.8.8.8      7 ms       x\n[ OK ] https://www.apple.com  200 1.214492s\n' > "$CD/b.txt"
+printf 'netdoctor report Sat Nov  7 10:00:00 PST 2026\n== Diagnosis ==\n[ OK ] 2/6 Gateway 10.0.0.1: reachable (avg 2.0 ms)\n[FAIL] 4/6 DNS: the system resolver fails\n[WARN] 6/6 Proxy / VPN: tunnels: utun4\nSignal / Noise: -47 dBm / -88 dBm\n  8.8.8.8      11 ms      x\n[ OK ] https://www.apple.com  200 0.116464s\n' > "$CD/c.txt"
+expect "compare: only timings differ"   0 "Nothing changed apart from timings" /bin/bash $ND compare "$CD/a.txt" "$CD/b.txt"
+expect "compare: a changed gateway is shown (was)" 0 "was  [ OK ] 2/6 Gateway 192.168.0.1" /bin/bash $ND compare "$CD/a.txt" "$CD/c.txt"
+expect "compare: a changed gateway is shown (now)" 0 "now  [ OK ] 2/6 Gateway 10.0.0.1" /bin/bash $ND compare "$CD/a.txt" "$CD/c.txt"
+expect "compare: new failure is shown"   0 "now  [FAIL] 4/6 DNS" /bin/bash $ND compare "$CD/a.txt" "$CD/c.txt"
+expect "compare: problem counts"         0 "FAIL 0 → 1,  WARN 1 → 1" /bin/bash $ND compare "$CD/a.txt" "$CD/c.txt"
+out=$(/bin/bash $ND compare "$CD/a.txt" "$CD/c.txt" </dev/null 2>&1); printf '%s' "$out" | grep -qF "Signal" && fail "compare: unchanged lines must not be listed" || pass
+expect "compare: one argument"           1 "Usage"         /bin/bash $ND compare "$CD/a.txt"
+expect "compare: missing file"           1 "Cannot read"   /bin/bash $ND compare "$CD/a.txt" "$CD/nope.txt"
+printf '<html>' > "$CD/r.html"; expect "compare: html is refused" 1 "Only .txt reports" /bin/bash $ND compare "$CD/a.txt" "$CD/r.html"
+printf 'hello\n' > "$CD/x.txt"; expect "compare: not a report"   1 "Not a netdoctor report" /bin/bash $ND compare "$CD/a.txt" "$CD/x.txt"
+expect "compare: no saved reports"       1 "found 0"       env HOME="$CD/home" /bin/bash $ND compare
+cp "$CD/a.txt" "$CD/home/Desktop/netdoctor-report-1.txt"; touch -t 202611070800 "$CD/home/Desktop/netdoctor-report-1.txt"
+expect "compare: only one saved report"  1 "found 1"       env HOME="$CD/home" /bin/bash $ND compare
+cp "$CD/c.txt" "$CD/home/Desktop/netdoctor-report-2.txt"; touch -t 202611071000 "$CD/home/Desktop/netdoctor-report-2.txt"
+expect "compare: picks the two newest, older first" 0 "was  [ OK ] 2/6 Gateway 192.168.0.1" env HOME="$CD/home" /bin/bash $ND compare
+
 # ---- result ------------------------------------------------------------------------------------------
 echo
 if [ "$FAIL" -eq 0 ]; then echo "all $PASS tests passed"; exit 0; fi
