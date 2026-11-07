@@ -17,6 +17,9 @@ default_if()  { route -n get default 2>/dev/null | awk '/interface:/{print $2}';
 gateway()     { route -n get default 2>/dev/null | awk '/gateway:/{print $2}'; }
 # 提权: 已是 root 直接执行; 有终端时正常询问密码; 无终端(GUI 调用)或设了 NETDOCTOR_NOSUDO(如 report)用 -n, 避免卡在/弹出密码提示
 priv() { if [ "$(id -u)" = 0 ]; then "$@"; elif [ -t 0 ] && [ -z "${NETDOCTOR_NOSUDO:-}" ]; then sudo "$@"; else sudo -n "$@"; fi; }
+# 能否提权: root / 有终端 (sudo 会询问密码) / sudo 已缓存凭据。GUI 调用没有终端, 拿不到就别硬跑
+can_priv() { [ "$(id -u)" = 0 ] && return 0; [ -t 0 ] && [ -z "${NETDOCTOR_NOSUDO:-}" ] && return 0; sudo -n true 2>/dev/null; }
+need_admin() { bad "$(L "Administrator rights are required: run  sudo netdoctor $1  in a terminal" "需要管理员权限: 请在终端运行  sudo netdoctor $1")"; }
 wifi_if()     { networksetup -listallhardwareports 2>/dev/null | awk '/Wi-Fi|AirPort/{getline; print $2; exit}'; }
 
 usage() {
@@ -677,12 +680,17 @@ cmd_proxy() {
 
 cmd_capture() {
   local f=${1:-}; local out="$HOME/Desktop/cap-$(date +%Y%m%d-%H%M%S).pcap"
+  can_priv || { need_admin capture; return 1; }
   echo "$(L "Capturing → $out  (Ctrl-C to stop; open with Wireshark)" "抓包 → $out  (Ctrl-C 结束; 用 Wireshark 打开)")"
   echo "$(L "Filter examples: 'host 1.2.3.4'  'port 53'  'tcp port 443 and host x.com'" "过滤器示例: 'host 1.2.3.4'  'port 53'  'tcp port 443 and host x.com'")"
   if [ -n "$f" ]; then priv tcpdump -i "$(default_if)" -nn -s0 -w "$out" "$f"; else priv tcpdump -i "$(default_if)" -nn -s0 -w "$out"; fi
 }
 
-cmd_fixdns() { priv dscacheutil -flushcache && priv killall -HUP mDNSResponder && ok "$(L "DNS cache flushed" "DNS 缓存已刷新")"; }
+cmd_fixdns() {
+  can_priv || { need_admin fixdns; return 1; }
+  if priv dscacheutil -flushcache && priv killall -HUP mDNSResponder; then ok "$(L "DNS cache flushed" "DNS 缓存已刷新")"
+  else bad "$(L "Flushing the DNS cache failed (wrong password or no admin rights)" "刷新 DNS 缓存失败 (密码错误或没有管理员权限)")"; return 1; fi
+}
 
 cmd_tools() {
   hdr "$(L "Built-in" "系统自带")"
