@@ -204,6 +204,11 @@ SP_MID='Uplink capacity: 30 Mbps\nDownlink capacity: 300 Mbps\nUplink Responsive
 lib "speed: upload bufferbloat"   0 "Bufferbloat: latency under upload load" "speed_verdict \"\$(printf '$SP_BAD')\""
 lib "speed: good responsiveness"  0 "Responsiveness is good"                  "speed_verdict \"\$(printf '$SP_OK')\""
 lib "speed: fair responsiveness"  0 "Responsiveness is fair"                  "speed_verdict \"\$(printf '$SP_MID')\""
+lib "speed: single Responsiveness line (fair)" 0 "Responsiveness is fair (879 RPM)" "speed_verdict 'Downlink capacity: 521 Mbps
+Uplink capacity: 21 Mbps
+Responsiveness: Medium (68 milliseconds | 879 RPM)'"
+lib "speed: single Responsiveness line (bad)"  0 "Bufferbloat: latency under network load is very high (120 RPM)" "speed_verdict 'Uplink capacity: 21 Mbps
+Responsiveness: Low (500 milliseconds | 120 RPM)'"
 lib "speed: unparseable output"   0 "no bufferbloat verdict"                  "speed_verdict 'garbage'"
 lib "speed: slow upload warns"    0 "Upload bandwidth is only 3 Mbps"         "speed_verdict \"\$(printf 'Uplink capacity: 3 Mbps\\nDownlink capacity: 90 Mbps\\nUplink Responsiveness: High (3 milliseconds | 1900 RPM)')\""
 printf 'A47733\tGoogle\n00000C Cisco Systems\n' > "$T/oui.txt"

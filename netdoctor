@@ -302,6 +302,8 @@ cmd_lan() {
     net=$(( ipi & 0xffffff00 )); size=255
   fi
   selfmac=$(ifconfig "$ifc" 2>/dev/null | awk '/ether /{print $2; exit}')
+  # 没有"本地网络"权限的进程 (网页 / App 里运行) 读到的是占位 MAC 02:00:00:00:00:00, 不是真的
+  [ "$selfmac" = "02:00:00:00:00:00" ] && { selfmac="?"; unk=1; }
   hdr "$(L "Devices on the local network" "局域网设备") ($(int2ip $((net+1))) - $(int2ip $((net+size-1))))"
   echo "$(L "Scanning $((size-1)) addresses on $ifc …" "正在扫描 $ifc 上的 $((size-1)) 个地址 …")"
   popt="-W 1"; [ "$(uname)" = Darwin ] && popt="-t 1"
@@ -828,7 +830,10 @@ cmd_speed() {
     if has speedtest-cli; then speedtest-cli; else return 1; fi
     return
   fi
-  local out; out=$(networkQuality -v 2>&1) || { printf '%s\n' "$out"; bad "$(L "networkQuality failed" "networkQuality 执行失败")"; return 1; }
+  local out; out=$(networkQuality -v 2>&1) || {
+    # 失败时系统会倒出一大段证书信息; 只留第一行 (截断), 并说明多半是临时问题
+    printf '%s\n' "$out" | head -1 | cut -c1-200
+    bad "$(L "networkQuality failed (often a temporary problem reaching Apple's test server; try again, or check the clock / proxy with: netdoctor doctor)" "networkQuality 执行失败 (多半是暂时连不上 Apple 的测速服务器; 请重试, 或用 netdoctor doctor 检查时钟 / 代理)")"; return 1; }
   printf '%s\n' "$out"
   speed_verdict "$out"
 }
@@ -841,19 +846,27 @@ speed_verdict() {
   ul=$(printf '%s\n' "$t" | sed -n 's/^Uplink capacity: *\([0-9.]*\) Mbps.*/\1/p' | head -1)
   dr=$(printf '%s\n' "$t" | sed -n 's/^Downlink [Rr]esponsiveness:.*|  *\([0-9]*\) RPM.*/\1/p' | head -1)
   ur=$(printf '%s\n' "$t" | sed -n 's/^Uplink [Rr]esponsiveness:.*|  *\([0-9]*\) RPM.*/\1/p' | head -1)
+  # 有的 macOS / 网络下只给一行总的 "Responsiveness: Medium (68 milliseconds | 879 RPM)", 不分上下行
+  local fig single=""
+  if [ -z "$dr$ur" ]; then
+    dr=$(printf '%s\n' "$t" | sed -n 's/^Responsiveness:.*|  *\([0-9]*\) RPM.*/\1/p' | head -1)
+    [ -n "$dr" ] && { ur=$dr; single=1; }
+  fi
+  if [ -n "$single" ]; then fig="$dr RPM"; else fig="$(L "down $dr RPM, up $ur RPM" "下载 $dr RPM, 上传 $ur RPM")"; fi
   echo
   if [ -z "$dr$ur" ]; then
     warn "$(L "Could not read the responsiveness figures, so no bufferbloat verdict (the output format may differ on this macOS)." "读不到响应性数据, 无法判断缓冲膨胀 (这个 macOS 版本的输出格式可能不同)。")"; return 0
   fi
   local worst=$dr; [ -z "$worst" ] && worst=$ur; [ -n "$ur" ] && [ "$ur" -lt "$worst" ] && worst=$ur
   if [ "$worst" -ge 1000 ]; then
-    ok "$(L "Responsiveness is good (down $dr RPM, up $ur RPM): the line stays snappy under load." "响应性良好 (下载 $dr RPM, 上传 $ur RPM): 满载时网络依然流畅。")"
+    ok "$(L "Responsiveness is good ($fig): the line stays snappy under load." "响应性良好 ($fig): 满载时网络依然流畅。")"
   elif [ "$worst" -ge 300 ]; then
-    warn "$(L "Responsiveness is fair (down $dr RPM, up $ur RPM): latency rises noticeably when the line is busy." "响应性一般 (下载 $dr RPM, 上传 $ur RPM): 线路繁忙时延迟会明显上升。")"
+    warn "$(L "Responsiveness is fair ($fig): latency rises noticeably when the line is busy." "响应性一般 ($fig): 线路繁忙时延迟会明显上升。")"
   else
     local dir; dir="$(L "upload" "上传")"; [ -n "$dr" ] && [ "$dr" -lt 300 ] && dir="$(L "download" "下载")"
     [ -n "$dr" ] && [ -n "$ur" ] && [ "$dr" -lt 300 ] && [ "$ur" -lt 300 ] && dir="$(L "upload and download" "上传和下载")"
-    bad "$(L "Bufferbloat: latency under $dir load is very high (down ${dr:-?} RPM, up ${ur:-?} RPM). Video calls and games will lag while someone is uploading or downloading." "存在缓冲膨胀: $dir 满载时延迟很高 (下载 ${dr:-?} RPM, 上传 ${ur:-?} RPM)。有人上传或下载时, 视频会议和游戏会卡。")"
+    [ -n "$single" ] && dir="$(L "network" "网络")"
+    bad "$(L "Bufferbloat: latency under $dir load is very high ($fig). Video calls and games will lag while someone is uploading or downloading." "存在缓冲膨胀: $dir 满载时延迟很高 ($fig)。有人上传或下载时, 视频会议和游戏会卡。")"
     echo "$(L "  Fix: enable SQM / smart queue (fq_codel, CAKE) on the router, or cap its speed at about 90% of the figures above." "  办法: 在路由器上启用 SQM / 智能队列 (fq_codel、CAKE), 或把路由器限速设为上面带宽的约 90%。")"
   fi
   if [ -n "$ul" ] && [ -n "$dl" ]; then
