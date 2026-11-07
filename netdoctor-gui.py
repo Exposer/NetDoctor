@@ -2,7 +2,7 @@
 """NetDoctor GUI - local web interface (standard library only, listens on 127.0.0.1 only).
 Usage: python3 netdoctor-gui.py [--port 8765] [--no-open]
 """
-import argparse, json, os, re, secrets, select, shlex, socket, subprocess, sys, threading, webbrowser
+import argparse, json, os, re, secrets, select, shlex, signal, socket, subprocess, sys, threading, webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -321,7 +321,7 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, json.dumps(wifi_info()), "application/json")
         if self.path == "/ping":
             try:
-                n = int(self.headers.get("Content-Length") or 0)
+                n = min(int(self.headers.get("Content-Length") or 0), 65536)
                 host = str((json.loads(self.rfile.read(n) or b"{}")).get("host") or "").strip()
             except Exception:
                 host = ""
@@ -331,7 +331,7 @@ class H(BaseHTTPRequestHandler):
         if self.path != "/run": return self._send(404, "not found")
         lang = "en"
         try:
-            n = int(self.headers.get("Content-Length") or 0)
+            n = min(int(self.headers.get("Content-Length") or 0), 65536)
             req = json.loads(self.rfile.read(n) or b"{}")
             lang = "zh" if req.get("lang") == "zh" else "en"
             spec = BY_ID.get(req.get("cmd"))
@@ -356,31 +356,40 @@ class H(BaseHTTPRequestHandler):
         else:
             cmd = ["/bin/bash", NETDOCTOR, spec["id"]] + args
         try:
+            # 独立进程组: 点"停止"时可以连同脚本启动的 ping/perl/nc 等子进程一起结束
             p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                 stderr=subprocess.STDOUT, env=env, bufsize=0)
+                                 stderr=subprocess.STDOUT, env=env, bufsize=0, start_new_session=True)
         except Exception as e:
             self.wfile.write(("%s: %s\n" % (tr(lang, "Failed to start"), e)).encode()); return
+        def kill_group():
+            for sig in (signal.SIGTERM, signal.SIGKILL):
+                try: os.killpg(p.pid, sig)
+                except (ProcessLookupError, PermissionError, OSError): break
+                try: p.wait(timeout=1); break
+                except subprocess.TimeoutExpired: pass
+        gone = False
         try:
             fd = p.stdout.fileno()
             while True:
                 r, _, _ = select.select([fd, self.connection], [], [], 1.0)
                 if self.connection in r:  # 浏览器断开 (点了停止/关了页面) -> 结束子进程
                     try:
-                        if not self.connection.recv(1, socket.MSG_PEEK): break
-                    except OSError: break
+                        if not self.connection.recv(1, socket.MSG_PEEK): gone = True; break
+                    except OSError: gone = True; break
                 if fd in r:
                     chunk = os.read(fd, 4096)
                     if not chunk: break
                     self.wfile.write(chunk); self.wfile.flush()
-            if p.poll() is None and not p.stdout.closed:
-                p.kill()
+            if gone: kill_group()
             rc = p.wait()
             self.wfile.write(("\n\x1b[2m%s\x1b[0m\n" % (tr(lang, "[exit code %d]") % rc)).encode())
         except (BrokenPipeError, ConnectionResetError):
             pass  # user clicked Stop
         finally:
             if p.poll() is None:
-                p.kill()
+                kill_group()
+            try: p.stdout.close()
+            except OSError: pass
 
 HTML = r"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>NetDoctor Network Diagnostics</title><link rel="icon" type="image/svg+xml" href="/icon.svg"><style>

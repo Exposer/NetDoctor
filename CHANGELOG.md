@@ -19,6 +19,9 @@
 - `netdoctor`:输入未知命令时先提示“未知命令: xxx”并显示当前版本号(提醒用 `git pull` 更新),再打印用法,退出码为 2;新增 `netdoctor --version`(也可用 `version`、`-v`)以及 `help`、`-h`、`--help`。此前遇到不认识的命令会悄悄打印用法,分不清是命令输错还是本地版本太旧。
 
 ### 修复
+- `netdoctor tcpping`:macOS 自带 perl 的 `IO::Socket::INET` 在带超时(非阻塞 connect)时会把“连接被拒绝”误判为成功,导致关闭的端口也显示已连接;改为阻塞连接加 `alarm` 超时,并改用 `getaddrinfo`(支持 IPv6)。perl 本身出错时不再返回退出码 0。
+- `netdoctor ports`:全部端口都开放时退出码误为 1;新增主机名校验,不再接受以 `-` 开头的值(避免被当成 `nc` 选项)。
+- 网页界面:点“停止”或关闭页面时,现在会终止整个进程组(包括脚本启动的 perl / nc / networkQuality 等子进程),而不只是 bash;请求体大小设了 64 KB 上限。
 - `netdoctor lan`:子网为 /22 及更小时扫描整个网段(原先超过 /24 只扫 /24,会漏掉设备);修复主机名带空格(如 `name lan`)时 IP 解析错位;本机不再重复出现;读不到 ARP 表时(例如在网页版 / App 中被 macOS 本地网络隐私限制)仍会列出有 ping 应答的设备,MAC 显示为 `?` 并提示授权。
 - `netdoctor` 脚本固定使用 `/bin/bash`(原先 `#!/usr/bin/env bash` 在网页版把 `/usr/local/bin` 放到 PATH 最前时,可能选中旧的 x86 版 bash,导致 `arp` 等命令输出异常);网页版也显式用 `/bin/bash` 调用。
 

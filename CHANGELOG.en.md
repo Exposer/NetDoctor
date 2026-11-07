@@ -19,6 +19,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `netdoctor`: an unknown command now prints "Unknown command: xxx" with the running version (and a hint to `git pull`) before the usage text, and exits with status 2. Added `netdoctor --version` (also `version` and `-v`) as well as `help`, `-h` and `--help`. Previously an unrecognised command silently printed the usage text, which made it impossible to tell a typo from an outdated local copy.
 
 ### Fixed
+- `netdoctor tcpping`: the `IO::Socket::INET` that ships with macOS perl reports "connection refused" as success when a timeout (non-blocking connect) is used, so closed ports looked connected; it now uses a blocking connect with an `alarm` timeout and `getaddrinfo` (IPv6 works). A failure of perl itself no longer exits with 0.
+- `netdoctor ports`: exit code was 1 when every port was open; the host is now validated so a value starting with `-` can no longer be taken as an `nc` option.
+- Web UI: Stop / closing the page now terminates the whole process group (including perl / nc / networkQuality started by the script), not just bash; request bodies are capped at 64 KB.
 - `netdoctor lan`: scans the whole subnet for /22 and smaller (previously anything above a /24 was cut to the /24 and devices were missed); fixes IP parsing when a hostname contains a space (e.g. `name lan`); this Mac is no longer listed twice; when the ARP table cannot be read (e.g. macOS Local Network privacy inside the web UI / app) it still lists hosts that answered ping, shows `?` for the MAC and points to the permission setting.
 - `netdoctor` now always runs under `/bin/bash` (`#!/usr/bin/env bash` could pick up an old x86 bash when the web UI puts `/usr/local/bin` first in PATH, which broke commands such as `arp`); the web UI also invokes it through `/bin/bash` explicitly.
 
