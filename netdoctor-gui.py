@@ -844,12 +844,30 @@ if(used)e.preventDefault()});
 pick('quick');applyLang();
 </script></body></html>"""
 
+def port_arg(v):
+    n = int(v)
+    if not 0 <= n <= 65535:
+        raise argparse.ArgumentTypeError("must be between 0 and 65535")
+    return n
+
+def port_in_use(port):
+    """True if something already accepts connections on 127.0.0.1:port."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sk:
+        sk.settimeout(0.5)
+        return sk.connect_ex(("127.0.0.1", port)) == 0
+
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument("--port", type=int, default=8765, help="0 = random free port; falls back to random if busy"); ap.add_argument("--no-open", action="store_true")
+    ap = argparse.ArgumentParser(); ap.add_argument("--port", type=port_arg, default=8765, help="0 = random free port; falls back to random if busy"); ap.add_argument("--no-open", action="store_true")
     a = ap.parse_args()
+    # macOS lets two sockets listen on the same port when SO_REUSEADDR is set (the default for this server
+    # class), so a busy port does not make bind() fail and a second instance would silently share it.
+    # Probe first, so the "busy -> random free port" fallback really happens.
+    if a.port and port_in_use(a.port):
+        print("Port %d is already in use; picking a free port instead." % a.port)
+        a.port = 0
     try:
         srv = ThreadingHTTPServer(("127.0.0.1", a.port), H)
-    except OSError:  # port busy (e.g. a second instance): use any free port
+    except OSError:  # still busy (race or no permission): use any free port
         srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
     url = "http://127.0.0.1:%d/" % srv.server_address[1]
     print("NetDoctor GUI:", url, "(Ctrl-C to quit)")

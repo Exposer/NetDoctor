@@ -19,6 +19,7 @@
 - `netdoctor`:输入未知命令时先提示“未知命令: xxx”并显示当前版本号(提醒用 `git pull` 更新),再打印用法,退出码为 2;新增 `netdoctor --version`(也可用 `version`、`-v`)以及 `help`、`-h`、`--help`。此前遇到不认识的命令会悄悄打印用法,分不清是命令输错还是本地版本太旧。
 
 ### 修复
+- `netdoctor-gui.py`:指定的端口已被占用时,第二个实例不会报错而是悄悄和第一个共用同一端口(macOS 上 `SO_REUSEADDR` 允许这样),请求随机落到其中一个,令牌对不上就出现莫名的 forbidden;现在启动前先探测端口,被占用就提示并改用空闲端口。`--port` 超出 0–65535 时给出清晰的错误而不是 traceback。
 - `netdoctor report`:在终端里运行时,生成报告途中会突然调 `sudo wdutil` 并弹出密码提示(输出已重定向到文件,很让人困惑);现在报告里只用 `sudo -n`,拿不到管理员信息就跳过。单独运行 `netdoctor wifi` 仍会正常询问密码。
 - `Brewfile`:cask `wireshark` 已改名为 `wireshark-app`(旧名只是别名),改用正式名称。
 - 管理员权限路径(网页界面和 SwiftUI App 的 `osascript`):`do shell script` 默认把换行转成 `\r`,导致复制 / 保存 / 报告里的换行不对;加上 `without altering line endings`。
