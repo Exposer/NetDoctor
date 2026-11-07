@@ -681,8 +681,13 @@ cmd_speed() {
 }
 
 cmd_conns() {
-  hdr "$(L "Listening ports" "监听端口")"; priv lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | head -40
-  hdr "$(L "Established connections" "已建立连接")"; priv lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null | head -40
+  # 没有管理员权限 (无终端且 sudo 无缓存) 时降级为普通权限的 lsof: 只能看到当前用户自己的进程
+  local P=priv
+  if ! can_priv; then
+    P=""; warn "$(L "No administrator rights: only your own processes are listed (run sudo netdoctor conns for all)" "没有管理员权限: 只列出当前用户自己的进程 (用 sudo netdoctor conns 查看全部)")"
+  fi
+  hdr "$(L "Listening ports" "监听端口")"; $P lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | head -40
+  hdr "$(L "Established connections" "已建立连接")"; $P lsof -nP -iTCP -sTCP:ESTABLISHED 2>/dev/null | head -40
   if has nettop; then echo "$(L "Live per-process traffic: nettop -P -d    |   bandwhich (needs sudo)" "实时按进程流量: nettop -P -d    |   bandwhich (需 sudo)")"; fi
 }
 
