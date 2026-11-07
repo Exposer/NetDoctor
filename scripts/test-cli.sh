@@ -112,6 +112,18 @@ E
 for needle in 71.83.193.52 a4:77:33:1b:2c:3d "Max's Home 5G" 2603:8000 100.69.255.68 corp.example.com 1c2d:3e4f "/Users/$U" "$HN"; do
   lib_not "redact hides: $needle" "redact_filter < $T/sample.txt" "$needle"
 done
+V6S="$T/v6sample.txt"; printf '%s\n' '== IPv6 router (default route) ==' '  fe80::9683:c4ff:fea9:72d6%en0 (en0)' '  IPv6 DNS servers: fd7a:115c:a1e0::53 fd09:3040:5f16::1' '[ OK ] The IPv6 router answers (avg 0.9 ms)' > "$V6S"
+for needle in "9683:c4ff" "fea9:72d6" "fd7a:115c" "fd09:3040"; do
+  lib_not "redact hides in the IPv6 section: $needle" "redact_filter < $V6S" "$needle"
+done
+V6T="$T/v6ula.txt"; printf '%s\n' '  DNS: 100.100.100.100 fd7a:115c:a1e0::53 192.168.0.1 fd09:3040:5f16::1' '    nameserver[1] : fd09:3040:5f16::1' > "$V6T"
+for needle in "fd7a" "fd09" "115c"; do lib_not "redact hides a ULA anywhere: $needle" "redact_filter < $V6T" "$needle"; done
+lib "redact keeps the other addresses next to a ULA" 0 "192.168.0.1" "redact_filter < $V6T"
+lib_not "redact: a word that merely contains fd is untouched" "echo 'config fdisk: fd12 is fine' | redact_filter" "<redacted>"
+lib "redact keeps the IPv6 router verdict and interface" 0 "The IPv6 router answers (avg 0.9 ms)" "redact_filter < $V6S"
+lib "redact keeps the interface of the IPv6 router"       0 "%en0 (en0)"                       "redact_filter < $V6S"
+lib "redact does not double-mark link-local addresses" 0 "fe80::<redacted>%en0" "redact_filter < $V6S"
+lib_not "redact does not stack placeholders" "redact_filter < $V6S" "<redacted><redacted>"
 lib "redact keeps private gateway / public DNS / latency" 0 "gateway 192.168.0.1 and DNS 1.1.1.1 and 12 ms" "redact_filter < $T/sample.txt"
 lib "redact keeps the Wi-Fi signal values"               0 "<redacted>"                                     "redact_filter < $T/sample.txt"
 

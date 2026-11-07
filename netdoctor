@@ -1858,6 +1858,9 @@ EOF
     -e 's/^   ([0-9A-Fa-f]{1,4}:){2,}[0-9A-Fa-f:]*(  .*)$/   <redacted>\2/'
     -e 's/(inet6 )(f[cd][0-9A-Fa-f:]*|[23][0-9A-Fa-f:]*)/\1<redacted>/'
     -e 's/(inet6 )fe80[0-9A-Fa-f:]*/\1fe80::<redacted>/'   # 老式 EUI-64 的链路本地地址由 MAC 推导, 会间接泄漏 MAC
+    -e 's/(^|[^0-9A-Fa-f:])f[cd][0-9A-Fa-f]{2}:[0-9A-Fa-f:]*[0-9A-Fa-f]/\1<redacted>/g'   # 任何位置的唯一本地地址 (ULA, fc00::/7; 如 Tailscale 的 fd7a: 和路由器的 fd..:): 能认出你的网络
+    -e 's/fe80:[0-9A-Fa-f:]*[0-9A-Fa-f]/fe80::<redacted>/g' # 任何位置的链路本地地址 (如 IPv6 路由器 fe80::...%en0: EUI-64 里藏着路由器的 MAC)
+    -e 's/^( *(IPv6 DNS servers|IPv6 DNS 服务器): ).*/\1<redacted>/'   # 可能是 Tailscale 的 fd7a: / 路由器的全局或 ULA 地址
     -e 's/(Current Wi-Fi Network: ).*/\1<redacted>/'
     -e 's/^( *B?SSID *:).*/\1 <redacted>/'
     -e 's/((utun|ppp|ipsec|tun|tap)[0-9]+)=[0-9.]+/\1=<redacted>/g'
@@ -1923,9 +1926,12 @@ cmd_report() {
 $v";; esac
     done
   fi
+  # IPv6 诊断有一串超时探测 (网络不通时最坏约 40 秒): 和其他检查同时在后台跑, 到它的位置再取结果, 报告不因此变慢
+  local v6tmp v6pid; v6tmp=$(mktemp) || { rm -f "$gen"; bad "$(L "Could not create a temporary file" "无法创建临时文件")"; return 1; }
+  cmd_ipv6 >"$v6tmp" 2>&1 & v6pid=$!
   { echo "netdoctor report $(date)"; uname -a; sw_vers
-    cmd_doctor; cmd_overview; cmd_dhcp; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$gen" 2>&1
-  local txt; txt=$(mktemp) || { rm -f "$gen"; bad "$(L "Could not create a temporary file" "无法创建临时文件")"; return 1; }
+    cmd_doctor; cmd_overview; cmd_dhcp; cmd_quick; cmd_wifi; cmd_dns apple.com; wait "$v6pid" 2>/dev/null; cat "$v6tmp"; cmd_proxy; } >"$gen" 2>&1
+  local txt; txt=$(mktemp) || { rm -f "$gen" "$v6tmp"; bad "$(L "Could not create a temporary file" "无法创建临时文件")"; return 1; }
   if [ "$redact" = 1 ]; then
     { echo "# $(L "Personal info hidden (public IP, MAC, Wi-Fi name, host name, search domains)" "已隐藏个人信息 (公网 IP、MAC、Wi-Fi 名称、主机名、搜索域)")"; redact_filter <"$gen"; } >"$txt"
   else
@@ -1934,7 +1940,7 @@ $v";; esac
   if [ "$html" = 1 ]; then report_to_html "NetDoctor $(L "report" "报告")" "$(date)" "$(L "Summary" "概要")" "$(L en zh-CN)" <"$txt" >"$f"
   else cat "$txt" >"$f"; fi
   rm -f "$txt"
-  rm -f "$gen"
+  rm -f "$gen" "$v6tmp"
   if [ ! -s "$f" ]; then bad "$(L "Could not write the report to $f" "无法写入报告: $f")"; return 1; fi
   ok "$(L "Saved: $f" "已保存: $f")"
   if [ "$redact" = 1 ]; then
