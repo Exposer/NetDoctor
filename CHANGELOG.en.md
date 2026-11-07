@@ -19,6 +19,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `netdoctor`: an unknown command now prints "Unknown command: xxx" with the running version (and a hint to `git pull`) before the usage text, and exits with status 2. Added `netdoctor --version` (also `version` and `-v`) as well as `help`, `-h` and `--help`. Previously an unrecognised command silently printed the usage text, which made it impossible to tell a typo from an outdated local copy.
 
 ### Fixed
+- Web UI command palette: searching for a tool by its Chinese name (e.g. 诊断, 强制门户, 局域网) found nothing while the UI was in English; both the English and Chinese names of every tool are now searched.
 - `netdoctor quick`: a failed public-IP lookup is now reported (the old `|| warn` could never fire, so nothing was shown); the exit code is 1 when there is no default route or any check fails (it was always 0).
 - `netdoctor port` / `http` / `mtu` / `speed`: exited with 0 on failure (`bad` itself returns 0), so the web UI and app showed "exit code 0"; they now return 1.
 - SwiftUI app: Stop now ends the whole process tree (it only killed direct children, so `nc` / `ping` started from background subshells by `ports`, `dnsbench` and `lan` were left running).

@@ -651,7 +651,7 @@ g.textAlign='left';g.fillStyle=acc;g.fillText('● '+t('Download'),L+8,T+14);g.f
 /* ---- command palette (Ctrl/Cmd+K) ---- */
 let palSel=0,palItems=[];
 function palAll(){const pg=(k,icon,fn,alt)=>({icon,label:t(k),alt:k+' '+alt,d:'',run:fn});
-return CMDS.map(c=>({icon:c.icon,label:t(c.label),alt:c.label+' '+c.id+' '+c.desc+' '+t(c.desc),d:t(c.desc),run:()=>pick(c.id)})).concat([
+return CMDS.map(c=>({icon:c.icon,label:t(c.label),alt:c.label+' '+(ZH[c.label]||'')+' '+c.id+' '+c.desc+' '+(ZH[c.desc]||''),d:t(c.desc),run:()=>pick(c.id)})).concat([
 pg('Live latency','📈',showMon,'monitor ping latency 延迟 监控'),pg('Wi-Fi signal','📶',showWf,'wifi signal rssi 信号'),pg('Watchlist','📋',showWl,'favorites hosts 收藏 监控列表'),
 pg('Auto-check','🔁',showAc,'schedule diagnose 自动 体检 定时'),pg('Speed trend','📉',showSp,'speed bandwidth history chart 测速 带宽 趋势'),
 pg('History','🕘',()=>toggleHist(true),'runs past 历史 记录'),pg('Keyboard shortcuts','⌨',()=>toggleHelp(true),'help keys 快捷键 帮助'),
