@@ -506,6 +506,8 @@ fxlib "dnsset: injection attempt"    1 "Not an IP address" "$DNSENV; cmd_dnsset 
 fxlib "dnsset: IPv6-looking injection" 1 "Not an IP address" "$DNSENV; cmd_dnsset '2606::1;ls'"
 fxlib "dnsset: letters without colon"  1 "Not an IP address" "$DNSENV; cmd_dnsset abcd"
 fxlib "dnsset: out of shape IPv4"    1 "Not an IP address" "$DNSENV; cmd_dnsset 1.1.1"
+fxlib "dnsset: octet above 255"       1 "Not an IP address" "$DNSENV; cmd_dnsset 999.1.1.1"
+fxlib "dnsset: last octet 256"         1 "Not an IP address" "$DNSENV; cmd_dnsset 1.1.1.256"
 fxlib "dnsset: too many servers"     1 "1 to 4"            "$DNSENV; cmd_dnsset 1.1.1.1 8.8.8.8 9.9.9.9 4.4.4.4 5.5.5.5"
 if [ "$(id -u)" != 0 ]; then
   lib "dnsset: no admin rights" 1 "Administrator rights" "default_if() { echo en1; }; networksetup() { :; }; cmd_dnsset 1.1.1.1"
