@@ -240,6 +240,53 @@ lib "vendor: random MAC"          0 "random / virtual"            "mac_vendor 5a
 lib "vendor: no database, no guess" 0 "[]"                        "echo \"[\$(mac_vendor a4:77:33:1b:2c:3d '')]\""
 lib "vendor: unknown MAC is blank" 0 "[]"                         "echo \"[\$(mac_vendor ? $T/oui.txt)]\""
 
+# ---- 9. mtr verdict, leak assessment, bonjour parsing --------------------------------------------------
+mv() { printf '%s\n' "$2" | PATH="$T/bin:$PATH" NETDOCTOR_SOURCE_ONLY=1 /bin/bash -c ". $ND; mtr_verdict $1 | mtr_explain; echo rc=\${PIPESTATUS[1]}" 2>&1 | strip; }
+mcheck() { # name dest rows-with-\n want-substring want-rc
+  local out; out=$(mv "$2" "$3")
+  if ! printf '%s' "$out" | grep -qF -- "$4"; then fail "$1" "wanted '$4', got: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)"
+  elif ! printf '%s' "$out" | grep -qF -- "rc=$5"; then fail "$1" "wanted rc=$5, got: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)"
+  else pass; fi
+}
+mcheck "mtr: healthy path"             9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 0 9 8 12\n3 9.9.9.9 0 12 10 15' "Path looks healthy" 0
+mcheck "mtr: middle hop ICMP limit"    9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 100 - - -\n3 9.9.9.9 0 12 10 15' "ignores or rate-limits" 0
+mcheck "mtr: loss from hop 1"          9.9.9.9 $'1 192.168.0.1 40 3 1 20\n2 10.0.0.1 40 9 8 30\n3 9.9.9.9 38 12 10 40' "Loss starts at hop 1" 1
+mcheck "mtr: hop 1 advice"             9.9.9.9 $'1 192.168.0.1 40 3 1 20\n2 10.0.0.1 40 9 8 30\n3 9.9.9.9 38 12 10 40' "your own router" 1
+mcheck "mtr: loss from hop 4"          9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 0 9 8 12\n3 10.1.1.1 0 9 8 12\n4 10.2.2.2 25 20 10 90\n5 9.9.9.9 30 22 10 90' "Loss starts at hop 4" 1
+mcheck "mtr: loss in the middle only"  9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 50 9 8 12\n3 9.9.9.9 0 12 10 15' "destination is fine" 0
+mcheck "mtr: never reaches the target" 9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 0 9 8 12' "stops at hop 2" 1
+mcheck "mtr: destination ignores ping" 9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 9.9.9.9 100 - - -' "does not answer ping" 0
+mcheck "mtr: latency jump"             9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 0 9 8 12\n3 9.9.9.9 0 180 170 200' "Latency jumps by about 171 ms at hop 3" 0
+mcheck "mtr: temporary spike is not a jump" 9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 0 200 8 300\n3 9.9.9.9 0 12 10 15' "Path looks healthy" 0
+out=$(mv 9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 0 200 8 300\n3 9.9.9.9 0 12 10 15'); if printf '%s' "$out" | grep -q "Latency jumps"; then fail "mtr: a spike that does not persist must not be reported" "$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-160)"; else pass; fi
+expect "mtr: bad count"           1 "from 3 to 100"        /bin/bash $ND mtr 1.1.1.1 2
+expect "mtr: count not a number"  1 "from 3 to 100"        /bin/bash $ND mtr 1.1.1.1 abc
+expect "mtr: IPv6 unsupported"    1 "IPv4 only"            /bin/bash $ND mtr ::1
+expect "mtr: no host"             1 "Usage"                /bin/bash $ND mtr
+expect "mtr: invalid host"        1 "Invalid host"         /bin/bash $ND mtr 'x;ls'
+lk() { PATH="$T/bin:$PATH" NETDOCTOR_SOURCE_ONLY=1 /bin/bash -c ". $ND; printf '%s' \"\$4\" | leak_assess \"\$1\" \"\$2\" \"\$3\"; echo rc=\$?" _ "$@" 2>&1 | strip; }
+lcheck() { local out; out=$(lk "$2" "$3" "$4" "$5"); if printf '%s' "$out" | grep -qF -- "$6" && printf '%s' "$out" | grep -qF -- "rc=$7"; then pass; else fail "$1" "wanted '$6' rc=$7, got: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-220)"; fi; }
+lcheck "leak: no VPN"              en0 en0 1 $'192.168.0.1 en0\n'                  "No full-tunnel VPN" 0
+lcheck "leak: VPN, DNS inside"     utun4 utun4 1 $'10.8.0.1 utun4\n'                "reached through the tunnel" 0
+lcheck "leak: VPN, DNS outside"    utun4 utun4 0 $'192.168.0.1 en0\n'               "DNS leak: 192.168.0.1" 1
+lcheck "leak: VPN, IPv6 outside"   utun4 en0 1 $'10.8.0.1 utun4\n'                  "IPv6 leak" 1
+lcheck "leak: VPN, no IPv6"        utun4 en0 0 $'10.8.0.1 utun4\n'                  "IPv6 cannot leak" 0
+lcheck "leak: fix hint on leak"    utun4 utun4 0 $'192.168.0.1 en0\n'               "kill switch" 1
+lcheck "leak: IPsec VPN counts"    ipsec0 ipsec0 0 $'10.8.0.1 ipsec0\n'            "VPN active" 0
+SD=$'0:36:43.593  Add        3   7 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3  15 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3   7 .                    _udp.local.          _sleep-proxy\n0:36:43.593  Rmv        3   7 .                    _tcp.local.          _gone'
+printf '%s\n' "$SD" > "$T/meta.txt"
+lib "bonjour: service types (dedupe, Rmv ignored)" 0 "_ssh._tcp" "bonjour_types $T/meta.txt"
+lib "bonjour: udp type"                            0 "_sleep-proxy._udp" "bonjour_types $T/meta.txt"
+lib_not "bonjour: removed type ignored"            "bonjour_types $T/meta.txt" "_gone"
+printf '%s\n' $'0:36:43.593  Add        3   7 local.               _airplay._tcp.       Living Room TV' $'0:36:43.600  Add        3  15 local.               _airplay._tcp.       Living Room TV' $'0:36:43.600  Add        2  15 local.               _ipp._tcp.           HP Color LaserJet' $'0:36:44.000  Rmv        0  15 local.               _ipp._tcp.           Old Printer' > "$T/b.txt"
+lib "bonjour: instance with spaces"  0 "_airplay._tcp|Living Room TV" "bonjour_parse $T/b.txt"
+lib "bonjour: same service on two interfaces counted once" 0 "1" "bonjour_parse $T/b.txt | grep -c airplay"
+lib_not "bonjour: removed instance ignored" "bonjour_parse $T/b.txt" "Old Printer"
+lib "bonjour: friendly label"        0 "AirPlay" "bonjour_label _airplay._tcp"
+lib "bonjour: unknown type kept"     0 "_weird._tcp" "bonjour_label _weird._tcp"
+expect "bonjour: bad seconds"        1 "from 2 to 30"  /bin/bash $ND bonjour 1
+expect "bonjour: not a number"       1 "from 2 to 30"  /bin/bash $ND bonjour x
+
 # ---- result ------------------------------------------------------------------------------------------
 echo
 if [ "$FAIL" -eq 0 ]; then echo "all $PASS tests passed"; exit 0; fi

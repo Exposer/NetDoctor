@@ -62,6 +62,9 @@ netdoctor tools                                          # see which tools are i
 | Slow DNS / pick the fastest DNS | `netdoctor dnsbench` (compares and recommends, prints the switch command) |
 | Who is on my network | `netdoctor lan` (IP / MAC / name) |
 | Connected to Wi-Fi / cable but not online, IP starts with 169.254 | `netdoctor dhcp` (DHCP lease details; spots a "self-assigned address = DHCP failed", and `doctor` detects it too) |
+| The connection is flaky and you do not know which segment is to blame | `netdoctor mtr <host>` (per-hop loss and latency, and whether the problem is in your router, your ISP or further away; a middle router that only rate-limits ping is recognised as harmless) |
+| A VPN is on and you worry about DNS / IPv6 leaks | `netdoctor leak` (checks whether DNS requests and IPv6 bypass the tunnel, and how to fix it) |
+| What AirPlay devices, printers and shares are on the LAN | `netdoctor bonjour` (discovers services advertised over Bonjour / mDNS; use `netdoctor lan` for everything that answers ping) |
 | A snapshot of the whole network state | `netdoctor overview` (interface / IP / gateway / DNS / Wi-Fi / proxy / public IP) |
 | Port unreachable | `netdoctor port host 443`, `nmap -p 443 host` |
 | Check many ports at once | `netdoctor ports host` (common ports), `netdoctor ports host 22,80,443`, `netdoctor ports host 1-1024` |

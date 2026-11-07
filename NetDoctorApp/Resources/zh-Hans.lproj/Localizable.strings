@@ -107,3 +107,11 @@
 "Network is back" = "网络已恢复";
 "%@ answers again after about %d s." = "%@ 约 %d 秒后恢复应答。";
 "Could not save the file" = "无法保存文件";
+"Per-hop loss (mtr)" = "逐跳丢包 (mtr)";
+"Per-hop loss and latency to a host, and which hop the problem is at (no admin rights needed)" = "到目标主机的逐跳丢包与延迟, 并判断问题出在哪一跳 (无需管理员权限)";
+"Pings per hop" = "每跳 ping 次数";
+"VPN leak check" = "VPN 泄漏检查";
+"Check that DNS and IPv6 do not bypass the VPN tunnel" = "检查 DNS 和 IPv6 是否绕过了 VPN 隧道";
+"Bonjour services" = "Bonjour 服务";
+"Discover AirPlay, printers, SSH, file sharing and other services advertised on the LAN" = "发现局域网里广播的 AirPlay、打印机、SSH、文件共享等服务";
+"Seconds" = "秒数";

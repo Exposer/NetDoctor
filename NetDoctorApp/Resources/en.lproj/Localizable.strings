@@ -107,3 +107,11 @@
 "Network is back" = "Network is back";
 "%@ answers again after about %d s." = "%@ answers again after about %d s.";
 "Could not save the file" = "Could not save the file";
+"Per-hop loss (mtr)" = "Per-hop loss (mtr)";
+"Per-hop loss and latency to a host, and which hop the problem is at (no admin rights needed)" = "Per-hop loss and latency to a host, and which hop the problem is at (no admin rights needed)";
+"Pings per hop" = "Pings per hop";
+"VPN leak check" = "VPN leak check";
+"Check that DNS and IPv6 do not bypass the VPN tunnel" = "Check that DNS and IPv6 do not bypass the VPN tunnel";
+"Bonjour services" = "Bonjour services";
+"Discover AirPlay, printers, SSH, file sharing and other services advertised on the LAN" = "Discover AirPlay, printers, SSH, file sharing and other services advertised on the LAN";
+"Seconds" = "Seconds";

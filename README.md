@@ -60,6 +60,9 @@ netdoctor tools                      # 查看装了哪些
 | DNS 慢 / 想选最快的 DNS | `netdoctor dnsbench`(对比并推荐,给出切换命令) |
 | 想知道网内有哪些设备 | `netdoctor lan`(IP / MAC / 主机名) |
 | 连上 Wi-Fi / 网线却上不了网, IP 以 169.254 开头 | `netdoctor dhcp`(查看 DHCP 租约;识别“自分配地址 = DHCP 失败”,`doctor` 也会自动判断) |
+| 网络时好时坏、不知道卡在哪一段 | `netdoctor mtr <主机>`(逐跳丢包和延迟,并判断问题出在你的路由器、运营商还是更远处;中间路由器限速 ping 会被识别为无害) |
+| 开着 VPN 担心 DNS / IPv6 泄漏 | `netdoctor leak`(检查 DNS 请求和 IPv6 是否绕过隧道,给出修复办法) |
+| 想知道局域网里有哪些 AirPlay、打印机、共享服务 | `netdoctor bonjour`(发现 Bonjour / mDNS 广播的服务;所有能应答 ping 的设备用 `netdoctor lan`) |
 | 想一眼看全网络状态 | `netdoctor overview`(网卡 / IP / 网关 / DNS / Wi-Fi / 代理 / 公网 IP) |
 | 端口不通 | `netdoctor port host 443`、`nmap -p 443 host` |
 | 一次查多个端口 | `netdoctor ports host`(常用端口)、`netdoctor ports host 22,80,443`、`netdoctor ports host 1-1024` |
