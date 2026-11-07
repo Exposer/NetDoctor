@@ -944,21 +944,50 @@ ipv6_assess() {
   return 0
 }
 
+# 虚拟 / 叠加网卡: VPN 隧道 (tunnel_if) 加上 gif / stf / awdl / llw / lo。它们的地址不代表"这个网络"有没有 IPv6
+virtual_if() { tunnel_if "$1" && return 0; case "$1" in gif*|stf*|awdl*|llw*|lo*) return 0;; esac; return 1; }
+# stdin: ifconfig 的输出 -> 每行 "类别 网卡 地址" (g=全局, u=唯一本地 fc00::/7); 链路本地和回环地址不输出
+v6_addrs() { awk '/^[^ \t]/{i=$1; sub(/:$/,"",i)} /inet6 /{a=$2; if (a ~ /^fe80|^::1/) next; sub(/%.*/,"",a); print (a ~ /^f[cd]/ ? "u" : "g"), i, a}'; }
+# stdin: v6_addrs 的输出; $1 = 只要这块网卡 (空 = 所有非虚拟网卡; "-" 不匹配任何网卡) -> 每行 "类别 地址"
+v6_pick() { local c i a; while read -r c i a; do virtual_if "$i" && continue; [ -n "$1" ] && [ "$i" != "$1" ] && continue; echo "$c $a"; done; }
+b01() { [ -n "$1" ] && echo 1 || echo 0; }
+
+# 依次 ping 候选的 IPv6 地址 (参数: 包大小 地址...; 包大小可空), 输出第一个有应答的 "地址 平均ms"; 都不通返回 1
+v6_first_reachable() {
+  local size=$1 t r; shift
+  for t in "$@"; do
+    r=$(ping6_stats "$t" 3 "$size" 4); r=${r#* }
+    [ -n "$r" ] && { echo "$t $r"; return 0; }
+  done
+  return 1
+}
+
+# 对 $2 做一次经 IPv4 / IPv6 ($1 = 4 或 6) 的 HTTPS; 以 TLS 握手完成 (time_appconnect > 0) 为成功, 不看 HTTP 状态码
+# (403 / 429 也说明通了)。成功时输出 TCP 建连毫秒数。
+tls_ms() {
+  local th app con; th=$(curl -"$1" -s -o /dev/null -m 4 -w '%{time_appconnect} %{time_connect}' "https://$2" 2>/dev/null)
+  app=${th%% *}; con=${th#* }
+  case "$app" in ""|0|0.000000) return 1;; esac
+  awk -v c="$con" 'BEGIN{printf "%d", c*1000}'
+}
+
 cmd_ipv6() {
-  local g ula gwline gw gwif gwif2 tun=0 gwok="" a6 v4 v6 u=https://api.ip.sb/ip ipok="" bigok="" nameok="" aaaa=0 t4="" t6="" h=www.google.com dns6 p6='' alt hh th
+  local g ula picked gw gwif gwif2 tun=0 gwok="" a6 v4 v6 u=https://api.ip.sb/ip ipok="" bigok="" nameok="" aaaa=0 t4="" t6="" h=www.google.com dns6 p6="" pavg hh pub="2001:4860:4860::8888 2606:4700:4700::1111" r
   hdr "$(L "IPv6 addresses" "IPv6 地址")"
   # 排除链路本地 (fe80) 与唯一本地/私有 (fc00::/7), 它们不能访问公网
   # 只看默认路由所在的物理网卡; VPN / 叠加网络 (utun*) 的地址 (如 Tailscale 的 fd7a:) 不代表这个网络有没有 IPv6
-  gwline=$(route -n get -inet6 default 2>/dev/null); gw=$(echo "$gwline" | awk '/gateway:/{print $2; exit}'); gwif=$(echo "$gwline" | awk '/interface:/{print $2; exit}')
+  read -r gw gwif <<EOF_R
+$(route -n get -inet6 default 2>/dev/null | awk '/gateway:/{g=$2} /interface:/{i=$2} END{print (g==""?"-":g), (i==""?"-":i)}')
+EOF_R
+  [ "$gw" = - ] && gw=""; [ "$gwif" = - ] && gwif=""
   # 没有 IPv6 默认路由时 gwif 为空: 只看 IPv4 默认路由所在的网卡 (它才是"这个网络"); 别的网卡 (USB 网卡、虚拟网卡) 上的地址不算。
   # "-" 不会匹配任何网卡名, 即在拿不到主网卡时不把任何地址当作这个网络的
-  case "$gwif" in
-    utun*|ipsec*|ppp*|gif*|stf*) tun=1; gwif2="";;
-    "") gwif2=$(default_if); case "$gwif2" in ""|utun*|ipsec*|ppp*|gif*|stf*) gwif2="-";; esac;;
-    *) gwif2=$gwif;;
-  esac
-  g=$(ifconfig | awk -v want="$gwif2" '/^[^ \t]/{i=$1; sub(/:$/,"",i)} i ~ /^(utun|ipsec|ppp|gif|stf|awdl|llw|lo)/{next} want!="" && i!=want{next} /inet6 / && $2 !~ /^fe80|^::1|^f[cd]/{print $2}' | head -3)
-  ula=$(ifconfig | awk -v want="$gwif2" '/^[^ \t]/{i=$1; sub(/:$/,"",i)} i ~ /^(utun|ipsec|ppp|gif|stf|awdl|llw|lo)/{next} want!="" && i!=want{next} /inet6 / && $2 ~ /^f[cd]/{print $2}' | head -3)
+  if virtual_if "$gwif"; then tun=1; gwif2=""
+  elif [ -z "$gwif" ]; then gwif2=$(default_if); { [ -z "$gwif2" ] || virtual_if "$gwif2"; } && gwif2="-"
+  else gwif2=$gwif; fi
+  picked=$(ifconfig 2>/dev/null | v6_addrs | v6_pick "$gwif2")
+  g=$(echo "$picked" | awk '$1=="g"{print $2}' | head -3)
+  ula=$(echo "$picked" | awk '$1=="u"{print $2}' | head -3)
   if [ -n "$g" ]; then ok "$(L "Global IPv6 address present" "存在全局 IPv6 地址")"; echo "$g" | sed 's/^/   /'
   else warn "$(L "No global IPv6 address, only link-local/private ones (IPv6-only sites will be unreachable; usually harmless)" "没有全局 IPv6 地址, 只有本地/私有地址 (仅 IPv6 的站点打不开; 通常无碍)")"
     [ -n "$ula" ] && echo "$ula" | sed 's/^/   /'; fi
@@ -981,39 +1010,26 @@ cmd_ipv6() {
   if [ -n "$v6" ]; then ok "IPv6  $v6"; else warn "$(L "IPv6 request failed" "IPv6 请求失败")"; fi
   if [ "$tun" = 0 ] && [ -n "$g" ] && [ -n "$gw" ]; then
     hdr "$(L "Deeper IPv6 probes" "IPv6 深入探测")"
-    set -- $(ping6_stats 2001:4860:4860::8888 3 "" 4); if [ -n "${2:-}" ]; then ipok=1; p6=2001:4860:4860::8888; ok "$(L "By address (2001:4860:4860::8888): reachable, avg ${2} ms" "按地址 (2001:4860:4860::8888): 可达, 平均 ${2} ms")"
-    else set -- $(ping6_stats 2606:4700:4700::1111 3 "" 4); if [ -n "${2:-}" ]; then ipok=1; p6=2606:4700:4700::1111; ok "$(L "By address (2606:4700:4700::1111): reachable, avg ${2} ms" "按地址 (2606:4700:4700::1111): 可达, 平均 ${2} ms")"
-      else ipok=0; bad "$(L "By address: both public IPv6 DNS servers unreachable" "按地址: 两个公共 IPv6 DNS 服务器都不通")"; fi; fi
+    if r=$(v6_first_reachable "" $pub); then
+      set -- $r; p6=$1; pavg=$2; ipok=1; ok "$(L "By address ($p6): reachable, avg ${pavg} ms" "按地址 ($p6): 可达, 平均 ${pavg} ms")"
+    else ipok=0; bad "$(L "By address: both public IPv6 DNS servers unreachable" "按地址: 两个公共 IPv6 DNS 服务器都不通")"; fi
     if [ "$ipok" = 1 ]; then
-      # 用刚才应答的那个地址测大包; 不通再换另一个, 避免只因一个目标被过滤就判成 MTU 黑洞
-      set -- $(ping6_stats "$p6" 3 1400 4)
-      if [ -z "${2:-}" ]; then alt=2606:4700:4700::1111; [ "$p6" = "$alt" ] && alt=2001:4860:4860::8888; set -- $(ping6_stats "$alt" 3 1400 4); fi
-      if [ -n "${2:-}" ]; then bigok=1; ok "$(L "Large packets (1400 bytes): pass" "大包 (1400 字节): 通过")"
+      # 先用刚才应答的那个地址测大包, 不通再换另一个, 避免只因一个目标被过滤就判成 MTU 黑洞
+      if v6_first_reachable 1400 "$p6" $(printf '%s\n' $pub | grep -vx "$p6") >/dev/null; then bigok=1; ok "$(L "Large packets (1400 bytes): pass" "大包 (1400 字节): 通过")"
       else bigok=0; bad "$(L "Large packets (1400 bytes): lost" "大包 (1400 字节): 丢失")"; fi
     fi
-    # 以 TLS 握手完成 (time_appconnect > 0) 为成功, 不看 HTTP 状态码 (403 / 429 也说明 IPv6 通了);
-    # 依次试几个站点, 避免某个站点本身被墙 / 故障就怪到 IPv6 头上
-    nameok=0; t6=""; t4=""
+    # 依次试几个站点, 避免某个站点本身被墙 / 故障就怪到 IPv6 头上; 失败的站点顺便查一下它有没有 AAAA (google 的已在上面查过)
+    nameok=0
     for hh in www.google.com www.cloudflare.com www.baidu.com; do
-      th=$(curl -6 -s -o /dev/null -m 4 -w '%{time_appconnect} %{time_connect}' "https://$hh" 2>/dev/null)
-      if [ -n "${th%% *}" ] && awk -v a="${th%% *}" 'BEGIN{exit !(a>0)}'; then
-        nameok=1; h=$hh; t6=$(echo "$th" | awk '{printf "%d", $2*1000}'); break
-      fi
-      [ -n "$(dig +short +time=2 +tries=1 AAAA "$hh" 2>/dev/null | head -1)" ] && aaaa=1
+      if t6=$(tls_ms 6 "$hh"); then nameok=1; h=$hh; break; fi
+      [ "$aaaa" = 1 ] || [ "$hh" = www.google.com ] || [ -z "$(dig +short +time=2 +tries=1 AAAA "$hh" 2>/dev/null | head -1)" ] || aaaa=1
     done
     if [ "$nameok" = 1 ]; then ok "$(L "HTTPS over IPv6 to $h: connected in ${t6} ms" "经 IPv6 访问 $h 的 HTTPS: ${t6} ms 建连")"
-    else warn "$(L "HTTPS over IPv6 failed for all test sites" "经 IPv6 访问测试站点的 HTTPS 全部失败")"; fi
-    if [ "$nameok" = 1 ]; then
-      th=$(curl -4 -s -o /dev/null -m 4 -w '%{time_appconnect} %{time_connect}' "https://$h" 2>/dev/null)
-      if [ -n "${th%% *}" ] && awk -v a="${th%% *}" 'BEGIN{exit !(a>0)}'; then t4=$(echo "$th" | awk '{printf "%d", $2*1000}'); fi
-    fi
-    [ -n "$t4" ] && echo "  $(L "(IPv4 to the same site: ${t4} ms)" "(同一站点走 IPv4: ${t4} ms)")"
+      t4=$(tls_ms 4 "$h") && echo "  $(L "(IPv4 to the same site: ${t4} ms)" "(同一站点走 IPv4: ${t4} ms)")"
+    else t6=""; warn "$(L "HTTPS over IPv6 failed for all test sites" "经 IPv6 访问测试站点的 HTTPS 全部失败")"; fi
   fi
   hdr "$(L "Verdict" "结论")"
-  local rc; ipv6_assess glob=$([ -n "$g" ] && echo 1 || echo 0) ula=$([ -n "$ula" ] && echo 1 || echo 0) gw=$([ -n "$gw" ] && echo 1 || echo 0) gwok=$gwok \
-    ipok=$ipok bigok=$bigok nameok=$nameok aaaa=$aaaa v4ok=$([ -n "$v4" ] && echo 1 || echo 0) t4=$t4 t6=$t6 tun=$tun
-  rc=$?
-  return $rc
+  ipv6_assess glob=$(b01 "$g") ula=$(b01 "$ula") gw=$(b01 "$gw") gwok=$gwok ipok=$ipok bigok=$bigok nameok=$nameok aaaa=$aaaa v4ok=$(b01 "$v4") t4=$t4 t6=$t6 tun=$tun
 }
 
 # 强制门户探测。结果放在全局变量 CAP_STATE (ok | portal | offline) 和 CAP_REDIR (登录页地址),
@@ -1356,6 +1372,7 @@ channels_assess() {
     function span(c,b,w,   e,base,k) {
       if (b==2) { h=(w<=20?11:w/2); LO=2407+5*c-h; HI=2407+5*c+h; return }   # 2.4 GHz 的 20 MHz 信道实际占约 22 MHz, 所以相邻 4 个信道以内会重叠 (1/6/11 才互不干扰)
       if (b==5) { e=5000+5*c-10; base=(c<=64?5170:(c<=144?5490:5735)) } else { e=5950+5*c-10; base=5945 }
+      EDGE=e
       if (w<=20) { LO=e; HI=e+20 } else { k=int((e-base)/w); LO=base+k*w; HI=LO+w }
     }
     function score(lo,hi,   i,s) { s=0; cn=0
@@ -1373,25 +1390,30 @@ channels_assess() {
         if (cb==2 && c!=1 && c!=6 && c!=11) continue
         if (cb==5 && c==165 && cw>20) continue
         span(c,cb,cw); if (LO==clo) continue
-        if (cb==5 && cw>20 && LO!=5000+5*c-10) continue
-        if (cb==6 && cw>20 && LO!=5950+5*c-10) continue
+        if (cb>=5 && cw>20 && LO!=EDGE) continue      # 宽信道只有对齐的第一个 20 MHz 才是候选
         s=score(LO,HI); printf "CAND %s %s %s\n", c, s, (cb==5 && c>=52 && c<=144 ? 1 : 0) }
     }'
 }
 
 # 把 channels_assess 的输出翻成结论。stdin 是 channels_assess 的输出。
 channels_verdict() {
-  local cb="" cc="" cw="" cs=0 cn=0 best="" bs="" bd="" s5=0 s6=0 tmp curline bestline
-  tmp=$(cat)
-  if printf '%s\n' "$tmp" | grep -q '^NOCUR'; then warn "$(L "This Mac is not connected to a Wi-Fi network, so there is no channel to judge." "这台 Mac 没有连接 Wi-Fi, 无法判断信道。")"; return 1; fi
-  curline=$(printf '%s\n' "$tmp" | grep '^CUR')
-  set -- $curline; cb=$2; cc=$3; cw=$4; cs=$5; cn=$6
-  s5=$(printf '%s\n' "$tmp" | awk '$1=="SUP" && $2==5{print $3}'); s5=${s5:-0}
-  s6=$(printf '%s\n' "$tmp" | awk '$1=="SUP" && $2==6{print $3}'); s6=${s6:-0}
-  bestline=$(printf '%s\n' "$tmp" | grep '^CAND' | sort -k3,3n -k4,4n -k2,2n | head -1)
+  local cb="" cc="" cw="" cs=0 cn=0 best="" bs="" bd="" has5plus=0 k a b c d e neis="" cands="" nocur=0 bestline
+  while read -r k a b c d e; do
+    case "$k" in
+      NOCUR) nocur=1;;
+      CUR)   cb=$a; cc=$b; cw=$c; cs=$d; cn=$e;;
+      SUP)   [ "$a" != 2 ] && has5plus=1;;
+      NEI)   neis="$neis  $a GHz: $b
+";;
+      CAND)  cands="$cands$k $a $b $c
+";;
+    esac
+  done
+  if [ "$nocur" = 1 ]; then warn "$(L "This Mac is not connected to a Wi-Fi network, so there is no channel to judge." "这台 Mac 没有连接 Wi-Fi, 无法判断信道。")"; return 1; fi
+  bestline=$(printf '%s' "$cands" | sort -k3,3n -k4,4n -k2,2n | head -1)
   if [ -n "$bestline" ]; then set -- $bestline; best=$2; bs=$3; bd=$4; fi
   hdr "$(L "Neighbouring networks by band" "各频段看到的邻居网络")"
-  if printf '%s\n' "$tmp" | grep -q '^NEI'; then printf '%s\n' "$tmp" | awk '$1=="NEI"{printf "  %s GHz: %s\n",$2,$3}' | sort
+  if [ -n "$neis" ]; then printf '%s' "$neis" | sort
   else echo "  $(L "none seen (the scan may have been limited)" "没有看到 (扫描可能受限)")"; fi
   hdr "$(L "Your channel" "你所在的信道")"
   echo "  ${cb} GHz, $(L "channel" "信道") ${cc}, ${cw} MHz — $(L "$cn neighbouring network(s) overlap it (weighted score $cs)" "有 $cn 个邻居网络与它的频谱重叠 (加权分 $cs)")"
@@ -1405,7 +1427,7 @@ channels_verdict() {
   else
     warn "$(L "Your channel is crowded ($cn overlapping networks, score $cs) and no other channel in this band is clearly better." "你的信道比较拥挤 ($cn 个网络重叠, 分数 $cs), 同频段里也没有明显更好的信道。")"
   fi
-  if [ "$cb" = 2 ] && [ "$cs" -gt 2 ] && { [ "$s5" -gt 0 ] || [ "$s6" -gt 0 ]; }; then
+  if [ "$cb" = 2 ] && [ "$cs" -gt 2 ] && [ "$has5plus" = 1 ]; then
     echo "  $(L "This Mac supports 5 GHz; if your router offers it, connect to the 5 GHz network: more channels and far less crowded (shorter range through walls)." "这台 Mac 支持 5 GHz; 如果路由器有 5 GHz 网络, 建议连它: 信道多、干扰少 (穿墙距离更短)。")"
   fi
   if [ "$cb" = 2 ] && [ "$cw" -ge 40 ] && [ "$cn" -ge 3 ]; then
@@ -1521,7 +1543,8 @@ cmd_exposure() {
   ns=$(netstat -an -p tcp 2>/dev/null | exposure_parse)
   procs=""; has lsof && procs=$(lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | exposure_procs)
   fw=$(fw_state)
-  list=$(printf '%s\n' "$ns" | while read -r p sc; do [ -z "$p" ] && continue; n=$(printf '%s\n' "$procs" | awk -v p="$p" '$1==p{ $1=""; sub(/^ /,""); print; exit }'); printf '%s %s %s\n' "$p" "$sc" "${n:-?}"; done)
+  # 端口表 (netstat) 和进程名表 (lsof) 一次 awk 连接起来: 每行 "端口 范围 进程名" (查不到进程名写 ?)
+  list=$(awk 'NR==FNR { n=$0; sub(/^[0-9]+ /,"",n); pn[$1]=n; next } NF { print $1, $2, ($1 in pn ? pn[$1] : "?") }' <(printf '%s\n' "$procs") <(printf '%s\n' "$ns"))
   printf '%s\n' "$list" | exposure_assess fw="$fw"
   local rc=$?
   echo "  $(L "(Only TCP is checked. Without administrator rights process names are only known for your own processes; '?' means unknown.)" "(只检查 TCP。没有管理员权限时只能知道自己的进程名, ? 表示未知。)")"

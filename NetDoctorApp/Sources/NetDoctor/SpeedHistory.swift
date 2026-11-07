@@ -107,22 +107,19 @@ final class SpeedHistory: ObservableObject {
 
     func clear() { records = []; save() }
 
-    private static func coder() -> (JSONEncoder, JSONDecoder) {
-        let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601
-        let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601
-        return (e, d)
-    }
+    private static let encoder: JSONEncoder = { let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; return e }()
+    private static let decoder: JSONDecoder = { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }()
 
     private func load() {
         guard let url = url, let data = try? Data(contentsOf: url),
-              let r = try? Self.coder().1.decode([SpeedRecord].self, from: data) else { return }
+              let r = try? Self.decoder.decode([SpeedRecord].self, from: data) else { return }
         records = SpeedStats.pruned(r, now: Date(), maxAge: Self.maxAge, maxCount: Self.maxCount)
     }
 
     private func save() {
         guard let url = url else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if let data = try? Self.coder().0.encode(records) { try? data.write(to: url, options: .atomic) }
+        if let data = try? Self.encoder.encode(records) { try? data.write(to: url, options: .atomic) }
     }
 }
 
@@ -142,8 +139,12 @@ final class SpeedCheck: ObservableObject {
             guard intervalHours != oldValue else { return }
             UserDefaults.standard.set(intervalHours, forKey: "speedIntervalHours")
             reschedule()
-            if SpeedStats.isDue(last: history.records.last?.time, now: Date(), intervalHours: intervalHours) { run(scheduled: true) }
+            runIfDue()
         }
+    }
+
+    private func runIfDue() {
+        if SpeedStats.isDue(last: history.records.last?.time, now: Date(), intervalHours: intervalHours) { run(scheduled: true) }
     }
 
     /// Changing the interval from the UI. Turning the automatic test on from "Off" asks first: a test uses a lot
@@ -175,7 +176,7 @@ final class SpeedCheck: ObservableObject {
     /// Call once at launch.
     func start() {
         reschedule()
-        if SpeedStats.isDue(last: history.records.last?.time, now: Date(), intervalHours: intervalHours) { run(scheduled: true) }
+        runIfDue()
     }
 
     private func reschedule() {
@@ -191,15 +192,17 @@ final class SpeedCheck: ObservableObject {
     }
 
     /// Network.framework knows about Personal Hotspot and cellular ("expensive") and Low Data Mode ("constrained").
+    /// No answer within 2 s counts as metered ("unknown"): the test is skipped and tried again later, rather than
+    /// risking gigabytes on a hotspot.
     private static func pathIsMetered() -> Bool {
         let monitor = NWPathMonitor()
         let sem = DispatchSemaphore(value: 0)
         var metered = false
         monitor.pathUpdateHandler = { path in metered = path.isExpensive || path.isConstrained; sem.signal() }
         monitor.start(queue: DispatchQueue(label: "netdoctor.speed.path"))
-        _ = sem.wait(timeout: .now() + 2)
+        let answered = sem.wait(timeout: .now() + 2) == .success
         monitor.cancel()
-        return metered
+        return !answered || metered
     }
 
     private static func defaultGateway() -> String {

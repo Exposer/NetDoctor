@@ -23,6 +23,7 @@ struct SpeedHistoryView: View {
         let from = now.addingTimeInterval(-range.seconds)
         let rs = SpeedStats.window(history.records, from: from, to: now)
         let stats = SpeedStats.summary(rs)
+        let rpmRecords = rs.filter { $0.rpm != nil }
         let dName = loc("Download"), uName = loc("Upload")
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
@@ -81,7 +82,7 @@ struct SpeedHistoryView: View {
                 Chart {
                     RuleMark(y: .value("Poor", 300)).foregroundStyle(.red.opacity(0.5)).lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                     RuleMark(y: .value("Good", 1000)).foregroundStyle(.green.opacity(0.5)).lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    ForEach(rs.filter { $0.rpm != nil }) { r in
+                    ForEach(rpmRecords) { r in
                         LineMark(x: .value("Time", r.time), y: .value("RPM", r.rpm ?? 0)).foregroundStyle(.orange)
                         PointMark(x: .value("Time", r.time), y: .value("RPM", r.rpm ?? 0)).foregroundStyle(.orange)
                     }
