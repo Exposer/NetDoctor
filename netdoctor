@@ -270,6 +270,24 @@ cmd_dhcp() {
   return 0
 }
 
+# MAC 地址 -> 厂商。系统没有自带 OUI 库, 所以按顺序找: ~/.netdoctor/oui.txt、nmap、Wireshark 的库 (格式: 前 6 位十六进制 + 空格/制表符 + 厂商名)。
+# 都没有时只能识别"随机 MAC" (第一个字节的 0x02 位: iPhone / Android 的"私有 Wi-Fi 地址"), 不会瞎猜厂商。
+oui_file() {
+  local f
+  for f in "$HOME/.netdoctor/oui.txt" /usr/local/share/nmap/nmap-mac-prefixes /opt/homebrew/share/nmap/nmap-mac-prefixes /usr/share/nmap/nmap-mac-prefixes; do
+    [ -r "$f" ] && { echo "$f"; return; }
+  done
+}
+mac_vendor() {   # $1=MAC (aa:bb:cc:...), $2=OUI 文件 (可空)
+  local mac=$1 f=$2 first p
+  case "$mac" in ""|"?"|"-") return;; esac
+  first=$((16#${mac%%:*}))
+  if [ $(( first & 2 )) -ne 0 ]; then L "random MAC (private address)" "随机 MAC (私有地址)"; return; fi
+  [ -n "$f" ] || return
+  p=$(printf '%s' "$mac" | tr 'a-f' 'A-F' | awk -F: '{printf "%s%s%s", (length($1)==1?"0"$1:$1), (length($2)==1?"0"$2:$2), (length($3)==1?"0"$3:$3)}')
+  awk -v p="$p" 'toupper(substr($1,1,6))==p { $1=""; sub(/^[ \t]+/,""); print; exit }' "$f" 2>/dev/null
+}
+
 cmd_lan() {
   local ifc ip m mask ipi net size i addr n=0 popt gw selfmac found tmp unk=0 t
   ifc=$(default_if); gw=$(gateway)
@@ -314,19 +332,35 @@ $line"
         if (name=="" || name=="?") name="-"
         if (!(a in nm) || (nm[a]=="-" && name!="-")) { nm[a]=name; mc[a]=mac } }
       END { for (a in nm) print a, mc[a], nm[a] }' | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
-  printf '  %-16s %-18s %s\n' "IP" "MAC" "Name"
-  local cnt=0 line tag
+  local ouif; ouif=$(oui_file)
+  # 没有名字的设备: 向网关 (路由器自带的 DNS) 做一次反向解析, 并行, 每个最多等 1 秒
+  local rdir; rdir=$(mktemp -d -t netdoctor-rdns)
+  if has dig; then
+    while read -r a2 mac name; do
+      [ -z "$a2" ] || [ "$name" != "-" ] && continue
+      ( dig +short +time=1 +tries=1 -x "$a2" ${gw:+@"$gw"} 2>/dev/null | head -1 | sed 's/\.$//' >"$rdir/$a2" ) &
+    done <<EOF3
+$found
+EOF3
+    wait
+  fi
+  printf '  %-16s %-18s %-28s %s\n' "IP" "MAC" "$(L "Name" "名称")" "$(L "Vendor" "厂商")"
+  local cnt=0 line tag vend rn
   while read -r a2 mac name; do
     [ -z "$a2" ] || [ "$a2" = "$ip" ] && continue
     case "$(int2ip $(( $(ip2int "$a2") & mask )))" in "$(int2ip $net)") ;; *) continue;; esac
-    tag=""; [ "$a2" = "$gw" ] && tag="  $(L "(gateway)" "(网关)")"
-    printf '  %-16s %-18s %s%s\n' "$a2" "$mac" "$name" "$tag"; cnt=$((cnt+1))
+    if [ "$name" = "-" ] && [ -s "$rdir/$a2" ]; then rn=$(head -1 "$rdir/$a2"); case "$rn" in *\ *|"") ;; *) name=$rn;; esac; fi
+    tag=""; [ "$a2" = "$gw" ] && tag="$(L "(gateway)" "(网关)") "
+    vend=$(mac_vendor "$mac" "$ouif")
+    printf '  %-16s %-18s %-28s %s%s\n' "$a2" "$mac" "${name:0:28}" "$tag" "$vend"; cnt=$((cnt+1))
   done <<EOF2
 $found
 EOF2
-  printf '  %-16s %-18s %s\n' "$ip" "${selfmac:--}" "$(L "(this Mac)" "(本机)")"
+  rm -rf "$rdir"
+  printf '  %-16s %-18s %-28s %s\n' "$ip" "${selfmac:--}" "-" "$(L "(this Mac)" "(本机)")"
   ok "$(L "$((cnt+1)) devices (including this Mac)" "共 $((cnt+1)) 台设备 (含本机)")"
   [ "$unk" = 1 ] && warn "$(L "Some MAC addresses could not be read. If this runs inside the app or web UI, allow it under System Settings → Privacy & Security → Local Network, or run netdoctor lan in Terminal." "部分设备的 MAC 无法读取。若在 App/网页中运行, 请在 系统设置 → 隐私与安全性 → 本地网络 中允许, 或直接在终端运行 netdoctor lan。")"
+  [ -z "$ouif" ] && echo "$(L "No vendor database found: only random (private) MACs are labelled. Put an OUI list in ~/.netdoctor/oui.txt (or install nmap) to see vendors." "没有找到厂商库: 只能标出随机 (私有) MAC。把 OUI 列表放到 ~/.netdoctor/oui.txt (或安装 nmap) 即可显示厂商。")"
   echo "$(L "Devices that block ping may be missing; the ARP table only lists hosts that answered recently." "屏蔽 ping 的设备可能不会出现; ARP 表只包含近期有应答的主机。")"
 }
 
@@ -789,11 +823,43 @@ cmd_mtu() {
 }
 
 cmd_speed() {
-  if has networkQuality; then networkQuality -v || { bad "$(L "networkQuality failed" "networkQuality 执行失败")"; return 1; }
-  else
+  if ! has networkQuality; then
     bad "$(L "Requires macOS 12+ (networkQuality)" "需要 macOS 12+ (networkQuality)")"
     if has speedtest-cli; then speedtest-cli; else return 1; fi
+    return
   fi
+  local out; out=$(networkQuality -v 2>&1) || { printf '%s\n' "$out"; bad "$(L "networkQuality failed" "networkQuality 执行失败")"; return 1; }
+  printf '%s\n' "$out"
+  speed_verdict "$out"
+}
+
+# 解析 networkQuality 的摘要, 给出结论: 带宽够不够、上传 / 下载时延是否因缓冲膨胀 (bufferbloat) 而飙升。
+# 响应性单位是 RPM (每分钟往返次数): >= 1000 很好, 300-999 一般, < 300 差 (视频会议、游戏会卡)。
+speed_verdict() {
+  local t=$1 dl ul dr ur
+  dl=$(printf '%s\n' "$t" | sed -n 's/^Downlink capacity: *\([0-9.]*\) Mbps.*/\1/p' | head -1)
+  ul=$(printf '%s\n' "$t" | sed -n 's/^Uplink capacity: *\([0-9.]*\) Mbps.*/\1/p' | head -1)
+  dr=$(printf '%s\n' "$t" | sed -n 's/^Downlink [Rr]esponsiveness:.*|  *\([0-9]*\) RPM.*/\1/p' | head -1)
+  ur=$(printf '%s\n' "$t" | sed -n 's/^Uplink [Rr]esponsiveness:.*|  *\([0-9]*\) RPM.*/\1/p' | head -1)
+  echo
+  if [ -z "$dr$ur" ]; then
+    warn "$(L "Could not read the responsiveness figures, so no bufferbloat verdict (the output format may differ on this macOS)." "读不到响应性数据, 无法判断缓冲膨胀 (这个 macOS 版本的输出格式可能不同)。")"; return 0
+  fi
+  local worst=$dr; [ -z "$worst" ] && worst=$ur; [ -n "$ur" ] && [ "$ur" -lt "$worst" ] && worst=$ur
+  if [ "$worst" -ge 1000 ]; then
+    ok "$(L "Responsiveness is good (down $dr RPM, up $ur RPM): the line stays snappy under load." "响应性良好 (下载 $dr RPM, 上传 $ur RPM): 满载时网络依然流畅。")"
+  elif [ "$worst" -ge 300 ]; then
+    warn "$(L "Responsiveness is fair (down $dr RPM, up $ur RPM): latency rises noticeably when the line is busy." "响应性一般 (下载 $dr RPM, 上传 $ur RPM): 线路繁忙时延迟会明显上升。")"
+  else
+    local dir; dir="$(L "upload" "上传")"; [ -n "$dr" ] && [ "$dr" -lt 300 ] && dir="$(L "download" "下载")"
+    [ -n "$dr" ] && [ -n "$ur" ] && [ "$dr" -lt 300 ] && [ "$ur" -lt 300 ] && dir="$(L "upload and download" "上传和下载")"
+    bad "$(L "Bufferbloat: latency under $dir load is very high (down ${dr:-?} RPM, up ${ur:-?} RPM). Video calls and games will lag while someone is uploading or downloading." "存在缓冲膨胀: $dir 满载时延迟很高 (下载 ${dr:-?} RPM, 上传 ${ur:-?} RPM)。有人上传或下载时, 视频会议和游戏会卡。")"
+    echo "$(L "  Fix: enable SQM / smart queue (fq_codel, CAKE) on the router, or cap its speed at about 90% of the figures above." "  办法: 在路由器上启用 SQM / 智能队列 (fq_codel、CAKE), 或把路由器限速设为上面带宽的约 90%。")"
+  fi
+  if [ -n "$ul" ] && [ -n "$dl" ]; then
+    awk -v u="$ul" -v d="$dl" 'BEGIN{ if (u < 5) exit 0; exit 1 }' && warn "$(L "Upload bandwidth is only $ul Mbps: video calls and cloud uploads will be slow." "上传带宽只有 $ul Mbps: 视频会议和云端上传会比较慢。")"
+  fi
+  return 0
 }
 
 cmd_conns() {

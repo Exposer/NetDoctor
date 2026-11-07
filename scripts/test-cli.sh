@@ -197,6 +197,22 @@ lib "dhcp: short lease warns"        0 "Very short lease"         "ND_MODE=short
 lib "dhcp: VPN gateway mismatch"     0 "not the router the DHCP server offered" "ND_MODE=vpn; export ND_MODE; cmd_dhcp"
 lib "doctor: self-assigned = DHCP failed" 1 "DHCP failed" "ND_MODE=selfassigned; export ND_MODE; cmd_doctor"
 
+# ---- 8. speed verdict, MAC vendor -------------------------------------------------------------------
+SP_BAD='Uplink capacity: 24 Mbps\nDownlink capacity: 496 Mbps\nUplink Responsiveness: Low (1.8 seconds | 32 RPM)\nDownlink Responsiveness: High (42 milliseconds | 1410 RPM)'
+SP_OK='Uplink capacity: 30 Mbps\nDownlink capacity: 300 Mbps\nUplink Responsiveness: High (30 milliseconds | 1900 RPM)\nDownlink Responsiveness: High (40 milliseconds | 1500 RPM)'
+SP_MID='Uplink capacity: 30 Mbps\nDownlink capacity: 300 Mbps\nUplink Responsiveness: Medium (200 milliseconds | 600 RPM)\nDownlink Responsiveness: High (40 milliseconds | 1500 RPM)'
+lib "speed: upload bufferbloat"   0 "Bufferbloat: latency under upload load" "speed_verdict \"\$(printf '$SP_BAD')\""
+lib "speed: good responsiveness"  0 "Responsiveness is good"                  "speed_verdict \"\$(printf '$SP_OK')\""
+lib "speed: fair responsiveness"  0 "Responsiveness is fair"                  "speed_verdict \"\$(printf '$SP_MID')\""
+lib "speed: unparseable output"   0 "no bufferbloat verdict"                  "speed_verdict 'garbage'"
+lib "speed: slow upload warns"    0 "Upload bandwidth is only 3 Mbps"         "speed_verdict \"\$(printf 'Uplink capacity: 3 Mbps\\nDownlink capacity: 90 Mbps\\nUplink Responsiveness: High (3 milliseconds | 1900 RPM)')\""
+printf 'A47733\tGoogle\n00000C Cisco Systems\n' > "$T/oui.txt"
+lib "vendor: found in OUI file"   0 "Google"                      "mac_vendor a4:77:33:1b:2c:3d $T/oui.txt"
+lib "vendor: single-digit octets" 0 "Cisco Systems"               "mac_vendor 0:0:c:1:2:3 $T/oui.txt"
+lib "vendor: random MAC"          0 "random MAC"                  "mac_vendor 5a:11:22:33:44:55 $T/oui.txt"
+lib "vendor: no database, no guess" 0 "[]"                        "echo \"[\$(mac_vendor a4:77:33:1b:2c:3d '')]\""
+lib "vendor: unknown MAC is blank" 0 "[]"                         "echo \"[\$(mac_vendor ? $T/oui.txt)]\""
+
 # ---- result ------------------------------------------------------------------------------------------
 echo
 if [ "$FAIL" -eq 0 ]; then echo "all $PASS tests passed"; exit 0; fi
