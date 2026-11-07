@@ -91,3 +91,5 @@
 "Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path" = "对比 IPv4 / IPv6 连通性,发现异常的 IPv6 链路";
 "Captive portal" = "强制门户";
 "Wi-Fi connected but no web access? Detect a login page" = "连上 Wi-Fi 却打不开网页?检测登录跳转页";
+"22,80,443 or 1-1024" = "22,80,443 或 1-1024";
+"extra domain (optional)" = "额外要测的域名(可选)";

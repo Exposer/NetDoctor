@@ -173,6 +173,8 @@ ZH = {
     "Channel": "信道",
     "Rate": "速率",
     "Reading Wi-Fi… (this can take 10+ seconds on some Macs)": "正在读取 Wi-Fi…(部分 Mac 需要十几秒)",
+    "22,80,443 or 1-1024": "22,80,443 或 1-1024",
+    "extra domain to include (optional)": "额外要测的域名(可选)",
     "Wi-Fi info unavailable": "无法获取 Wi-Fi 信息",
     "Reads the link every few seconds (macOS only). Rule of thumb: > −60 dBm good, −70 fair, < −75 poor.": "每隔几秒读取一次(仅 macOS)。经验值:> −60 dBm 好,−70 一般,< −75 差。",
     "Open Wi-Fi signal": "打开 Wi-Fi 信号",
@@ -760,7 +762,7 @@ function pick(id,keep,nofocus){leaveViews();const busy=!!($('#run')&&$('#run').d
 if(!keep&&!busy&&(!cur||cur.id!=id)){raw='';idle=true;$('#out').textContent=t(INTRO);$('#st').textContent=''}
 const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
 $('#t').textContent=cur.icon+' '+t(cur.label);$('#d').textContent=t(cur.desc);const f=$('#f');f.innerHTML='';
-cur.inputs.forEach(i=>{const l=document.createElement('label');l.textContent=t(i.label)+(i.req?' *':'');const x=document.createElement('input');x.type='text';x.name=i.name;x.placeholder=i.ph||'';x.value=(keep&&old[i.name]!==undefined)?old[i.name]:(i.def||'');if(FAVN.includes(i.name)){x.setAttribute('list','favlist');x.setAttribute('spellcheck','false');const star=document.createElement('button');star.type='button';star.className='star';star.onclick=()=>toggleFav(x.value);x.addEventListener('input',renderFavs);const w=document.createElement('span');w.className='fw';w.append(x,star);l.append(w)}else l.append(x);f.append(l)});
+cur.inputs.forEach(i=>{const l=document.createElement('label');l.textContent=t(i.label)+(i.req?' *':'');const x=document.createElement('input');x.type='text';x.name=i.name;x.placeholder=t(i.ph||'');x.value=(keep&&old[i.name]!==undefined)?old[i.name]:(i.def||'');if(FAVN.includes(i.name)){x.setAttribute('list','favlist');x.setAttribute('spellcheck','false');const star=document.createElement('button');star.type='button';star.className='star';star.onclick=()=>toggleFav(x.value);x.addEventListener('input',renderFavs);const w=document.createElement('span');w.className='fw';w.append(x,star);l.append(w)}else l.append(x);f.append(l)});
 if(cur.admin===true||cur.admin==='optional'){const l=document.createElement('label');l.className='chk';l.innerHTML=`<input type="checkbox" name="_admin" ${cur.admin===true?'checked disabled':''}>${t('Requires administrator rights')}${cur.admin===true?'':' '+t('(fuller details)')}`;f.append(l);if(keep&&old._admin!==undefined&&cur.admin!==true)l.querySelector('input').checked=old._admin}
 const r=document.createElement('button');r.className='btn';r.id='run';r.textContent=t('Run');r.title=MOD+'+Enter';r.type='submit';f.append(r);
 f.onsubmit=e=>{e.preventDefault();run()};const first=f.querySelector('input[type=text]');renderFavs();first&&!nofocus&&first.focus()}

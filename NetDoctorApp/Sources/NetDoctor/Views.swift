@@ -48,7 +48,7 @@ struct ToolView: View {
                 ForEach(tool.inputs) { i in
                     VStack(alignment: .leading, spacing: 3) {
                         (Text(LocalizedStringKey(i.label)) + Text(i.required ? " *" : "")).font(.caption).foregroundStyle(.secondary)
-                        TextField(i.placeholder, text: Binding(
+                        TextField(loc(i.placeholder), text: Binding(
                             get: { runner.values[i.name] ?? "" },
                             set: { runner.values[i.name] = $0 }))
                             .textFieldStyle(.roundedBorder)

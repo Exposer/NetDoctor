@@ -91,3 +91,5 @@
 "Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path" = "Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path";
 "Captive portal" = "Captive portal";
 "Wi-Fi connected but no web access? Detect a login page" = "Wi-Fi connected but no web access? Detect a login page";
+"22,80,443 or 1-1024" = "22,80,443 or 1-1024";
+"extra domain (optional)" = "extra domain (optional)";
