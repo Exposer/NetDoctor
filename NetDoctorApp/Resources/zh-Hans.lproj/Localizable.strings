@@ -87,3 +87,7 @@
 "Layer-by-layer checks with a verdict and suggested next steps" = "逐层检查并给出结论和下一步建议";
 "TCP ping" = "TCP 延迟";
 "TCP connect latency to a port — for when ping is blocked" = "测量到某个端口的 TCP 连接延迟,适用于 ping 被屏蔽时";
+"IPv6 check" = "IPv6 检测";
+"Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path" = "对比 IPv4 / IPv6 连通性,发现异常的 IPv6 链路";
+"Captive portal" = "强制门户";
+"Wi-Fi connected but no web access? Detect a login page" = "连上 Wi-Fi 却打不开网页?检测登录跳转页";

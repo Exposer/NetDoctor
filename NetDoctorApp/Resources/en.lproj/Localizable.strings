@@ -87,3 +87,7 @@
 "Layer-by-layer checks with a verdict and suggested next steps" = "Layer-by-layer checks with a verdict and suggested next steps";
 "TCP ping" = "TCP ping";
 "TCP connect latency to a port — for when ping is blocked" = "TCP connect latency to a port — for when ping is blocked";
+"IPv6 check" = "IPv6 check";
+"Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path" = "Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path";
+"Captive portal" = "Captive portal";
+"Wi-Fi connected but no web access? Detect a login page" = "Wi-Fi connected but no web access? Detect a login page";

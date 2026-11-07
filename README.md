@@ -54,6 +54,8 @@ netdoctor tools                      # 查看装了哪些
 | 网页打不开但 ping 通 | `netdoctor dns x.com` → `netdoctor http URL` → `netdoctor proxy` |
 | 某跳丢包/延迟高 | `netdoctor route host`(mtr)、`gping`、`trip` |
 | 不知道哪里坏了 | `netdoctor doctor`(逐层检查,给出结论和下一步建议) |
+| 连上 Wi-Fi 却打不开网页(要登录?) | `netdoctor captive` |
+| 某些网站慢 / IPv6 异常 | `netdoctor ipv6` |
 | ping 被屏蔽 / 想测端口延迟 | `netdoctor tcpping host 443`(TCP 连接延迟与丢包) |
 | DNS 慢 / 想选最快的 DNS | `netdoctor dnsbench`(对比并推荐,给出切换命令) |
 | 想知道网内有哪些设备 | `netdoctor lan`(IP / MAC / 主机名) |

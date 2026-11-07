@@ -56,6 +56,8 @@ netdoctor tools                                          # see which tools are i
 | Pages won't load but ping works | `netdoctor dns x.com` → `netdoctor http URL` → `netdoctor proxy` |
 | Packet loss / high latency on some hop | `netdoctor route host` (mtr), `gping`, `trip` |
 | Not sure what is broken | `netdoctor doctor` (layered checks with a verdict and next steps) |
+| Wi-Fi connected but pages won't load (login needed?) | `netdoctor captive` |
+| Some sites slow / IPv6 problems | `netdoctor ipv6` |
 | Ping is blocked / measure a port's latency | `netdoctor tcpping host 443` (TCP connect latency and loss) |
 | Slow DNS / pick the fastest DNS | `netdoctor dnsbench` (compares and recommends, prints the switch command) |
 | Who is on my network | `netdoctor lan` (IP / MAC / name) |

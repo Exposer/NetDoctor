@@ -19,6 +19,8 @@ COMMANDS = [
  {"id":"lan","label":"LAN scan","icon":"🖧","desc":"Discover devices on the local network (IP, MAC, name)","inputs":[]},
  {"id":"wifi","label":"Wi-Fi","icon":"📶","desc":"SSID, signal, noise, channel, rate","inputs":[],"admin":"optional"},
  {"id":"dns","label":"DNS compare","icon":"🔎","desc":"Answers and timings from the system and several public DNS servers","inputs":[{"name":"domain","label":"Domain","ph":"example.com","req":True}]},
+ {"id":"ipv6","label":"IPv6 check","icon":"6️⃣","desc":"Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path","inputs":[]},
+ {"id":"captive","label":"Captive portal","icon":"🚧","desc":"Wi-Fi connected but no web access? Detect a login page","inputs":[]},
  {"id":"dnsbench","label":"DNS benchmark","icon":"🏁","desc":"Compare the system and public DNS servers by speed and get a recommendation","inputs":[{"name":"domain","label":"Domain","ph":"extra domain to include (optional)"}]},
  {"id":"http","label":"HTTP timing","icon":"🌐","desc":"DNS / TCP / TLS / first byte / total breakdown","inputs":[{"name":"url","label":"URL","ph":"https://example.com","req":True}]},
  {"id":"ping","label":"Ping","icon":"📡","desc":"Packet loss and latency statistics","inputs":[{"name":"host","label":"Host","ph":"1.1.1.1","req":True},{"name":"count","label":"Count","ph":"20","def":"20"}]},
@@ -115,6 +117,10 @@ ZH = {
     "Layer-by-layer checks with a verdict and suggested next steps": "逐层检查并给出结论和下一步建议",
     "TCP ping": "TCP 延迟",
     "TCP connect latency to a port — for when ping is blocked": "测量到某个端口的 TCP 连接延迟,适用于 ping 被屏蔽时",
+    "IPv6 check": "IPv6 检测",
+    "Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path": "对比 IPv4 / IPv6 连通性,发现异常的 IPv6 链路",
+    "Captive portal": "强制门户",
+    "Wi-Fi connected but no web access? Detect a login page": "连上 Wi-Fi 却打不开网页?检测登录跳转页",
     "DNS benchmark": "DNS 测速",
     "Compare the system and public DNS servers by speed and get a recommendation": "对比系统与多家公共 DNS 的速度并给出推荐",
     "LAN scan": "局域网扫描",
@@ -343,12 +349,12 @@ class H(BaseHTTPRequestHandler):
         if use_admin and sys.platform == "darwin":
             inner = "HOME=%s PATH=%s NETDOCTOR_COLOR=1 NETDOCTOR_LANG=%s %s 2>&1" % (
                 shlex.quote(os.path.expanduser("~")), shlex.quote(env["PATH"]), lang,
-                " ".join(shlex.quote(x) for x in [NETDOCTOR, spec["id"]] + args))
+                " ".join(shlex.quote(x) for x in ["/bin/bash", NETDOCTOR, spec["id"]] + args))
             inner = inner.replace("\\", "\\\\").replace('"', '\\"')
             cmd = ["osascript", "-e", 'do shell script "%s" with administrator privileges' % inner]
             self.wfile.write((tr(lang, "(Waiting for the system administrator password prompt…)") + "\n").encode()); self.wfile.flush()
         else:
-            cmd = [NETDOCTOR, spec["id"]] + args
+            cmd = ["/bin/bash", NETDOCTOR, spec["id"]] + args
         try:
             p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, env=env, bufsize=0)

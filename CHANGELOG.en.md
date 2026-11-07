@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
+- `netdoctor ipv6` and a matching **IPv6 check** tool: checks for a global IPv6 address (link-local and private ones are ignored), AAAA resolution and real IPv4 / IPv6 reachability, and explains the problem when an IPv6 address exists but traffic fails. `report` includes it too.
+- `netdoctor captive` and a matching **Captive portal** tool: detects Wi-Fi that needs a login before it gives internet access, and shows the redirect URL.
 - Web UI: a **command palette**. Press `⌘/Ctrl+K` and type a name, a description or an English / Chinese keyword to search and jump to any tool or page (including live latency, Wi-Fi signal, watchlist, auto-check, history and the shortcut help); it can also switch language and theme. `↑` / `↓` select, `Enter` opens, `Esc` closes.
 - Web UI: a **Speed trend** page, opened from the 📉 sidebar entry or with `p`. Run speed test measures with `networkQuality` and stores the result in History; download / upload speeds are parsed from the history and charted over time, with the latest, average and best download speed (Gbps / Kbps are converted to Mbps). A run whose output cannot be read is reported instead of being plotted as a data point.
 - Web UI: an **Auto-check** page, opened from the 🔁 sidebar entry or with `a`. It runs Diagnose in the background every 1 / 5 / 15 / 30 / 60 minutes and keeps going while you use other pages (the sidebar shows ●). Each result is stored in History, and a timeline shows Healthy / Unstable / Problem with the verdict; View opens the full output. With **Notify** ticked it sends a desktop notification when the verdict changes (for example from healthy to a DNS problem, or back) and the tab title shows ⚠ while there is a problem. Handy for intermittent network trouble.
@@ -15,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ### Changed
 - Web UI: HTML escaping of the output pane now also covers `>` (defence in depth); exporting a report from an empty selection now shows a message instead of doing nothing.
 - `netdoctor`: an unknown command now prints "Unknown command: xxx" with the running version (and a hint to `git pull`) before the usage text, and exits with status 2. Added `netdoctor --version` (also `version` and `-v`) as well as `help`, `-h` and `--help`. Previously an unrecognised command silently printed the usage text, which made it impossible to tell a typo from an outdated local copy.
+
+### Fixed
+- `netdoctor` now always runs under `/bin/bash` (`#!/usr/bin/env bash` could pick up an old x86 bash when the web UI puts `/usr/local/bin` first in PATH, which broke commands such as `arp`); the web UI also invokes it through `/bin/bash` explicitly.
+
 
 ## [1.1.7] - 2026-11-07
 
