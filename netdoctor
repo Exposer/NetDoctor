@@ -450,13 +450,14 @@ cmd_captive() {
   local u=http://captive.apple.com/hotspot-detect.html body redir
   body=$(curl -s -m 8 "$u" 2>/dev/null); redir=$(curl -s -m 8 -o /dev/null -w '%{redirect_url}' "$u" 2>/dev/null)
   if [ -z "$body" ] && [ -z "$redir" ]; then bad "$(L "Could not reach captive.apple.com (no connectivity?)" "无法访问 captive.apple.com (没有网络?)")"; return 1; fi
-  if echo "$body" | grep -q 'Success'; then ok "$(L "No captive portal: direct internet access" "没有强制门户, 可直接上网")"
+  # Apple 的应答是 <HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>; 只认它, 不能是页面里随便出现 "Success" 字样
+  if echo "$body" | grep -qi '<title>Success</title>' && [ -z "$redir" ]; then ok "$(L "No captive portal: direct internet access" "没有强制门户, 可直接上网")"
   else
     warn "$(L "Captive portal suspected: got a login/redirect page instead of the expected reply" "疑似强制门户: 收到的是登录/跳转页, 而不是预期应答")"
     [ -n "$redir" ] && echo "   → $redir"
     echo "$(L "Open any http:// page (e.g. http://captive.apple.com) in a browser to reach the login page." "用浏览器打开任意 http:// 网址 (如 http://captive.apple.com) 即可进入登录页。")"
+    return 1
   fi
-  return 0
 }
 
 cmd_quick() {
