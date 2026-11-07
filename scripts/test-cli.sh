@@ -328,6 +328,27 @@ v6 "ipv6: slow compared with IPv4"   "much slower to connect"      0 glob=1 gw=1
 v6 "ipv6: a small gap is not slow"   "IPv6 is healthy"             0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 t4=20 t6=200
 v6 "ipv6: healthy"                   "IPv6 is healthy"             0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 v4ok=1
 v6 "ipv6: IPv6-only network"          "IPv6-only connectivity"     0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 v4ok=0
+# ---- exposure: netstat parsing and assessment ----
+NS="$T/ns.txt"; printf '%s\n' 'tcp4       0      0  *.22                   *.*                    LISTEN' 'tcp6       0      0  *.22                   *.*                    LISTEN' 'tcp4       0      0  127.0.0.1.6379         *.*                    LISTEN' 'tcp4       0      0  192.168.0.5.8080       *.*                    LISTEN' 'tcp6       0      0  ::1.631                *.*                    LISTEN' 'tcp6       0      0  fe80::1%lo0.80         *.*                    LISTEN' 'tcp46      0      0  *.55146                *.*                    LISTEN' 'tcp4       0      0  *.9999                 *.*                    ESTABLISHED' > "$NS"
+lib "exposure: wildcard is all"            0 "22 all"      "exposure_parse < $NS"
+lib "exposure: loopback is local"          0 "6379 local"  "exposure_parse < $NS"
+lib "exposure: a specific address is lan"  0 "8080 lan"     "exposure_parse < $NS"
+lib "exposure: ::1 is local"               0 "631 local"   "exposure_parse < $NS"
+lib "exposure: tcp46 wildcard is all"      0 "55146 all"   "exposure_parse < $NS"
+lib_not "exposure: non-LISTEN rows are ignored" "exposure_parse < $NS" "9999"
+lib "exposure: widest scope wins (22 listed once)" 0 "" "exposure_parse < $NS | awk '\$1==22' | wc -l | grep -qx ' *1'"
+ex() { local name=$1 want=$2 rc=$3 in=$4; shift 4; lib "$name" "$rc" "$want" "printf '%s\n' '$in' | exposure_assess $*"; }
+ex "exposure: Redis open to the network is serious" "Redis is open" 1 "6379 all redis-server" fw=on
+ex "exposure: Docker API is serious"               "Docker API"    1 "2375 all dockerd" fw=on
+ex "exposure: Redis on loopback is fine"           "Nothing sensitive is exposed" 0 "6379 local redis-server" fw=on
+ex "exposure: SSH is a warning, not an error"      "Remote Login (SSH)" 0 "22 all ?" fw=on
+ex "exposure: SMB is a warning"                    "File Sharing (SMB)" 0 "445 all ?" fw=on
+ex "exposure: dev server on all interfaces"        "development server" 0 "3000 all node" fw=on
+ex "exposure: unknown daemon port is only listed"  "reachable from the network" 0 "88 all ?" fw=on
+ex "exposure: high ports are folded"               "1 high ports (49152+)" 0 "55146 all rapportd" fw=on
+ex "exposure: firewall off with exposure"          "firewall is OFF" 0 "22 all ?" fw=off
+ex "exposure: firewall unknown"                    "could not read the firewall state" 0 "5000 all ControlCe" fw=unknown
+ex "exposure: nothing exposed"                     "no ports below 49152" 0 "631 local cupsd" fw=on
 SD=$'0:36:43.593  Add        3   7 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3  15 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3   7 .                    _udp.local.          _sleep-proxy\n0:36:43.593  Rmv        3   7 .                    _tcp.local.          _gone'
 printf '%s\n' "$SD" > "$T/meta.txt"
 lib "bonjour: service types (dedupe, Rmv ignored)" 0 "_ssh._tcp" "bonjour_types $T/meta.txt"

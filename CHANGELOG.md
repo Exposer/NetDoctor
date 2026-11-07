@@ -7,6 +7,7 @@
 ## [未发布]
 
 ### 新增
+- `netdoctor exposure` 与 **暴露的端口** 工具(命令行 / 网页 / App):检查这台 Mac 自己对网络开放了哪些 TCP 端口。端口来自 `netstat`(不需要管理员权限就能看到全部),分成"对所有网卡 / 某个地址开放"和"仅本机 (127.0.0.1 / ::1)",高位端口 (49152+) 合并成一行(通常是 AirPlay 之类的系统服务)。对暴露在网络上的危险服务给出结论和关闭办法:Docker API、Redis、MongoDB、Elasticsearch、memcached、telnet 为严重 (退出码 1);FTP、SSH 远程登录、SMB 文件共享、VNC 屏幕共享、远程管理、RDP、常见数据库、对网络开放的开发服务器为提醒。同时读取 macOS 应用防火墙状态。只检查 TCP;没有管理员权限时进程名只能看到自己的进程。检查别的主机仍用 `netdoctor ports`。
 - `netdoctor ipv6` 升级为完整的 IPv6 诊断(命令行 / 网页 / App 的 IPv6 检测):除原有的地址、AAAA、IPv4 / IPv6 对比外,新增 IPv6 路由器 (默认路由) 是否应答、按地址能否上外网、1400 字节大包能否通过(路径 MTU 黑洞)、IPv6 HTTPS 访问真实站点、与 IPv4 建连速度对比、本机 IPv6 DNS 服务器,并给出明确结论:网络根本没有 IPv6 / 只有本地 (ULA) IPv6(无碍)、有地址没路由 (RA 问题)、路由器不应答、上游运营商 IPv6 不通、MTU 黑洞、IPv6 被拦或 DNS 无 AAAA、IPv6 明显比 IPv4 慢,以及对应的办法(如 `networksetup -setv6off`)。有 bad 级故障时退出码为 1。
 - `netdoctor channels` 与 **Wi-Fi 信道** 工具(命令行 / 网页 / App):扫描附近的 Wi-Fi,按频谱重叠(而不是只看信道号)统计与你当前信道冲突的邻居网络(2.4 GHz 相邻信道也算,5 / 6 GHz 按带宽对齐的频段块算;信号 ≥ -65 dBm 的算两分),明显有更空的信道时推荐具体信道,并给出 DFS 信道提醒、改用 5 GHz、拥挤的 2.4 GHz 上把 40 MHz 改成 20 MHz 等建议。用 `system_profiler` 扫描,约 15 秒,不需要 sudo;没有定位权限时看不到邻居名字,所以只统计不列名。
 

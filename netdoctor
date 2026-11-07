@@ -45,6 +45,7 @@ netdoctor $VERSION - macOS 网络诊断
   route <主机>          路由选择 + traceroute/mtr 路径
   mtr <主机> [次数]     逐跳丢包 / 延迟 (无需 root), 并判断问题出在哪一跳
   leak                  VPN 下的 DNS / IPv6 泄漏检查
+  exposure              本机暴露面检查: 哪些端口对网络开放, 哪些服务不该暴露, 防火墙状态
   channels              Wi-Fi 信道拥挤分析, 推荐更空的信道 (约 15 秒)
   bonjour [秒数]        发现局域网里的 Bonjour 服务 (AirPlay、打印机、SSH、文件共享…)
   ping <主机>           持续 ping 并统计丢包/抖动 (默认 20 个包)
@@ -83,6 +84,7 @@ Usage: netdoctor <command> [args]
   route <host>          route selection + traceroute/mtr path
   mtr <host> [count]    per-hop loss / latency (no root) and which hop the problem is at
   leak                  DNS / IPv6 leak check while a VPN is on
+  exposure              what this Mac exposes to the network: open ports, risky services, firewall state
   channels              Wi-Fi channel crowding analysis and a quieter channel (about 15 s)
   bonjour [seconds]     discover Bonjour services on the LAN (AirPlay, printers, SSH, file sharing…)
   ping <host>           ping with loss/jitter stats (20 packets by default)
@@ -485,8 +487,12 @@ EOF2
 
 ping_stats() { # $1 = host, $2 = count -> prints "loss avg" (avg empty if nothing answered)
   local out; out=$(ping -c "${2:-3}" -t 3 "$1" 2>/dev/null)
-  printf '%s %s\n' "$(echo "$out" | awk -F', ' '/packet loss/{for(i=1;i<=NF;i++) if($i ~ /packet loss/){sub(/%.*/,"",$i); print $i}}')" \
-                    "$(echo "$out" | awk -F'/' '/min\/avg\/max/{print $5}')"
+  # 被超时杀掉时 ping6 不会打印汇总: 退回到逐包的 time= 自己算平均, 慢但能通的链路不会被误判为不通
+  local loss avg
+  loss=$(echo "$out" | awk -F', ' '/packet loss/{for(i=1;i<=NF;i++) if($i ~ /packet loss/){sub(/%.*/,"",$i); print $i}}')
+  avg=$(echo "$out" | awk -F'/' '/min\/avg\/max/{print $5}')
+  [ -n "$avg" ] || avg=$(echo "$out" | awk '/bytes from/{for(i=1;i<=NF;i++) if($i ~ /^time=/){sub(/time=/,"",$i); n++; t+=$i}} END{if(n) printf "%.3f", t/n}')
+  printf '%s %s\\n' "$loss" "$avg\"
 }
 resolves() { # $1 = name, $2 = optional DNS server
   if has dig; then dig ${2:+@$2} +short +time=3 +tries=1 "$1" 2>/dev/null | grep -q .
@@ -934,19 +940,23 @@ ipv6_assess() {
 }
 
 cmd_ipv6() {
-  local g ula gwline gw gwif gwok="" a6 v4 v6 u=https://api.ip.sb/ip ipok="" bigok="" nameok="" aaaa=0 t4="" t6="" h=www.google.com dns6
+  local g ula gwline gw gwif gwif2 tun=0 gwok="" a6 v4 v6 u=https://api.ip.sb/ip ipok="" bigok="" nameok="" aaaa=0 t4="" t6="" h=www.google.com dns6 p6='' alt hh th
   hdr "$(L "IPv6 addresses" "IPv6 地址")"
   # 排除链路本地 (fe80) 与唯一本地/私有 (fc00::/7), 它们不能访问公网
-  g=$(ifconfig | awk '/inet6 / && $2 !~ /^fe80|^::1|^f[cd]/{print $2}' | head -3)
-  ula=$(ifconfig | awk '/inet6 / && $2 ~ /^f[cd]/{print $2}' | head -3)
+  # 只看默认路由所在的物理网卡; VPN / 叠加网络 (utun*) 的地址 (如 Tailscale 的 fd7a:) 不代表这个网络有没有 IPv6
+  gwline=$(route -n get -inet6 default 2>/dev/null); gw=$(echo "$gwline" | awk '/gateway:/{print $2; exit}'); gwif=$(echo "$gwline" | awk '/interface:/{print $2; exit}')
+  case "$gwif" in utun*|ipsec*|ppp*|gif*|stf*) tun=1; gwif2="";; *) tun=0; gwif2=$gwif;; esac
+  g=$(ifconfig | awk -v want="$gwif2" '/^[^ \t]/{i=$1; sub(/:$/,"",i)} i ~ /^(utun|ipsec|ppp|gif|stf|awdl|llw|lo)/{next} want!="" && i!=want{next} /inet6 / && $2 !~ /^fe80|^::1|^f[cd]/{print $2}' | head -3)
+  ula=$(ifconfig | awk -v want="$gwif2" '/^[^ \t]/{i=$1; sub(/:$/,"",i)} i ~ /^(utun|ipsec|ppp|gif|stf|awdl|llw|lo)/{next} want!="" && i!=want{next} /inet6 / && $2 ~ /^f[cd]/{print $2}' | head -3)
   if [ -n "$g" ]; then ok "$(L "Global IPv6 address present" "存在全局 IPv6 地址")"; echo "$g" | sed 's/^/   /'
   else warn "$(L "No global IPv6 address, only link-local/private ones (IPv6-only sites will be unreachable; usually harmless)" "没有全局 IPv6 地址, 只有本地/私有地址 (仅 IPv6 的站点打不开; 通常无碍)")"
     [ -n "$ula" ] && echo "$ula" | sed 's/^/   /'; fi
   hdr "$(L "IPv6 router (default route)" "IPv6 路由器 (默认路由)")"
-  gwline=$(route -n get -inet6 default 2>/dev/null); gw=$(echo "$gwline" | awk '/gateway:/{print $2; exit}'); gwif=$(echo "$gwline" | awk '/interface:/{print $2; exit}')
-  if [ -n "$gw" ]; then
+  if [ "$tun" = 1 ]; then
+    warn "$(L "The IPv6 default route goes through a VPN / tunnel ($gwif): the router and the IPv6 internet path cannot be diagnosed separately; disconnect the VPN and run this again." "IPv6 默认路由走的是 VPN / 隧道 ($gwif): 无法单独诊断路由器和 IPv6 外网链路; 断开 VPN 后再试。")"
+  elif [ -n "$gw" ]; then
     echo "  $gw ${gwif:+($gwif)}"
-    set -- $(ping6_stats "$gw" 2 "" 5); [ -n "${2:-}" ] && gwok=1 || gwok=0
+    set -- $(ping6_stats "$gw" 2 "" 4); [ -n "${2:-}" ] && gwok=1 || gwok=0
     if [ "$gwok" = 1 ]; then ok "$(L "The IPv6 router answers (avg ${2} ms)" "IPv6 路由器有应答 (平均 ${2} ms)")"; else bad "$(L "The IPv6 router does not answer" "IPv6 路由器没有应答")"; fi
   else warn "$(L "No IPv6 default route" "没有 IPv6 默认路由")"; fi
   hdr "$(L "DNS AAAA records" "DNS AAAA 记录")"
@@ -955,21 +965,37 @@ cmd_ipv6() {
   a6=$(dig +short +time=3 +tries=1 AAAA "$h" 2>/dev/null | head -1)
   if [ -n "$a6" ]; then aaaa=1; ok "$h → $a6"; else warn "$(L "No AAAA answer for $h" "$h 没有 AAAA 应答")"; fi
   hdr "$(L "Reachability: IPv4 vs IPv6" "连通性: IPv4 vs IPv6")"
-  v4=$(curl -4 -s -m 6 "$u" 2>/dev/null); v6=$(curl -6 -s -m 6 "$u" 2>/dev/null)
+  v4=$(curl -4 -s -m 5 "$u" 2>/dev/null); v6=$(curl -6 -s -m 5 "$u" 2>/dev/null)
   if [ -n "$v4" ]; then ok "IPv4  $v4"; else bad "$(L "IPv4 request failed" "IPv4 请求失败")"; fi
   if [ -n "$v6" ]; then ok "IPv6  $v6"; else warn "$(L "IPv6 request failed" "IPv6 请求失败")"; fi
-  if [ -n "$g" ] && [ -n "$gw" ]; then
+  if [ "$tun" = 0 ] && [ -n "$g" ] && [ -n "$gw" ]; then
     hdr "$(L "Deeper IPv6 probes" "IPv6 深入探测")"
-    set -- $(ping6_stats 2001:4860:4860::8888 3 "" 6); if [ -n "${2:-}" ]; then ipok=1; ok "$(L "By address (2001:4860:4860::8888): reachable, avg ${2} ms" "按地址 (2001:4860:4860::8888): 可达, 平均 ${2} ms")"
-    else set -- $(ping6_stats 2606:4700:4700::1111 3 "" 6); if [ -n "${2:-}" ]; then ipok=1; ok "$(L "By address (2606:4700:4700::1111): reachable, avg ${2} ms" "按地址 (2606:4700:4700::1111): 可达, 平均 ${2} ms")"
+    set -- $(ping6_stats 2001:4860:4860::8888 3 "" 4); if [ -n "${2:-}" ]; then ipok=1; p6=2001:4860:4860::8888; ok "$(L "By address (2001:4860:4860::8888): reachable, avg ${2} ms" "按地址 (2001:4860:4860::8888): 可达, 平均 ${2} ms")"
+    else set -- $(ping6_stats 2606:4700:4700::1111 3 "" 4); if [ -n "${2:-}" ]; then ipok=1; p6=2606:4700:4700::1111; ok "$(L "By address (2606:4700:4700::1111): reachable, avg ${2} ms" "按地址 (2606:4700:4700::1111): 可达, 平均 ${2} ms")"
       else ipok=0; bad "$(L "By address: both public IPv6 DNS servers unreachable" "按地址: 两个公共 IPv6 DNS 服务器都不通")"; fi; fi
     if [ "$ipok" = 1 ]; then
-      set -- $(ping6_stats 2001:4860:4860::8888 3 1400 6); if [ -n "${2:-}" ]; then bigok=1; ok "$(L "Large packets (1400 bytes): pass" "大包 (1400 字节): 通过")"
+      # 用刚才应答的那个地址测大包; 不通再换另一个, 避免只因一个目标被过滤就判成 MTU 黑洞
+      set -- $(ping6_stats "$p6" 3 1400 4)
+      if [ -z "${2:-}" ]; then alt=2606:4700:4700::1111; [ "$p6" = "$alt" ] && alt=2001:4860:4860::8888; set -- $(ping6_stats "$alt" 3 1400 4); fi
+      if [ -n "${2:-}" ]; then bigok=1; ok "$(L "Large packets (1400 bytes): pass" "大包 (1400 字节): 通过")"
       else bigok=0; bad "$(L "Large packets (1400 bytes): lost" "大包 (1400 字节): 丢失")"; fi
     fi
-    t6=$(curl -6 -s -o /dev/null -m 6 -w '%{time_connect} %{http_code}' "https://$h" 2>/dev/null)
-    case "$t6" in *" 2"*|*" 3"*) nameok=1; t6=$(echo "$t6" | awk '{printf "%d", $1*1000}'); ok "$(L "HTTPS over IPv6 to $h: connected in ${t6} ms" "经 IPv6 访问 $h 的 HTTPS: ${t6} ms 建连")";; *) nameok=0; t6=""; warn "$(L "HTTPS over IPv6 to $h failed" "经 IPv6 访问 $h 的 HTTPS 失败")";; esac
-    t4=$(curl -4 -s -o /dev/null -m 6 -w '%{time_connect} %{http_code}' "https://$h" 2>/dev/null); case "$t4" in *" 2"*|*" 3"*) t4=$(echo "$t4" | awk '{printf "%d", $1*1000}');; *) t4="";; esac
+    # 以 TLS 握手完成 (time_appconnect > 0) 为成功, 不看 HTTP 状态码 (403 / 429 也说明 IPv6 通了);
+    # 依次试几个站点, 避免某个站点本身被墙 / 故障就怪到 IPv6 头上
+    nameok=0; t6=""; t4=""
+    for hh in www.google.com www.cloudflare.com www.baidu.com; do
+      th=$(curl -6 -s -o /dev/null -m 4 -w '%{time_appconnect} %{time_connect}' "https://$hh" 2>/dev/null)
+      if [ -n "${th%% *}" ] && awk -v a="${th%% *}" 'BEGIN{exit !(a>0)}'; then
+        nameok=1; h=$hh; t6=$(echo "$th" | awk '{printf "%d", $2*1000}'); break
+      fi
+      [ -n "$(dig +short +time=2 +tries=1 AAAA "$hh" 2>/dev/null | head -1)" ] && aaaa=1
+    done
+    if [ "$nameok" = 1 ]; then ok "$(L "HTTPS over IPv6 to $h: connected in ${t6} ms" "经 IPv6 访问 $h 的 HTTPS: ${t6} ms 建连")"
+    else warn "$(L "HTTPS over IPv6 failed for all test sites" "经 IPv6 访问测试站点的 HTTPS 全部失败")"; fi
+    if [ "$nameok" = 1 ]; then
+      th=$(curl -4 -s -o /dev/null -m 4 -w '%{time_appconnect} %{time_connect}' "https://$h" 2>/dev/null)
+      if [ -n "${th%% *}" ] && awk -v a="${th%% *}" 'BEGIN{exit !(a>0)}'; then t4=$(echo "$th" | awk '{printf "%d", $2*1000}'); fi
+    fi
     [ -n "$t4" ] && echo "  $(L "(IPv4 to the same site: ${t4} ms)" "(同一站点走 IPv4: ${t4} ms)")"
   fi
   hdr "$(L "Verdict" "结论")"
@@ -996,7 +1022,7 @@ captive_probe() {
 clock_skew() {
   local u h d age srv now
   for u in http://www.apple.com http://www.baidu.com http://www.cloudflare.com; do
-    h=$(curl -sI -m 6 "$u" 2>/dev/null | tr -d '\r')
+    h=$(curl -sI -m 5 "$u" 2>/dev/null | tr -d '\r')
     d=$(echo "$h" | awk -F': ' 'tolower($1)=="date"{print $2; exit}')
     [ -z "$d" ] && continue
     age=$(echo "$h" | awk -F': ' 'tolower($1)=="age"{print $2; exit}'); age=${age//[^0-9]/}
@@ -1383,6 +1409,101 @@ cmd_channels() {
   hdr "$(L "Wi-Fi channel analysis" "Wi-Fi 信道分析")"
   echo "$(L "Scanning nearby networks (about 15 s) …" "正在扫描附近的网络 (约 15 秒) …")"
   system_profiler SPAirPortDataType 2>/dev/null | wifi_scan_parse | channels_assess | channels_verdict
+}
+
+# ---------- exposure: 本机监听端口的暴露面检查 ----------
+# 看哪些端口对局域网 / 所有网卡开放, 哪些只对本机 (127.0.0.1 / ::1) 开放, 并标出不该暴露的服务。
+# netstat 不需要 root 就能看到全部监听端口 (lsof 只能看到自己的进程), 所以端口取自 netstat, 进程名尽量用 lsof 补。
+
+# stdin: netstat -an -p tcp 的输出 -> 每行 "端口 范围"; 范围: all (所有网卡) / lan (某个具体地址) / local (仅本机)。同一端口取最宽的范围。
+exposure_parse() {
+  awk '
+    $NF=="LISTEN" && $1 ~ /^tcp/ {
+      a=$4; i=length(a); while (i>0 && substr(a,i,1)!=".") i--
+      if (i<2) next
+      port=substr(a,i+1); addr=substr(a,1,i-1)
+      if (port !~ /^[0-9]+$/) next
+      if (addr=="*" || addr=="0.0.0.0" || addr=="::") sc=3
+      else if (addr ~ /^127\./ || addr=="::1") sc=1
+      else sc=2
+      if (sc>best[port]) best[port]=sc
+    }
+    END { for (p in best) printf "%s %s\n", p, (best[p]==3?"all":(best[p]==2?"lan":"local")) }' | sort -n
+}
+
+# stdin: lsof -nP -iTCP -sTCP:LISTEN 的输出 -> 每行 "端口 进程名" (只能看到有权限看的进程)
+exposure_procs() {
+  awk 'NR>1 && /LISTEN/ { n=$(NF-1); sub(/.*:/,"",n); c=$1; gsub(/\\x20/," ",c); if (n ~ /^[0-9]+$/ && !(n in seen)) { seen[n]=1; print n, c } }'
+}
+
+# 防火墙状态: on / off / unknown
+fw_state() {
+  local f=/usr/libexec/ApplicationFirewall/socketfilterfw o
+  [ -x "$f" ] || { echo unknown; return; }
+  o=$("$f" --getglobalstate 2>/dev/null)
+  case "$o" in *"enabled"*|*"State = 1"*|*"State = 2"*) echo on;; *"disabled"*|*"State = 0"*) echo off;; *) echo unknown;; esac
+}
+
+# 评估。stdin 每行 "端口 范围 进程名" (进程名可为 ?), 参数 fw=on|off|unknown。有危险暴露返回 1。
+exposure_assess() {
+  local fw=unknown a port scope proc nbad=0 nwarn=0 nlocal=0 nexp=0 ndyn=0 dynprocs="" lvl msg
+  for a in "$@"; do case "$a" in fw=*) fw=${a#fw=};; esac; done
+  while read -r port scope proc; do
+    [ -z "$port" ] && continue
+    proc=${proc:-?}
+    if [ "$scope" = local ]; then nlocal=$((nlocal+1)); continue; fi
+    if [ "$port" -ge 49152 ]; then ndyn=$((ndyn+1)); [ "$proc" != "?" ] && case " $dynprocs " in *" $proc "*) ;; *) dynprocs="$dynprocs $proc";; esac; continue; fi
+    nexp=$((nexp+1)); lvl=""; msg=""
+    case "$port" in
+      2375|2376) lvl=bad; msg="$(L "the Docker API is open to the network: anyone who can reach it can take over this Mac. Bind it to 127.0.0.1 or use TLS." "Docker API 对网络开放: 任何能连上的人都能控制这台 Mac。改成只监听 127.0.0.1, 或启用 TLS。")";;
+      6379)      lvl=bad; msg="$(L "Redis is open to the network (no password by default). Bind it to 127.0.0.1." "Redis 对网络开放 (默认没有密码)。改成只监听 127.0.0.1。")";;
+      27017)     lvl=bad; msg="$(L "MongoDB is open to the network. Bind it to 127.0.0.1 or turn on authentication." "MongoDB 对网络开放。改成只监听 127.0.0.1, 或启用认证。")";;
+      9200|9300) lvl=bad; msg="$(L "Elasticsearch is open to the network. Bind it to 127.0.0.1." "Elasticsearch 对网络开放。改成只监听 127.0.0.1。")";;
+      11211)     lvl=bad; msg="$(L "memcached is open to the network (no authentication). Bind it to 127.0.0.1." "memcached 对网络开放 (没有认证)。改成只监听 127.0.0.1。")";;
+      23)        lvl=bad; msg="$(L "telnet sends passwords in clear text. Turn it off." "telnet 明文传输密码。请关闭。")";;
+      21)        lvl=warn; msg="$(L "FTP sends passwords in clear text. Turn it off or use SFTP." "FTP 明文传输密码。请关闭, 或改用 SFTP。")";;
+      22)        lvl=warn; msg="$(L "Remote Login (SSH) is on: anyone on the network can try to log in. Turn it off in System Settings → General → Sharing if you do not need it." "远程登录 (SSH) 已开启: 网络上的人都可以尝试登录。不需要的话在 系统设置 → 通用 → 共享 里关闭。")";;
+      445|139)    lvl=warn; msg="$(L "File Sharing (SMB) is on. Turn it off in System Settings → General → Sharing if you do not need it." "文件共享 (SMB) 已开启。不需要的话在 系统设置 → 通用 → 共享 里关闭。")";;
+      5900)      lvl=warn; msg="$(L "Screen Sharing / VNC is on. Turn it off in System Settings → General → Sharing if you do not need it." "屏幕共享 / VNC 已开启。不需要的话在 系统设置 → 通用 → 共享 里关闭。")";;
+      3283)      lvl=warn; msg="$(L "Remote Management (Apple Remote Desktop) is on." "远程管理 (Apple Remote Desktop) 已开启。")";;
+      3389)      lvl=warn; msg="$(L "RDP is open to the network." "RDP 对网络开放。")";;
+      3306|5432|1433) lvl=warn; msg="$(L "a database is open to the network. Bind it to 127.0.0.1 unless other machines need it." "数据库对网络开放。除非别的机器要用, 否则改成只监听 127.0.0.1。")";;
+      *) case "$proc" in node|python*|Python|ruby|java|php*|deno|bun|vite|next-server*|go|air|uvicorn|gunicorn|flask) lvl=warn; msg="$(L "a development server is reachable by everyone on the network. Bind it to 127.0.0.1 unless you want that." "开发服务器对网络上所有人开放。除非有意, 否则改成只监听 127.0.0.1。")";; esac;;
+    esac
+    if [ -n "$lvl" ]; then
+      if [ "$lvl" = bad ]; then bad "$port/tcp $proc — $msg"; nbad=$((nbad+1)); else warn "$port/tcp $proc — $msg"; nwarn=$((nwarn+1)); fi
+    else
+      echo "  $port/tcp  $proc  ($(L "reachable from the network" "网络可达")$([ "$scope" = lan ] && printf ', %s' "$(L "one address only" "仅某个地址")"))"
+    fi
+  done
+  [ "$nexp" = 0 ] && echo "  $(L "no ports below 49152 are open to the network" "没有低于 49152 的端口对网络开放")"
+  [ "$ndyn" -gt 0 ] && echo "  $(L "$ndyn high ports (49152+) are open to the network, usually macOS services such as AirPlay / Handoff / Control Center" "$ndyn 个高位端口 (49152+) 对网络开放, 通常是 AirPlay / 接力 / 控制中心之类的 macOS 系统服务")${dynprocs:+: $(echo $dynprocs | tr ' ' ',' | sed 's/,/, /g')}"
+  echo "  $(L "$nlocal ports listen on this Mac only (127.0.0.1 / ::1): not reachable from the network" "$nlocal 个端口只对本机开放 (127.0.0.1 / ::1): 网络上访问不到")"
+  hdr "$(L "Verdict" "结论")"
+  case "$fw" in
+    on)  ok "$(L "The macOS application firewall is on." "macOS 应用防火墙已开启。")";;
+    off) if [ "$nexp" -gt 0 ]; then warn "$(L "The macOS application firewall is OFF while $nexp port(s) are open to the network. Turn it on in System Settings → Network → Firewall." "macOS 应用防火墙是关闭的, 却有 $nexp 个端口对网络开放。请在 系统设置 → 网络 → 防火墙 里打开。")"; nwarn=$((nwarn+1))
+         else warn "$(L "The macOS application firewall is off (nothing sensitive is listening right now). Consider turning it on: System Settings → Network → Firewall." "macOS 应用防火墙是关闭的 (目前没有敏感端口在监听)。建议打开: 系统设置 → 网络 → 防火墙。")"; fi;;
+    *)   echo "  $(L "(could not read the firewall state)" "(读不到防火墙状态)")";;
+  esac
+  if [ "$nbad" -gt 0 ]; then bad "$(L "$nbad dangerous service(s) are exposed to the network." "有 $nbad 个危险服务暴露在网络上。")"; return 1; fi
+  if [ "$nwarn" -gt 0 ]; then warn "$(L "$nwarn service(s) are exposed that you may not want exposed; see above." "有 $nwarn 个服务暴露在网络上, 请确认是不是你要的; 见上面。")"
+  else ok "$(L "Nothing sensitive is exposed to the network." "没有敏感服务暴露在网络上。")"; fi
+  return 0
+}
+
+cmd_exposure() {
+  local ns procs fw list
+  has netstat || { bad "$(L "netstat not found" "未找到 netstat")"; return 1; }
+  hdr "$(L "Ports open to the network (this Mac)" "本机对网络开放的端口")"
+  ns=$(netstat -an -p tcp 2>/dev/null | exposure_parse)
+  procs=""; has lsof && procs=$(lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | exposure_procs)
+  fw=$(fw_state)
+  list=$(printf '%s\n' "$ns" | while read -r p sc; do [ -z "$p" ] && continue; n=$(printf '%s\n' "$procs" | awk -v p="$p" '$1==p{ $1=""; sub(/^ /,""); print; exit }'); printf '%s %s %s\n' "$p" "$sc" "${n:-?}"; done)
+  printf '%s\n' "$list" | exposure_assess fw="$fw"
+  local rc=$?
+  echo "  $(L "(Only TCP is checked. Without administrator rights process names are only known for your own processes; '?' means unknown.)" "(只检查 TCP。没有管理员权限时只能知道自己的进程名, ? 表示未知。)")"
+  return $rc
 }
 
 # ---------- bonjour: 局域网服务发现 ----------
@@ -1806,7 +1927,7 @@ $v";; esac
 
 c=${1:-help}; [ $# -gt 0 ] && shift
 case "$c" in
-  quick|q) cmd_quick;; doctor|diagnose) cmd_doctor "$@";; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; mtr) cmd_mtr "$@";; watch) cmd_watch "$@";; dnsset) cmd_dnsset "$@";; compare) cmd_compare "$@";; leak) cmd_leak;; channels) cmd_channels;; bonjour) cmd_bonjour "$@";; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
+  quick|q) cmd_quick;; doctor|diagnose) cmd_doctor "$@";; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; mtr) cmd_mtr "$@";; watch) cmd_watch "$@";; dnsset) cmd_dnsset "$@";; compare) cmd_compare "$@";; leak) cmd_leak;; channels) cmd_channels;; exposure) cmd_exposure;; bonjour) cmd_bonjour "$@";; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
   ping) cmd_ping "$@";; port) cmd_port "$@";; http) cmd_http "$@";; tls) cmd_tls "$@";;
   mtu) cmd_mtu "$@";; speed) cmd_speed;; conns) cmd_conns;; proxy) cmd_proxy;;
   capture) cmd_capture "$@";; fixdns) cmd_fixdns;; fix) cmd_fix "$@";; report) cmd_report "$@";; tools) cmd_tools;;

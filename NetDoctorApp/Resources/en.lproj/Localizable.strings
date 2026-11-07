@@ -112,6 +112,8 @@
 "Pings per hop" = "Pings per hop";
 "VPN leak check" = "VPN leak check";
 "Check that DNS and IPv6 do not bypass the VPN tunnel" = "Check that DNS and IPv6 do not bypass the VPN tunnel";
+"Exposed ports" = "Exposed ports";
+"Which ports this Mac opens to the network, which services should not be exposed, and the firewall state" = "Which ports this Mac opens to the network, which services should not be exposed, and the firewall state";
 "Wi-Fi channels" = "Wi-Fi channels";
 "Scan nearby networks, show how crowded your channel is and recommend a quieter one (about 15 s)" = "Scan nearby networks, show how crowded your channel is and recommend a quieter one (about 15 s)";
 "Bonjour services" = "Bonjour services";

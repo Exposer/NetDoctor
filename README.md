@@ -62,6 +62,7 @@ netdoctor tools                      # 查看装了哪些
 | 连上 Wi-Fi / 网线却上不了网, IP 以 169.254 开头 | `netdoctor dhcp`(查看 DHCP 租约;识别“自分配地址 = DHCP 失败”,`doctor` 也会自动判断) |
 | 网络时好时坏、不知道卡在哪一段 | `netdoctor mtr <主机>`(逐跳丢包和延迟,并判断问题出在你的路由器、运营商还是更远处;中间路由器限速 ping 会被识别为无害) |
 | 开着 VPN 担心 DNS / IPv6 泄漏 | `netdoctor leak`(检查 DNS 请求和 IPv6 是否绕过隧道,给出修复办法) |
+| 想知道这台 Mac 对网络开放了哪些端口、有没有不该暴露的服务 | `netdoctor exposure`(本机监听端口分为"对网络开放 / 仅本机",标出 SSH、共享、数据库、Docker 等风险并检查防火墙;检查别的主机用 `netdoctor ports`) |
 | Wi-Fi 慢 / 老掉线,怀疑邻居信道干扰 | `netdoctor channels`(扫描附近网络,判断你的信道是否拥挤,并推荐更空的信道) |
 | 想知道局域网里有哪些 AirPlay、打印机、共享服务 | `netdoctor bonjour`(发现 Bonjour / mDNS 广播的服务;所有能应答 ping 的设备用 `netdoctor lan`) |
 | 想一眼看全网络状态 | `netdoctor overview`(网卡 / IP / 网关 / DNS / Wi-Fi / 代理 / 公网 IP) |

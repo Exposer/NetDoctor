@@ -112,6 +112,8 @@
 "Pings per hop" = "每跳 ping 次数";
 "VPN leak check" = "VPN 泄漏检查";
 "Check that DNS and IPv6 do not bypass the VPN tunnel" = "检查 DNS 和 IPv6 是否绕过了 VPN 隧道";
+"Exposed ports" = "暴露的端口";
+"Which ports this Mac opens to the network, which services should not be exposed, and the firewall state" = "这台 Mac 对网络开放了哪些端口、哪些服务不该暴露, 以及防火墙状态";
 "Wi-Fi channels" = "Wi-Fi 信道";
 "Scan nearby networks, show how crowded your channel is and recommend a quieter one (about 15 s)" = "扫描附近的网络, 显示你的信道有多拥挤, 并推荐更空的信道 (约 15 秒)";
 "Bonjour services" = "Bonjour 服务";
