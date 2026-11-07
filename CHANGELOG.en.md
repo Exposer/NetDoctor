@@ -6,7 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Added
+- Web UI: an **Auto-check** page, opened from the 🔁 sidebar entry or with `a`. It runs Diagnose in the background every 1 / 5 / 15 / 30 / 60 minutes and keeps going while you use other pages (the sidebar shows ●). Each result is stored in History, and a timeline shows Healthy / Unstable / Problem with the verdict; View opens the full output. With **Notify** ticked it sends a desktop notification when the verdict changes (for example from healthy to a DNS problem, or back) and the tab title shows ⚠ while there is a problem. Handy for intermittent network trouble.
+- Web UI: a **Report…** menu in the history panel exports entries as **Markdown** or as a self-contained **HTML** report (colours kept, all content escaped, light / dark aware). If entries are ticked only those are exported, otherwise the current search result.
+
 ### Changed
+- Web UI: HTML escaping of the output pane now also covers `>` (defence in depth); exporting a report from an empty selection now shows a message instead of doing nothing.
 - `netdoctor`: an unknown command now prints "Unknown command: xxx" with the running version (and a hint to `git pull`) before the usage text, and exits with status 2. Added `netdoctor --version` (also `version` and `-v`) as well as `help`, `-h` and `--help`. Previously an unrecognised command silently printed the usage text, which made it impossible to tell a typo from an outdated local copy.
 
 ## [1.1.7] - 2026-11-07

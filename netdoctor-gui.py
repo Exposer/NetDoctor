@@ -79,6 +79,25 @@ ZH = {
     "Failed to start": "启动失败",
     "[exit code %d]": "[退出码 %d]",
     "Quit": "退出",
+    "Auto-check": "自动体检",
+    "Runs Diagnose on a schedule, keeps every result in History and alerts when the verdict changes.": "按计划自动运行“智能诊断”,每次结果存入历史记录,结论变化时提醒。",
+    "Every": "每隔",
+    "minutes": "分钟",
+    "Run now": "立即运行",
+    "Healthy": "正常",
+    "Unstable": "不稳定",
+    "Problem": "有问题",
+    "Auto-check is running": "自动体检运行中",
+    "No runs yet": "还没有运行记录",
+    "View": "查看",
+    "Network verdict: %s": "网络结论: %s",
+    "Open Auto-check": "打开自动体检",
+    "Report…": "报告…",
+    "Markdown (.md)": "Markdown (.md)",
+    "HTML (.html)": "HTML (.html)",
+    "NetDoctor report": "NetDoctor 报告",
+    "Generated": "生成时间",
+    "Duration": "耗时",
     "Diagnose": "智能诊断",
     "Layer-by-layer checks with a verdict and suggested next steps": "逐层检查并给出结论和下一步建议",
     "TCP ping": "TCP 延迟",
@@ -367,6 +386,13 @@ input[type=text]{padding:7px 9px;border:1px solid var(--line);border-radius:7px;
 main.mon>:not(#mon){display:none}main:not(.mon)>#mon{display:none}
 main.wf>:not(#wf){display:none}main:not(.wf)>#wf{display:none}
 main.wl>:not(#wl){display:none}main:not(.wl)>#wl{display:none}
+main.ac>:not(#ac){display:none}main:not(.ac)>#ac{display:none}
+#ac{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}#ac .row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+#ac select,#hrep{padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--fg);font:inherit}
+#hrep{padding:4px 8px;font-size:12px}
+#aclog{flex:1;min-height:0;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.al{display:flex;gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--line);font-size:13px}.al .tm{color:var(--mut);font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:nowrap}.al .tx{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.al button{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;font:inherit;font-size:11px;padding:2px 8px;cursor:pointer}
 #wl{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}#wl .row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 #wl input[type=number]{width:90px;min-width:0}#wl .tbl{flex:1;min-height:0;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
 #wl table{width:100%;border-collapse:collapse}#wl th{position:sticky;top:0;background:var(--card);text-align:left;font-size:11px;color:var(--mut);padding:8px 12px;border-bottom:1px solid var(--line)}
@@ -428,9 +454,14 @@ kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);b
 <label><span data-i="Slow above (ms)">Slow above (ms)</span><input type="number" id="wlslow" value="150" min="1" max="5000"></label>
 <label class="chk"><input type="checkbox" id="wlnote" onchange="wlNotify(this)"><span data-i="Notify">Notify</span></label>
 <span class="fw"><input type="text" id="wladd" placeholder="example.com" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();wlAdd()}"><button class="btn sec" id="wladdbtn" onclick="wlAdd()" data-i="Add">Add</button></span><span id="wlmsg" style="color:var(--mut);font-size:12px"></span></div></div>
-<div class="tbl" id="wltbl"></div></section></main>
+<div class="tbl" id="wltbl"></div></section>
+<section id="ac"><div class="card"><h2>🔁 <span data-i="Auto-check">Auto-check</span></h2><p data-i="Runs Diagnose on a schedule, keeps every result in History and alerts when the verdict changes.">Runs Diagnose on a schedule, keeps every result in History and alerts when the verdict changes.</p>
+<div class="row"><button class="btn" id="acgo" onclick="acToggle()" data-i="Start">Start</button><button class="btn sec" id="acnow" onclick="acTick()" data-i="Run now">Run now</button>
+<label><span data-i="Every">Every</span><span class="fw"><select id="acint" onchange="acInterval(this.value)"><option value="1">1</option><option value="5" selected>5</option><option value="15">15</option><option value="30">30</option><option value="60">60</option></select><span data-i="minutes" style="align-self:center">minutes</span></span></label>
+<label class="chk"><input type="checkbox" id="acnote" onchange="acNotifyChange(this)"><span data-i="Notify">Notify</span></label><span id="acmsg" style="color:var(--mut);font-size:12px"></span></div></div>
+<div id="aclog"></div></section></main>
 <aside id="hist"><header><h3>🕘 <span data-i="History">History</span></h3><button class="btn sec" onclick="clearHist()" data-i="Clear all">Clear all</button><button class="btn sec" onclick="toggleHist(false)" data-i="Close">Close</button></header>
-<div class="hbar"><button class="btn sec" onclick="exportHist()" data-i="Export">Export</button><button class="btn sec" onclick="$('#hfile').click()" data-i="Import">Import</button><button class="btn" id="cmpbtn" onclick="cmpOpen()" data-i="Compare" disabled>Compare</button><input type="file" id="hfile" accept="application/json,.json" style="display:none" onchange="importHist(this)"></div>
+<div class="hbar"><button class="btn sec" onclick="exportHist()" data-i="Export">Export</button><button class="btn sec" onclick="$('#hfile').click()" data-i="Import">Import</button><button class="btn" id="cmpbtn" onclick="cmpOpen()" data-i="Compare" disabled>Compare</button><select id="hrep" onchange="makeReport(this.value);this.value=''"><option value="" data-i="Report…">Report…</option><option value="md" data-i="Markdown (.md)">Markdown (.md)</option><option value="html" data-i="HTML (.html)">HTML (.html)</option></select><input type="file" id="hfile" accept="application/json,.json" style="display:none" onchange="importHist(this)"></div>
 <input type="text" id="hq" oninput="renderHist()"><p class="note" data-i="Stored in this browser only (last 50 runs).">Stored in this browser only (last 50 runs).</p><div id="hlist"></div></aside>
 <div id="cmp" onclick="if(event.target===this)cmpClose()"><div class="box"><h3>⇄ <span data-i="Compare runs">Compare runs</span></h3><div id="cmpmeta"></div>
 <div class="row"><label class="chk"><input type="checkbox" id="cmpchg" checked onchange="cmpRender()"><span data-i="Only changes">Only changes</span></label><label class="chk"><input type="checkbox" id="cmpnum" checked onchange="cmpRender()"><span data-i="Ignore numbers">Ignore numbers</span></label><span id="cmpsum" class="sp"></span><button class="btn sec" onclick="cmpClose()" data-i="Close">Close</button></div><div id="cmpout"></div></div></div>
@@ -449,9 +480,10 @@ const INTRO='Pick a tool on the left and click “Run”. Start with “Quick ch
 CMDS.forEach(c=>{const b=document.createElement('button');b.innerHTML=`<span>${c.icon}</span><span class="nl"></span>`;b.onclick=()=>pick(c.id);b.id='b_'+c.id;$('#list').append(b)});
 {const b=document.createElement('button');b.id='b_mon';b.innerHTML='<span>📈</span><span class="nl"></span>';b.onclick=showMon;$('#list').append(b)}
 {const b=document.createElement('button');b.id='b_wf';b.innerHTML='<span>📶</span><span class="nl"></span>';b.onclick=showWf;$('#list').append(b)}
+{const b=document.createElement('button');b.id='b_ac';b.innerHTML='<span>🔁</span><span class="nl"></span>';b.onclick=showAc;$('#list').append(b)}
 {const b=document.createElement('button');b.id='b_wl';b.innerHTML='<span>📋</span><span class="nl"></span>';b.onclick=showWl;$('#list').append(b)}
 const MAXS=120;let msamples=[],mtimer=null,mbusy=false;
-function leaveViews(){monStop();wfStop();wlStop();const m=document.querySelector('main');m.classList.remove('mon');m.classList.remove('wf');m.classList.remove('wl')}
+function leaveViews(){monStop();wfStop();wlStop();const m=document.querySelector('main');m.classList.remove('mon');m.classList.remove('wf');m.classList.remove('wl');m.classList.remove('ac')}
 function showMon(){leaveViews();const m=document.querySelector('main');m.classList.add('mon');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_mon'));cur=null;drawMon();renderFavs()}
 function monToggle(){if(mtimer){monStop()}else{monStart()}}
 function monStart(){if(mtimer)return;$('#mgo').textContent=t('Stop');mtimer=setInterval(monTick,1000);monTick()}
@@ -508,6 +540,46 @@ function copyMd(){if(!raw||!cur)return;const args=Object.values((()=>{const v={}
 const body=plain().replace(/\s+$/,'');const fence=/`{3,}/.test(body)?'````':'```';
 const md='### '+cur.icon+' '+cur.label+(args?' — `'+args+'`':'')+'\n\n_'+new Date().toISOString().replace('T',' ').slice(0,19)+' · NetDoctor_\n\n'+fence+'text\n'+body+'\n'+fence+'\n';
 navigator.clipboard.writeText(md).then(()=>{$('#st').textContent=t('Copied as Markdown')})}
+/* ---- auto-check: run Diagnose on a schedule (keeps running while you use other pages) ---- */
+let acrun=false,acto=null,acbusy=false,acmin=5,aclog=[],accls=null;
+function showAc(){leaveViews();document.querySelector('main').classList.add('ac');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_ac'));cur=null;renderAc()}
+function acToggle(){acrun?acStop():acStart()}
+function acStart(){if(acrun)return;acrun=true;acBadge();acTick()}
+function acStop(){acrun=false;clearTimeout(acto);acBadge();acUpdateTitle();renderAc()}
+function acBadge(){const n=$('#b_ac .nl');if(n)n.textContent=t('Auto-check')+(acrun?' ●':'')}
+function acInterval(v){acmin=+v||5;if(acrun&&!acbusy){clearTimeout(acto);acto=setTimeout(acTick,acmin*60000)}}
+function acVerdict(out){const lines=stripAnsi(out).split('\n');let k=-1;lines.forEach((l,i)=>{if(/^==\s*(Verdict|结论)\s*==/.test(l.trim()))k=i});
+if(k>=0)for(let i=k+1;i<lines.length;i++){const m=lines[i].match(/^\[(FAIL| OK |WARN)\]\s*(.*)$/);if(m)return{cls:m[1]=='FAIL'?'bad':m[1]=='WARN'?'warn':'ok',text:m[2]}}
+return{cls:'bad',text:'?'}}
+async function acTick(){if(acbusy)return;acbusy=true;clearTimeout(acto);renderAc();const t0=Date.now();let out='',state='ok';
+try{const r=await fetch('/run',{method:'POST',headers:{'X-Token':TOKEN},body:JSON.stringify({cmd:'doctor',values:{},admin:false,lang})});if(!r.ok)state='failed';out=await r.text()}catch(e){state='failed';out=String(e)}
+const v=acVerdict(out);if(v.cls!='ok')state='failed';
+addHist({cmd:'doctor',values:{},admin:false,state,sec:+((Date.now()-t0)/1000).toFixed(1),out});
+aclog.unshift({ts:Date.now(),cls:v.cls,text:v.text,hid:hist.length?hist[0].id:null});aclog=aclog.slice(0,50);
+if(accls!==null&&accls!==v.cls&&$('#acnote').checked&&'Notification' in window&&Notification.permission=='granted'){try{new Notification('NetDoctor',{body:t('Network verdict: %s').replace('%s',v.text)})}catch(e){}}
+accls=v.cls;acbusy=false;acUpdateTitle();renderAc();if(acrun)acto=setTimeout(acTick,acmin*60000)}
+function acUpdateTitle(){if(!wlrun)document.title=(acrun&&accls=='bad'?'⚠ ':'')+BASE_TITLE()}
+async function acNotifyChange(cb){if(!cb.checked)return;if(!('Notification' in window)){cb.checked=false;return}
+if(Notification.permission=='default'){try{await Notification.requestPermission()}catch(e){}}
+if(Notification.permission!='granted'){cb.checked=false;$('#acmsg').textContent=t('Notifications are blocked by the browser')}else $('#acmsg').textContent=''}
+function acView(id){viewHist(id)}
+function renderAc(){const g=$('#acgo');if(!g)return;g.textContent=t(acrun?'Stop':'Start');$('#acnow').disabled=acbusy;
+if(acbusy)$('#acmsg').textContent=t('Running…');else if(acrun)$('#acmsg').textContent=t('Auto-check is running');else if($('#acmsg').textContent==t('Running…')||$('#acmsg').textContent==t('Auto-check is running'))$('#acmsg').textContent='';
+const lab={ok:['up','Healthy'],warn:['slow','Unstable'],bad:['down','Problem']};
+$('#aclog').innerHTML=aclog.length?aclog.map(r=>`<div class="al"><span class="st ${lab[r.cls][0]}">${esc(t(lab[r.cls][1]))}</span><span class="tm">${esc(new Date(r.ts).toLocaleTimeString(lang=='zh'?'zh-CN':'en-US'))}</span><span class="tx" title="${esc(r.text)}">${esc(r.text)}</span>${r.hid?`<button onclick="acView('${r.hid}')">${esc(t('View'))}</button>`:''}</div>`).join(''):`<div class="empty" style="padding:18px;color:var(--mut)">${esc(t('No runs yet'))}</div>`}
+/* ---- history report (Markdown / HTML) ---- */
+function reportRows(){const q=$('#hq').value.trim().toLowerCase();let rows=hist.filter(h=>{if(!q)return true;const c=CMDS.find(c=>c.id==h.cmd),lab=c?c.label:h.cmd;return (t(lab)+' '+lab+' '+Object.values(h.values||{}).join(' ')).toLowerCase().includes(q)});
+if(hcmp.length)rows=hist.filter(h=>hcmp.includes(h.id));return rows.slice().sort((a,b)=>a.ts-b.ts)}
+function makeReport(kind){if(!kind)return;const rows=reportRows();if(!rows.length){$('#st').textContent=t(hist.length?'No matches':'No history yet');return}const loc=lang=='zh'?'zh-CN':'en-US',now=new Date();
+const fmt=ts=>new Date(ts).toLocaleString(loc),sl={ok:'Done',stopped:'Stopped',failed:'Failed'};
+const head=h=>{const c=CMDS.find(c=>c.id==h.cmd);return {title:(c?c.icon+' '+t(c.label):h.cmd),args:Object.values(h.values||{}).filter(Boolean).join(' ')+(h.admin?' 🔒':'')}};
+let body,mime,ext;
+if(kind=='md'){body='# '+t('NetDoctor report')+'\n\n_'+t('Generated')+': '+fmt(now)+'_\n\n'+rows.map((h,i)=>{const x=head(h),o=stripAnsi(h.out).replace(/\s+$/,''),f=/`{3,}/.test(o)?'````':'```';
+return '## '+(i+1)+'. '+x.title+(x.args?' — `'+x.args.replace(/`/g,"'")+'`':'')+'\n\n_'+fmt(h.ts)+' · '+t(sl[h.state]||'Done')+' · '+h.sec+' s_\n\n'+f+'text\n'+o+'\n'+f+'\n'}).join('\n');mime='text/markdown';ext='md'}
+else{const css='body{font:14px -apple-system,"Segoe UI",sans-serif;max-width:920px;margin:32px auto;padding:0 16px;color:#1d1d1f;background:#f5f5f7}@media(prefers-color-scheme:dark){body{color:#f5f5f7;background:#1c1c1e}}h1{font-size:22px}h2{font-size:16px;margin:26px 0 2px}.m{color:#6e6e73;font-size:12px;margin:0 0 8px}pre{background:#14161a;color:#d8dde6;border-radius:10px;padding:12px;overflow:auto;white-space:pre-wrap;word-break:break-all;font:12px/1.5 ui-monospace,Menlo,monospace}.b{font-weight:700}.g{color:#32d74b}.r{color:#ff453a}.y{color:#ffd60a}.d{opacity:.55}code{background:rgba(127,127,127,.18);border-radius:4px;padding:1px 5px}';
+body='<!doctype html><html lang="'+(lang=='zh'?'zh-CN':'en')+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(t('NetDoctor report'))+'</title><style>'+css+'</style></head><body><h1>'+esc(t('NetDoctor report'))+'</h1><p class="m">'+esc(t('Generated'))+': '+esc(fmt(now))+'</p>'+
+rows.map((h,i)=>{const x=head(h);return '<h2>'+(i+1)+'. '+esc(x.title)+(x.args?' — <code>'+esc(x.args)+'</code>':'')+'</h2><p class="m">'+esc(fmt(h.ts))+' · '+esc(t(sl[h.state]||'Done'))+' · '+esc(h.sec)+' s</p><pre>'+ansi(h.out)+'</pre>'}).join('')+'</body></html>';mime='text/html';ext='html'}
+const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type:mime+';charset=utf-8'}));a.download='netdoctor-report-'+now.toISOString().slice(0,10)+'.'+ext;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 window.addEventListener('resize',()=>{const m=document.querySelector('main');if(m.classList.contains('mon'))drawMon();if(m.classList.contains('wf'))drawWf()});
 /* ---- Wi-Fi signal ---- */
 let wsamples=[],wrun=false,wto=null,wmeta={};
@@ -578,7 +650,7 @@ hist.sort((a,b)=>b.ts-a.ts);hist=hist.slice(0,HMAX);saveHist();
 (Array.isArray(d.favorites)?d.favorites:[]).forEach(v=>{if(typeof v=='string'&&v.trim()&&v.length<=300&&!favs.includes(v)&&favs.length<FMAX){favs.push(v);nf++}});saveFavs();
 renderHist();renderFavs();$('#st').textContent=t('Imported %s run(s), %s favorite(s)').replace('%s',nh).replace('%s',nf)}
 catch(e){$('#st').textContent=t('Import failed: invalid file')}}
-function applyLang(){$('#b_mon .nl').textContent=t('Live latency');$('#b_wf .nl').textContent=t('Wi-Fi signal');$('#b_wl .nl').textContent=t('Watchlist');$('#wlgo').textContent=wlrun?t('Stop'):t('Start');if(!wlrun)document.title=t('NetDoctor Network Diagnostics');if(wrun)$('#wgo').textContent=t('Stop');else $('#wgo').textContent=t('Start');if($('#cmp').classList.contains('on'))cmpRender();if(!mtimer)$('#mgo').textContent=t('Start');else $('#mgo').textContent=t('Stop');document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
+function applyLang(){$('#b_mon .nl').textContent=t('Live latency');$('#b_wf .nl').textContent=t('Wi-Fi signal');$('#b_wl .nl').textContent=t('Watchlist');acBadge();renderAc();$('#wlgo').textContent=wlrun?t('Stop'):t('Start');if(!wlrun)document.title=t('NetDoctor Network Diagnostics');if(wrun)$('#wgo').textContent=t('Stop');else $('#wgo').textContent=t('Start');if($('#cmp').classList.contains('on'))cmpRender();if(!mtimer)$('#mgo').textContent=t('Start');else $('#mgo').textContent=t('Stop');document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
 document.querySelectorAll('[data-i]').forEach(e=>e.textContent=t(e.dataset.i));
 CMDS.forEach(c=>{$('#b_'+c.id+' .nl').textContent=t(c.label)});
 $('#lang').textContent='🌐 '+(lang=='zh'?'English':'中文');if(idle)$('#out').textContent=t(INTRO);
@@ -590,7 +662,7 @@ cur.inputs.forEach(i=>{const l=document.createElement('label');l.textContent=t(i
 if(cur.admin===true||cur.admin==='optional'){const l=document.createElement('label');l.className='chk';l.innerHTML=`<input type="checkbox" name="_admin" ${cur.admin===true?'checked disabled':''}>${t('Requires administrator rights')}${cur.admin===true?'':' '+t('(fuller details)')}`;f.append(l);if(keep&&old._admin!==undefined&&cur.admin!==true)l.querySelector('input').checked=old._admin}
 const r=document.createElement('button');r.className='btn';r.id='run';r.textContent=t('Run');r.title=MOD+'+Enter';r.type='submit';f.append(r);
 f.onsubmit=e=>{e.preventDefault();run()};const first=f.querySelector('input[type=text]');renderFavs();first&&!nofocus&&first.focus()}
-function ansi(s){const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;');let open=0,o='';
+function ansi(s){const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');let open=0,o='';
 return esc(s).replace(/\x1b\[(\d+)m/g,(m,c)=>{let r='';if(c=='0'||c=='22'){r='</span>'.repeat(open);open=0;return r}
 const k={1:'b',31:'r',32:'g',33:'y',2:'d'}[c];if(!k)return '';open++;return `<span class="${k}">`})+'</span>'.repeat(open)}
 async function run(){let state='ok';const values={};let admin=false;$('#f').querySelectorAll('input').forEach(i=>{if(i.name=='_admin')admin=i.checked;else values[i.name]=i.value});
@@ -630,7 +702,7 @@ function clearHist(){if(hist.length&&confirm(t('Clear all history?'))){hist=[];h
 const MOD=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
 const SC=[[[MOD+' + Enter'],'Run the current tool'],[['Esc'],'Stop a running command; otherwise leave the input box'],
 [['j','↓'],'Previous / next tool'],[['1'],'Jump to tool 1–9'],[['/'],'Focus the first input'],[['Enter'],'Run (when not typing)'],
-[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['m'],'Open live latency'],[['w'],'Open Wi-Fi signal'],[['f'],'Open Watchlist'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
+[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['m'],'Open live latency'],[['w'],'Open Wi-Fi signal'],[['f'],'Open Watchlist'],[['a'],'Open Auto-check'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
 SC[2][0]=['j / ↓  ·  k / ↑'];SC[3][0]=['1 … 9'];
 function toggleHelp(on){const h=$('#help');const open=on===undefined?!h.classList.contains('on'):on;
 if(open){$('#helph').textContent='⌨ '+t('Keyboard shortcuts');$('#helpt').innerHTML=SC.map(([k,d])=>`<tr><td>${k.map(x=>'<kbd>'+x.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</kbd>').join('')}</td><td>${t(d)}</td></tr>`).join('')}
@@ -657,6 +729,7 @@ else if(k=='s'){if(raw)save()}
 else if(k=='m')showMon();
 else if(k=='w')showWf();
 else if(k=='f')showWl();
+else if(k=='a')showAc();
 else if(k=='h')toggleHist();
 else if(k=='l')toggleLang();
 else if(k=='t')toggleTheme();
