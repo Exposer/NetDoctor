@@ -4,6 +4,14 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),版本号遵循语义化版本。
 
+## [未发布]
+
+### 新增
+- 应用图标:Wi-Fi 信号加听诊器。提供 `assets/icon.svg`、`assets/AppIcon.icns`(含 16–1024 px 全部尺寸)和 PNG;SwiftUI 应用与网页版 `NetDoctor.app` 构建时都会带上图标,网页界面也用它作浏览器标签图标。`assets/make_icns.py` 可不依赖 `iconutil` 把 PNG 打包成 `.icns`。
+- 网页界面:**Watchlist**(监控列表)页,左侧栏 📋 或按 `f` 打开。逐个 ping 收藏的主机,显示状态(正常 / 较慢 / 离线)、当前 / 平均 / 丢包和趋势小图;可设“慢于 N 毫秒”的阈值,可直接在页面里添加或移除主机。
+- 网页界面:掉线提醒。勾选 **Notify** 后,主机连续 3 次无响应时发送桌面通知,恢复时再通知一次;掉线期间浏览器标签标题显示 `⚠ N`。
+- 网页界面:**Copy as Markdown**,把当前结果复制为带标题、参数、时间戳和代码块的 Markdown,方便贴进工单或聊天。
+
 ## [1.1.5] - 2026-11-07
 
 ### 新增

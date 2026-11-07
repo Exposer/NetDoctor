@@ -73,6 +73,24 @@ ZH = {
     "Failed to start": "启动失败",
     "[exit code %d]": "[退出码 %d]",
     "Quit": "退出",
+    "Watchlist": "监控列表",
+    "Pings every favorite and alerts when one goes down.": "逐个 ping 收藏的主机,有主机掉线时提醒。",
+    "Slow above (ms)": "慢于(毫秒)",
+    "Notify": "桌面通知",
+    "Notifications are blocked by the browser": "浏览器已阻止通知",
+    "Trend": "趋势",
+    "Status": "状态",
+    "Up": "正常",
+    "Slow": "较慢",
+    "Down": "离线",
+    "Waiting…": "等待中…",
+    "No favorites yet. Star hosts with ☆ in any tool, or add one here:": "还没有收藏。可在任意工具里点 ☆,或在这里添加:",
+    "Add": "添加",
+    "%s is down": "%s 离线",
+    "%s is back up": "%s 已恢复",
+    "Open Watchlist": "打开监控列表",
+    "Copy as Markdown": "复制为 Markdown",
+    "Copied as Markdown": "已复制为 Markdown",
     "Export": "导出",
     "Import": "导入",
     "Imported %s run(s), %s favorite(s)": "已导入 %s 条记录、%s 个收藏",
@@ -230,6 +248,11 @@ class H(BaseHTTPRequestHandler):
             page = (HTML.replace("__TOKEN__", TOKEN).replace("__CMDS__", json.dumps(COMMANDS, ensure_ascii=False))
                     .replace("__ZH__", json.dumps(ZH, ensure_ascii=False)))
             return self._send(200, page)
+        if self.path.split("?")[0] == "/icon.svg":
+            for cand in (os.path.join(HERE, "assets", "icon.svg"), os.path.join(HERE, "icon.svg")):
+                if os.path.isfile(cand):
+                    with open(cand, "rb") as fh:
+                        return self._send(200, fh.read(), "image/svg+xml")
         self._send(404, "not found")
 
     def do_POST(self):
@@ -303,7 +326,7 @@ class H(BaseHTTPRequestHandler):
                 p.kill()
 
 HTML = r"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>NetDoctor Network Diagnostics</title><style>
+<title>NetDoctor Network Diagnostics</title><link rel="icon" type="image/svg+xml" href="/icon.svg"><style>
 :root{--bg:#f5f5f7;--card:#fff;--fg:#1d1d1f;--mut:#6e6e73;--line:#e0e0e5;--acc:#0071e3;--term:#14161a;--termfg:#d8dde6}
 :root{color-scheme:light}
 @media(prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;--bg:#1c1c1e;--card:#2c2c2e;--fg:#f5f5f7;--mut:#98989d;--line:#3a3a3c;--acc:#0a84ff;--term:#0b0c0e}}
@@ -324,6 +347,14 @@ input[type=text]{padding:7px 9px;border:1px solid var(--line);border-radius:7px;
 .bar{display:flex;gap:8px;align-items:center}.sp{flex:1}
 main.mon>:not(#mon){display:none}main:not(.mon)>#mon{display:none}
 main.wf>:not(#wf){display:none}main:not(.wf)>#wf{display:none}
+main.wl>:not(#wl){display:none}main:not(.wl)>#wl{display:none}
+#wl{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}#wl .row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+#wl input[type=number]{width:90px;min-width:0}#wl .tbl{flex:1;min-height:0;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+#wl table{width:100%;border-collapse:collapse}#wl th{position:sticky;top:0;background:var(--card);text-align:left;font-size:11px;color:var(--mut);padding:8px 12px;border-bottom:1px solid var(--line)}
+#wl td{padding:8px 12px;border-bottom:1px solid var(--line);font-size:13px}#wl td.h{font-weight:600;word-break:break-all}#wl td.n{font-family:ui-monospace,Menlo,monospace}
+#wl .rm{border:0;background:none;color:var(--mut);cursor:pointer;font-size:15px}#wl .rm:hover{color:#d1342a}
+.st{font-size:11px;border-radius:99px;padding:1px 9px;color:#fff;white-space:nowrap}.st.up{background:#2fa84f}.st.slow{background:#c98a00}.st.down{background:#d1342a}.st.wait{background:#8b93a1}
+#wl svg{display:block}#wl .empty{padding:18px;color:var(--mut)}
 #wf{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}#wf .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
 #wf .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
 #wf .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px}#wf .stat small{display:block;color:var(--mut);font-size:11px}#wf .stat b{font:600 16px ui-monospace,Menlo,monospace}
@@ -361,7 +392,7 @@ kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);b
 <nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="toggleHist()" id="histbtn" style="margin-top:14px;color:var(--mut)">🕘 <span data-i="History">History</span></button><button onclick="toggleHelp()" id="helpbtn" style="color:var(--mut)">⌨ <span data-i="Shortcuts">Shortcuts</span></button><button onclick="toggleTheme()" id="theme" style="color:var(--mut)"></button><button onclick="toggleLang()" id="lang" style="color:var(--mut)"></button><button onclick="quit()" style="color:var(--mut)">⏻ <span data-i="Quit">Quit</span></button></nav>
 <main><div class="card"><h2 id="t"></h2><p id="d"></p><form id="f"></form><div id="favs" class="chips"></div></div>
 <datalist id="favlist"></datalist>
-<div class="bar"><span class="sp" id="st" style="color:var(--mut)"></span><button class="btn sec" onclick="copy()" data-i="Copy">Copy</button><button class="btn sec" onclick="save()" data-i="Save">Save</button><button class="btn sec" id="stop" onclick="stop()" data-i="Stop" disabled>Stop</button></div>
+<div class="bar"><span class="sp" id="st" style="color:var(--mut)"></span><button class="btn sec" onclick="copy()" data-i="Copy">Copy</button><button class="btn sec" id="mdbtn" onclick="copyMd()" data-i="Copy as Markdown">Copy as Markdown</button><button class="btn sec" onclick="save()" data-i="Save">Save</button><button class="btn sec" id="stop" onclick="stop()" data-i="Stop" disabled>Stop</button></div>
 <pre id="out"></pre>
 <section id="mon"><div class="card"><h2>📈 <span data-i="Live latency">Live latency</span></h2><p data-i="Pings once a second; red lines mark packet loss.">Pings once a second; red lines mark packet loss.</p>
 <div class="row"><label><span data-i="Target">Target</span><span class="fw"><input type="text" id="mhost" value="1.1.1.1" list="mpre" spellcheck="false" oninput="renderFavs()"><button type="button" class="star" id="mstar" onclick="toggleFav($('#mhost').value)">☆</button></span><datalist id="mpre"></datalist></label>
@@ -372,7 +403,13 @@ kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);b
 <section id="wf"><div class="card"><h2>📶 <span data-i="Wi-Fi signal">Wi-Fi signal</span></h2><p data-i="Reads the link every few seconds (macOS only). Rule of thumb: > −60 dBm good, −70 fair, < −75 poor.">Reads the link every few seconds (macOS only). Rule of thumb: > −60 dBm good, −70 fair, < −75 poor.</p>
 <div class="row"><button class="btn" id="wgo" onclick="wfToggle()" data-i="Start">Start</button><button class="btn sec" onclick="wfClear()" data-i="Clear">Clear</button><span id="wmsg" style="color:var(--mut);font-size:12px"></span></div></div>
 <div class="stats"><div class="stat"><small data-i="Signal">Signal</small><b id="w_rssi">—</b></div><div class="stat"><small data-i="Noise">Noise</small><b id="w_noise">—</b></div><div class="stat"><small data-i="SNR">SNR</small><b id="w_snr">—</b></div><div class="stat"><small data-i="Channel">Channel</small><b id="w_ch">—</b></div><div class="stat"><small data-i="Rate">Rate</small><b id="w_rate">—</b></div></div>
-<canvas id="wchart"></canvas></section></main>
+<canvas id="wchart"></canvas></section>
+<section id="wl"><div class="card"><h2>📋 <span data-i="Watchlist">Watchlist</span></h2><p data-i="Pings every favorite and alerts when one goes down.">Pings every favorite and alerts when one goes down.</p>
+<div class="row"><button class="btn" id="wlgo" onclick="wlToggle()" data-i="Start">Start</button>
+<label><span data-i="Slow above (ms)">Slow above (ms)</span><input type="number" id="wlslow" value="150" min="1" max="5000"></label>
+<label class="chk"><input type="checkbox" id="wlnote" onchange="wlNotify(this)"><span data-i="Notify">Notify</span></label>
+<span class="fw"><input type="text" id="wladd" placeholder="example.com" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();wlAdd()}"><button class="btn sec" id="wladdbtn" onclick="wlAdd()" data-i="Add">Add</button></span><span id="wlmsg" style="color:var(--mut);font-size:12px"></span></div></div>
+<div class="tbl" id="wltbl"></div></section></main>
 <aside id="hist"><header><h3>🕘 <span data-i="History">History</span></h3><button class="btn sec" onclick="clearHist()" data-i="Clear all">Clear all</button><button class="btn sec" onclick="toggleHist(false)" data-i="Close">Close</button></header>
 <div class="hbar"><button class="btn sec" onclick="exportHist()" data-i="Export">Export</button><button class="btn sec" onclick="$('#hfile').click()" data-i="Import">Import</button><button class="btn" id="cmpbtn" onclick="cmpOpen()" data-i="Compare" disabled>Compare</button><input type="file" id="hfile" accept="application/json,.json" style="display:none" onchange="importHist(this)"></div>
 <input type="text" id="hq" oninput="renderHist()"><p class="note" data-i="Stored in this browser only (last 50 runs).">Stored in this browser only (last 50 runs).</p><div id="hlist"></div></aside>
@@ -393,8 +430,9 @@ const INTRO='Pick a tool on the left and click “Run”. Start with “Quick ch
 CMDS.forEach(c=>{const b=document.createElement('button');b.innerHTML=`<span>${c.icon}</span><span class="nl"></span>`;b.onclick=()=>pick(c.id);b.id='b_'+c.id;$('#list').append(b)});
 {const b=document.createElement('button');b.id='b_mon';b.innerHTML='<span>📈</span><span class="nl"></span>';b.onclick=showMon;$('#list').append(b)}
 {const b=document.createElement('button');b.id='b_wf';b.innerHTML='<span>📶</span><span class="nl"></span>';b.onclick=showWf;$('#list').append(b)}
+{const b=document.createElement('button');b.id='b_wl';b.innerHTML='<span>📋</span><span class="nl"></span>';b.onclick=showWl;$('#list').append(b)}
 const MAXS=120;let msamples=[],mtimer=null,mbusy=false;
-function leaveViews(){monStop();wfStop();const m=document.querySelector('main');m.classList.remove('mon');m.classList.remove('wf')}
+function leaveViews(){monStop();wfStop();wlStop();const m=document.querySelector('main');m.classList.remove('mon');m.classList.remove('wf');m.classList.remove('wl')}
 function showMon(){leaveViews();const m=document.querySelector('main');m.classList.add('mon');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_mon'));cur=null;drawMon();renderFavs()}
 function monToggle(){if(mtimer){monStop()}else{monStart()}}
 function monStart(){if(mtimer)return;$('#mgo').textContent=t('Stop');mtimer=setInterval(monTick,1000);monTick()}
@@ -418,6 +456,39 @@ const X=i=>L+pw-(n-1-i)*pw/(MAXS-1);
 g.strokeStyle='rgba(209,52,42,.7)';msamples.forEach((v,i)=>{if(v===null){g.beginPath();g.moveTo(X(i),T);g.lineTo(X(i),T+ph);g.stroke()}});
 g.strokeStyle=acc;g.lineWidth=2;g.lineJoin='round';g.beginPath();let pen=false;
 msamples.forEach((v,i)=>{if(v===null){pen=false;return}const y=T+ph-ph*v/top;if(pen)g.lineTo(X(i),y);else{g.moveTo(X(i),y);pen=true}});g.stroke()}
+/* ---- watchlist: ping every favorite, alert on down/up transitions ---- */
+const WLN=60;let wlrun=false,wlto=null,wlst={},wlLoop=0;const BASE_TITLE=()=>t('NetDoctor Network Diagnostics');
+function showWl(){leaveViews();document.querySelector('main').classList.add('wl');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_wl'));cur=null;renderWl()}
+function wlToggle(){wlrun?wlStop():wlStart()}
+function wlStart(){if(wlrun||!favs.length)return;wlrun=true;wlst={};$('#wlgo').textContent=t('Stop');wlTick(++wlLoop)}
+function wlStop(){wlrun=false;wlLoop++;clearTimeout(wlto);const b=$('#wlgo');if(b)b.textContent=t('Start');document.title=BASE_TITLE()}
+function wlStatus(h){const x=wlst[h];if(!x||!x.s.length)return 'wait';const s=x.s,n=s.length;if(n>=3&&s[n-1]===null&&s[n-2]===null&&s[n-3]===null)return 'down';
+const last=s[n-1];if(last===null)return x.prev=='down'?'down':'up';return last>(+$('#wlslow').value||150)?'slow':'up'}
+function wlNote(msg){if($('#wlnote').checked&&'Notification' in window&&Notification.permission=='granted'){try{new Notification('NetDoctor',{body:msg})}catch(e){}}}
+async function wlOne(h){let v=null;try{const r=await fetch('/ping',{method:'POST',headers:{'X-Token':TOKEN},body:JSON.stringify({host:h})});if(r.ok)v=(await r.json()).ms}catch(e){}return v}
+async function wlTick(id){if(!wlrun||id!=wlLoop)return;const hosts=[...favs];
+for(let i=0;i<hosts.length;i+=6){const chunk=hosts.slice(i,i+6);const res=await Promise.all(chunk.map(wlOne));if(!wlrun||id!=wlLoop)return;
+chunk.forEach((h,k)=>{const x=wlst[h]||(wlst[h]={s:[],prev:'wait'});x.s.push(res[k]);if(x.s.length>WLN)x.s.shift();const st=wlStatus(h);
+if(st=='down'&&x.prev!='down')wlNote(t('%s is down').replace('%s',h));else if(x.prev=='down'&&st!='down')wlNote(t('%s is back up').replace('%s',h));x.prev=st})}
+const down=hosts.filter(h=>wlst[h]&&wlst[h].prev=='down').length;document.title=(down?'⚠ '+down+' · ':'')+BASE_TITLE();renderWl();wlto=setTimeout(()=>wlTick(id),1000)}
+async function wlNotify(cb){if(!cb.checked)return;if(!('Notification' in window)){cb.checked=false;return}
+if(Notification.permission=='default'){try{await Notification.requestPermission()}catch(e){}}
+if(Notification.permission!='granted'){cb.checked=false;$('#wlmsg').textContent=t('Notifications are blocked by the browser')}else $('#wlmsg').textContent=''}
+function spark(s){const v=s.filter(x=>x!==null);if(!v.length)return '';const W=110,H=22,mx=Math.max(...v,10),n=s.length;let d='',pen=false;
+s.forEach((x,i)=>{if(x===null){pen=false;return}const px=(i/(WLN-1))*W+(W-(n-1)/(WLN-1)*W),py=H-2-(H-4)*x/mx;d+=(pen?'L':'M')+px.toFixed(1)+' '+py.toFixed(1)+' ';pen=true});
+const lost=s.map((x,i)=>x===null?'<line x1="'+((i/(WLN-1))*W+(W-(n-1)/(WLN-1)*W)).toFixed(1)+'" x2="'+((i/(WLN-1))*W+(W-(n-1)/(WLN-1)*W)).toFixed(1)+'" y1="2" y2="'+(H-2)+'" stroke="#d1342a" opacity=".6"/>':'').join('');
+return '<svg width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'">'+lost+'<path d="'+d+'" fill="none" stroke="var(--acc)" stroke-width="1.6" stroke-linejoin="round"/></svg>'}
+function renderWl(){const box=$('#wltbl');if(!favs.length){box.innerHTML='<div class="empty">'+esc(t('No favorites yet. Star hosts with ☆ in any tool, or add one here:'))+'</div>';return}
+const rows=favs.map((h,i)=>{const x=wlst[h],st=wlStatus(h),v=x?x.s.filter(a=>a!==null):[],n=x?x.s.length:0,last=x&&n?x.s[n-1]:undefined;
+const avg=v.length?(v.reduce((a,b)=>a+b,0)/v.length).toFixed(0)+' ms':'—',loss=n?((n-v.length)/n*100).toFixed(0)+'%':'—';
+return `<tr><td class="h">${esc(h)}</td><td><span class="st ${st}">${esc(t({up:'Up',slow:'Slow',down:'Down',wait:'Waiting…'}[st]))}</span></td><td class="n">${last===undefined?'—':last===null?esc(t('Loss')):last.toFixed(0)+' ms'}</td><td class="n">${avg}</td><td class="n">${loss}</td><td>${x?spark(x.s):''}</td><td><button class="rm" title="${esc(t('Remove from favorites'))}" onclick="rmFav(${i})">✕</button></td></tr>`}).join('');
+box.innerHTML='<table><thead><tr><th>'+esc(t('Host'))+'</th><th>'+esc(t('Status'))+'</th><th>'+esc(t('Now'))+'</th><th>'+esc(t('Average'))+'</th><th>'+esc(t('Loss'))+'</th><th>'+esc(t('Trend'))+'</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>'}
+function wlAdd(){const i=$('#wladd'),v=i.value.trim();if(!v)return;if(!/^[A-Za-z0-9._:\/?&=%@~+,\[\]-]{1,253}$/.test(v)||v.startsWith('-'))return;if(!favs.includes(v))toggleFav(v);i.value='';i.focus()}
+/* ---- copy a result as Markdown ---- */
+function copyMd(){if(!raw||!cur)return;const args=Object.values((()=>{const v={};document.querySelectorAll('#f input[type=text]').forEach(i=>{if(i.value)v[i.name]=i.value});return v})()).join(' ');
+const body=plain().replace(/\s+$/,'');const fence=/`{3,}/.test(body)?'````':'```';
+const md='### '+cur.icon+' '+cur.label+(args?' — `'+args+'`':'')+'\n\n_'+new Date().toISOString().replace('T',' ').slice(0,19)+' · NetDoctor_\n\n'+fence+'text\n'+body+'\n'+fence+'\n';
+navigator.clipboard.writeText(md).then(()=>{$('#st').textContent=t('Copied as Markdown')})}
 window.addEventListener('resize',()=>{const m=document.querySelector('main');if(m.classList.contains('mon'))drawMon();if(m.classList.contains('wf'))drawWf()});
 /* ---- Wi-Fi signal ---- */
 let wsamples=[],wrun=false,wto=null,wmeta={};
@@ -444,7 +515,7 @@ path('n',mut,[5,4]);path('r',acc,[])}
 const FKEY='nd_favs',FMAX=30,FAVN=['host','domain','url'];let favs=[];
 try{favs=JSON.parse(localStorage.getItem(FKEY)||'[]').filter(x=>typeof x=='string'&&x.length<=300)}catch(e){}
 function saveFavs(){try{localStorage.setItem(FKEY,JSON.stringify(favs))}catch(e){}}
-function favTarget(){const m=document.querySelector('main');if(m.classList.contains('mon'))return $('#mhost');if(m.classList.contains('wf'))return null;return document.querySelector(FAVN.map(n=>'#f input[name='+n+']').join(','))}
+function favTarget(){const m=document.querySelector('main');if(m.classList.contains('mon'))return $('#mhost');if(m.classList.contains('wf')||m.classList.contains('wl'))return null;return document.querySelector(FAVN.map(n=>'#f input[name='+n+']').join(','))}
 function toggleFav(v){v=(v||'').trim();if(!v)return;const i=favs.indexOf(v);if(i>=0)favs.splice(i,1);else{favs.unshift(v);favs=favs.slice(0,FMAX)}saveFavs();renderFavs()}
 function fillFav(i){const el=favTarget(),v=favs[i];if(!el||v===undefined)return;let x=v;
 if(el.name=='url'&&!/^https?:\/\//.test(x))x='https://'+x;else if(el.name&&el.name!='url'&&/^https?:\/\//.test(x))x=x.replace(/^https?:\/\//,'').split(/[\/?#]/)[0];
@@ -454,7 +525,7 @@ function renderFavs(){const html=favs.length?'<small>★ '+esc(t('Favorites'))+'
 const m=document.querySelector('main'),mon=m.classList.contains('mon');$('#favs').innerHTML=mon||!document.querySelector('#f input[name=host],#f input[name=domain],#f input[name=url]')?'':html;$('#mfavs').innerHTML=mon?html:'';
 $('#favlist').innerHTML=favs.map(v=>`<option value="${esc(v)}">`).join('');$('#mpre').innerHTML=[...favs,'1.1.1.1','8.8.8.8','223.5.5.5','114.114.114.114'].filter((v,i,a)=>a.indexOf(v)==i).map(v=>`<option value="${esc(v)}">`).join('');
 document.querySelectorAll('#f .star').forEach(b=>{const on=favs.includes(b.previousSibling.value.trim());b.classList.toggle('on',on);b.textContent=on?'★':'☆';b.title=t(on?'Remove from favorites':'Add to favorites')});
-const ms=$('#mstar'),mon2=favs.includes($('#mhost').value.trim());ms.classList.toggle('on',mon2);ms.textContent=mon2?'★':'☆';ms.title=t(mon2?'Remove from favorites':'Add to favorites')}
+const ms=$('#mstar'),mon2=favs.includes($('#mhost').value.trim());ms.classList.toggle('on',mon2);ms.textContent=mon2?'★':'☆';ms.title=t(mon2?'Remove from favorites':'Add to favorites');if(document.querySelector('main').classList.contains('wl'))renderWl()}
 /* ---- compare two runs ---- */
 let hcmp=[];
 function cmpToggle(id,on){hcmp=hcmp.filter(x=>x!=id);if(on)hcmp.push(id);if(hcmp.length>2)hcmp.shift();renderHist()}
@@ -488,11 +559,11 @@ hist.sort((a,b)=>b.ts-a.ts);hist=hist.slice(0,HMAX);saveHist();
 (Array.isArray(d.favorites)?d.favorites:[]).forEach(v=>{if(typeof v=='string'&&v.trim()&&v.length<=300&&!favs.includes(v)&&favs.length<FMAX){favs.push(v);nf++}});saveFavs();
 renderHist();renderFavs();$('#st').textContent=t('Imported %s run(s), %s favorite(s)').replace('%s',nh).replace('%s',nf)}
 catch(e){$('#st').textContent=t('Import failed: invalid file')}}
-function applyLang(){$('#b_mon .nl').textContent=t('Live latency');$('#b_wf .nl').textContent=t('Wi-Fi signal');if(wrun)$('#wgo').textContent=t('Stop');else $('#wgo').textContent=t('Start');if($('#cmp').classList.contains('on'))cmpRender();if(!mtimer)$('#mgo').textContent=t('Start');else $('#mgo').textContent=t('Stop');document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
+function applyLang(){$('#b_mon .nl').textContent=t('Live latency');$('#b_wf .nl').textContent=t('Wi-Fi signal');$('#b_wl .nl').textContent=t('Watchlist');$('#wlgo').textContent=wlrun?t('Stop'):t('Start');if(!wlrun)document.title=t('NetDoctor Network Diagnostics');if(wrun)$('#wgo').textContent=t('Stop');else $('#wgo').textContent=t('Start');if($('#cmp').classList.contains('on'))cmpRender();if(!mtimer)$('#mgo').textContent=t('Start');else $('#mgo').textContent=t('Stop');document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
 document.querySelectorAll('[data-i]').forEach(e=>e.textContent=t(e.dataset.i));
 CMDS.forEach(c=>{$('#b_'+c.id+' .nl').textContent=t(c.label)});
 $('#lang').textContent='🌐 '+(lang=='zh'?'English':'中文');if(idle)$('#out').textContent=t(INTRO);
-applyTheme();renderFavs();if($('#hist').classList.contains('on'))renderHist();if(document.querySelector('main').classList.contains('wf'))drawWf();$('#stop').title='Esc';$('#histbtn').title='h';$('#lang').title='l';$('#theme').title='t';$('#helpbtn').title='?';if(cur)pick(cur.id,true,true)}
+applyTheme();renderFavs();if($('#hist').classList.contains('on'))renderHist();if(document.querySelector('main').classList.contains('wf'))drawWf();if(document.querySelector('main').classList.contains('wl'))renderWl();$('#stop').title='Esc';$('#histbtn').title='h';$('#lang').title='l';$('#theme').title='t';$('#helpbtn').title='?';if(cur)pick(cur.id,true,true)}
 function toggleLang(){lang=lang=='zh'?'en':'zh';try{localStorage.setItem('nd_lang',lang)}catch(e){}applyLang()}
 function pick(id,keep,nofocus){leaveViews();const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
 $('#t').textContent=cur.icon+' '+t(cur.label);$('#d').textContent=t(cur.desc);const f=$('#f');f.innerHTML='';
@@ -540,7 +611,7 @@ function clearHist(){if(hist.length&&confirm(t('Clear all history?'))){hist=[];h
 const MOD=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
 const SC=[[[MOD+' + Enter'],'Run the current tool'],[['Esc'],'Stop a running command; otherwise leave the input box'],
 [['j','↓'],'Previous / next tool'],[['1'],'Jump to tool 1–9'],[['/'],'Focus the first input'],[['Enter'],'Run (when not typing)'],
-[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['m'],'Open live latency'],[['w'],'Open Wi-Fi signal'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
+[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['m'],'Open live latency'],[['w'],'Open Wi-Fi signal'],[['f'],'Open Watchlist'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
 SC[2][0]=['j / ↓  ·  k / ↑'];SC[3][0]=['1 … 9'];
 function toggleHelp(on){const h=$('#help');const open=on===undefined?!h.classList.contains('on'):on;
 if(open){$('#helph').textContent='⌨ '+t('Keyboard shortcuts');$('#helpt').innerHTML=SC.map(([k,d])=>`<tr><td>${k.map(x=>'<kbd>'+x.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</kbd>').join('')}</td><td>${t(d)}</td></tr>`).join('')}
@@ -566,6 +637,7 @@ else if(k=='c'){if(raw)copy()}
 else if(k=='s'){if(raw)save()}
 else if(k=='m')showMon();
 else if(k=='w')showWf();
+else if(k=='f')showWl();
 else if(k=='h')toggleHist();
 else if(k=='l')toggleLang();
 else if(k=='t')toggleTheme();
