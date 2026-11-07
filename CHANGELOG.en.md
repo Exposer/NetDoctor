@@ -4,7 +4,7 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.6] - 2026-11-07
 
 ### Added
 - App icon: a Wi-Fi signal with a heartbeat line (a temporary design; the "Wi-Fi + stethoscope with heartbeat" version is kept in `assets/alt/`). Ships as `assets/icon.svg`, `assets/AppIcon.icns` (all sizes from 16 to 1024 px) and PNGs. Both the SwiftUI app and the web-UI `NetDoctor.app` include it when built, and the web UI uses it as its browser-tab icon. `assets/make_icns.py` packs PNGs into an `.icns` without needing `iconutil`.

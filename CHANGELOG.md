@@ -4,7 +4,7 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),版本号遵循语义化版本。
 
-## [未发布]
+## [1.1.6] - 2026-11-07
 
 ### 新增
 - 应用图标:Wi-Fi 信号加心跳线(临时方案;“Wi-Fi + 带心跳线的听诊器”版本保存在 `assets/alt/`)。提供 `assets/icon.svg`、`assets/AppIcon.icns`(含 16–1024 px 全部尺寸)和 PNG;SwiftUI 应用与网页版 `NetDoctor.app` 构建时都会带上图标,网页界面也用它作浏览器标签图标。`assets/make_icns.py` 可不依赖 `iconutil` 把 PNG 打包成 `.icns`。
