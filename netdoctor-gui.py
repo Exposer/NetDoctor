@@ -33,7 +33,7 @@ COMMANDS = [
  {"id":"conns","label":"Connections","icon":"🔌","desc":"Listening ports and connections by process","inputs":[],"admin":True},
  {"id":"proxy","label":"Proxy / VPN","icon":"🛡️","desc":"System proxy, environment variables, VPN and utun","inputs":[]},
  {"id":"fixdns","label":"Flush DNS","icon":"🧹","desc":"Clear the DNS cache and restart mDNSResponder","inputs":[],"admin":True},
- {"id":"report","label":"Export report","icon":"📄","desc":"Save a combined report to the Desktop","inputs":[]},
+ {"id":"report","label":"Export report","icon":"📄","desc":"Save a combined report to the Desktop","inputs":[{"name":"redact","label":"Hide personal info (public IP, MAC, Wi-Fi name, host name)","flag":"redact"}]},
  {"id":"tools","label":"Tool check","icon":"🧰","desc":"Which system and third-party tools are installed","inputs":[]},
 ]
 BY_ID = {c["id"]: c for c in COMMANDS}
@@ -119,6 +119,7 @@ ZH = {
     "TCP ping": "TCP 延迟",
     "TCP connect latency to a port — for when ping is blocked": "测量到某个端口的 TCP 连接延迟,适用于 ping 被屏蔽时",
     "IPv6 check": "IPv6 检测",
+    "Hide personal info (public IP, MAC, Wi-Fi name, host name)": "隐藏个人信息(公网 IP、MAC、Wi-Fi 名称、主机名)",
     "DHCP / IP address": "DHCP / IP 地址",
     "Check the DHCP lease and spot a self-assigned 169.254 address (DHCP failed)": "查看 DHCP 租约, 识别 169.254 自分配地址 (DHCP 失败)",
     "Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path": "对比 IPv4 / IPv6 连通性,发现异常的 IPv6 链路",
@@ -766,14 +767,14 @@ function pick(id,keep,nofocus){leaveViews();const busy=!!($('#run')&&$('#run').d
 if(!keep&&!busy&&(!cur||cur.id!=id)){raw='';idle=true;$('#out').textContent=t(INTRO);$('#st').textContent=''}
 const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
 $('#t').textContent=cur.icon+' '+t(cur.label);$('#d').textContent=t(cur.desc);const f=$('#f');f.innerHTML='';
-cur.inputs.forEach(i=>{const l=document.createElement('label');l.textContent=t(i.label)+(i.req?' *':'');const x=document.createElement('input');x.type='text';x.name=i.name;x.placeholder=t(i.ph||'');x.value=(keep&&old[i.name]!==undefined)?old[i.name]:(i.def||'');if(FAVN.includes(i.name)){x.setAttribute('list','favlist');x.setAttribute('spellcheck','false');const star=document.createElement('button');star.type='button';star.className='star';star.onclick=()=>toggleFav(x.value);x.addEventListener('input',renderFavs);const w=document.createElement('span');w.className='fw';w.append(x,star);l.append(w)}else l.append(x);f.append(l)});
+cur.inputs.forEach(i=>{if(i.flag){const fl=document.createElement('label');fl.className='chk';const fx=document.createElement('input');fx.type='checkbox';fx.name=i.name;fx.dataset.flag=i.flag;fx.checked=(keep&&old[i.name]!==undefined)?!!old[i.name]:false;fl.append(fx,document.createTextNode(t(i.label)));f.append(fl);return}const l=document.createElement('label');l.textContent=t(i.label)+(i.req?' *':'');const x=document.createElement('input');x.type='text';x.name=i.name;x.placeholder=t(i.ph||'');x.value=(keep&&old[i.name]!==undefined)?old[i.name]:(i.def||'');if(FAVN.includes(i.name)){x.setAttribute('list','favlist');x.setAttribute('spellcheck','false');const star=document.createElement('button');star.type='button';star.className='star';star.onclick=()=>toggleFav(x.value);x.addEventListener('input',renderFavs);const w=document.createElement('span');w.className='fw';w.append(x,star);l.append(w)}else l.append(x);f.append(l)});
 if(cur.admin===true||cur.admin==='optional'){const l=document.createElement('label');l.className='chk';l.innerHTML=`<input type="checkbox" name="_admin" ${cur.admin===true?'checked disabled':''}>${t('Requires administrator rights')}${cur.admin===true?'':' '+t('(fuller details)')}`;f.append(l);if(keep&&old._admin!==undefined&&cur.admin!==true)l.querySelector('input').checked=old._admin}
 const r=document.createElement('button');r.className='btn';r.id='run';r.textContent=t('Run');r.title=MOD+'+Enter';r.type='submit';f.append(r);
 f.onsubmit=e=>{e.preventDefault();run()};const first=f.querySelector('input[type=text]');renderFavs();first&&!nofocus&&first.focus()}
 function ansi(s){const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');let open=0,o='';
 return esc(s).replace(/\x1b\[(\d+)m/g,(m,c)=>{let r='';if(c=='0'||c=='22'){r='</span>'.repeat(open);open=0;return r}
 const k={1:'b',31:'r',32:'g',33:'y',2:'d'}[c];if(!k)return '';open++;return `<span class="${k}">`})+'</span>'.repeat(open)}
-async function run(){let state='ok';const values={};let admin=false;$('#f').querySelectorAll('input').forEach(i=>{if(i.name=='_admin')admin=i.checked;else values[i.name]=i.value});
+async function run(){let state='ok';const values={};let admin=false;$('#f').querySelectorAll('input').forEach(i=>{if(i.name=='_admin')admin=i.checked;else values[i.name]=i.type=='checkbox'?(i.checked?i.dataset.flag:''):i.value});
 ctl=new AbortController();raw='';idle=false;$('#out').textContent='';$('#run').disabled=true;$('#stop').disabled=false;$('#st').textContent=t('Running…');const t0=Date.now();
 try{const r=await fetch('/run',{method:'POST',headers:{'X-Token':TOKEN},body:JSON.stringify({cmd:cur.id,values,admin,lang}),signal:ctl.signal});if(!r.ok)state='failed';
 const rd=r.body.getReader(),dc=new TextDecoder();for(;;){const {done,value}=await rd.read();if(done)break;raw+=dc.decode(value,{stream:true});$('#out').innerHTML=ansi(raw);$('#out').scrollTop=1e9}
@@ -801,7 +802,7 @@ const lbl={ok:'Done',stopped:'Stopped',failed:'Failed'}[h.state]||'Done';
 return `<div class="hi${h.id==hsel?' sel':''}" onclick="viewHist('${h.id}')"><input type="checkbox" class="hc" title="${esc(t('Tick two runs to compare'))}" ${hcmp.includes(h.id)?'checked':''} onclick="event.stopPropagation();cmpToggle('${h.id}',this.checked)"><span>${c.icon}</span><div class="m"><div class="n">${esc(t(c.label))}<span class="bd ${h.state}">${esc(t(lbl))}</span></div><div class="a">${esc(args)||'&nbsp;'}</div><div class="w">${esc(when)} · ${h.sec}s</div></div><div class="x"><button onclick="event.stopPropagation();rerunHist('${h.id}')">${esc(t('Re-run'))}</button><button onclick="event.stopPropagation();delHist('${h.id}')">${esc(t('Delete'))}</button></div></div>`}).join(''):`<p style="color:var(--mut);padding:8px">${esc(t(hist.length?'No matches':'No history yet'))}</p>`}
 function toggleHist(on){const h=$('#hist');const open=on===undefined?!h.classList.contains('on'):on;h.classList.toggle('on',open);if(open){renderHist()}}
 function viewHist(id){const h=hist.find(x=>x.id==id);if(!h)return;hsel=id;pick(h.cmd,false,true);
-document.querySelectorAll('#f input').forEach(i=>{if(i.name=='_admin'){if(!i.disabled)i.checked=!!h.admin}else if(h.values&&h.values[i.name]!==undefined)i.value=h.values[i.name]});
+document.querySelectorAll('#f input').forEach(i=>{if(i.name=='_admin'){if(!i.disabled)i.checked=!!h.admin}else if(h.values&&h.values[i.name]!==undefined){if(i.type=='checkbox')i.checked=!!h.values[i.name];else i.value=h.values[i.name]}});
 raw=h.out;idle=false;$('#out').innerHTML=ansi(raw);$('#out').scrollTop=0;
 $('#st').textContent=t('Viewing history')+': '+new Date(h.ts).toLocaleString(lang=='zh'?'zh-CN':'en-US');renderHist()}
 function rerunHist(id){viewHist(id);if(!$('#run').disabled)run()}

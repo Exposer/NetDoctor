@@ -50,7 +50,7 @@ netdoctor $VERSION - macOS 网络诊断
   proxy                 系统代理 / 环境变量代理 / VPN 状态
   capture [过滤器]      tcpdump 抓包到 ~/Desktop (需 sudo)
   fixdns                刷新 DNS 缓存 (需 sudo)
-  report                把 quick+wifi+dns+proxy 输出保存到文件
+  report [redact]       把诊断、概览、DHCP、Wi-Fi、DNS、IPv6、代理等保存到文件; redact 自动隐藏 IP / MAC / Wi-Fi 名等个人信息
   tools                 检查第三方工具是否已安装
 USAGE
   else cat <<USAGE
@@ -80,7 +80,7 @@ Usage: netdoctor <command> [args]
   proxy                 system proxy / env-var proxy / VPN status
   capture [filter]      tcpdump capture to ~/Desktop (needs sudo)
   fixdns                flush the DNS cache (needs sudo)
-  report                save quick+wifi+dns+proxy output to a file
+  report [redact]       save diagnosis, overview, DHCP, Wi-Fi, DNS, IPv6 and proxy info to a file; "redact" hides IP / MAC / Wi-Fi name etc.
   tools                 check whether third-party tools are installed
 USAGE
   fi
@@ -841,16 +841,60 @@ cmd_tools() {
     has "$t" && ok "$t" || warn "$(L "$t not installed" "$t 未安装")"; done
 }
 
+# 转义成 sed -E 里的字面量
+re_escape() { printf '%s' "$1" | sed 's/[][\.*^$/&|(){}+?]/\\&/g'; }
+
+# 报告脱敏: 从标准输入读, 把个人信息换成占位符写到标准输出。
+# 隐藏: 公网 IP、全局 IPv6、MAC、Wi-Fi 名称 / BSSID、主机名、搜索域、用户名路径、VPN 隧道地址。
+# 保留: 局域网私有地址、网关、公共 DNS 的地址、延迟 / 丢包等诊断数据 (这些发给别人才有用)。
+redact_filter() {
+  local h hs u rules=()
+  h=$(hostname 2>/dev/null); hs=$(hostname -s 2>/dev/null); u=$(id -un 2>/dev/null)
+  [ -n "$h" ]  && rules+=(-e "s/$(re_escape "$h")/<hostname>/g")
+  [ -n "$hs" ] && rules+=(-e "s/$(re_escape "$hs")/<hostname>/g")
+  [ -n "$u" ]  && rules+=(-e "s#/Users/$(re_escape "$u")#/Users/<user>#g")
+  rules+=(
+    -e 's/([0-9A-Fa-f]{1,2}:){5}[0-9A-Fa-f]{1,2}/xx:xx:xx:xx:xx:xx/g'
+    -e 's/[A-Za-z0-9-]+\.ts\.net/<tailnet-host>/g'
+    -e 's/^( *(Public IP|公网 IP): )[^ ]+/\1<redacted>/'
+    -e 's/^( *IPv6: ).*/\1<redacted>/'
+    -e 's/^( *(Search domains|搜索域): ).*/\1<redacted>/'
+    -e 's/^( *(Search domain|搜索域) +)[^ ].*/\1<redacted>/'
+    -e 's/^( *(search domain\[[0-9]+\]|domain) *: ).*/\1<redacted>/'
+    -e 's/(\] IPv[46]  )[^ ]+/\1<redacted>/'
+    -e 's/^   ([0-9]{1,3}\.){3}[0-9]{1,3}(  .*)$/   <redacted>\2/'
+    -e 's/^   ([0-9A-Fa-f]{1,4}:){2,}[0-9A-Fa-f:]*$/   <redacted>/'
+    -e 's/(inet6 )(f[cd][0-9A-Fa-f:]*|[23][0-9A-Fa-f:]*)/\1<redacted>/'
+    -e 's/(inet6 )fe80[0-9A-Fa-f:]*/\1fe80::<redacted>/'   # 老式 EUI-64 的链路本地地址由 MAC 推导, 会间接泄漏 MAC
+    -e 's/(Current Wi-Fi Network: ).*/\1<redacted>/'
+    -e 's/^( *B?SSID *:).*/\1 <redacted>/'
+    -e 's/((utun|ppp|ipsec|tun|tap)[0-9]+)=[0-9.]+/\1=<redacted>/g'
+  )
+  sed -E "${rules[@]}"
+}
+
 cmd_report() {
   local NETDOCTOR_NOSUDO=1   # 输出被重定向到文件, 不要在中途弹出 sudo 密码提示
+  local B= G= R= Y= N=       # 报告是纯文本文件: 即使网页 / App 设了 NETDOCTOR_COLOR=1, 也不能把颜色转义码写进去 (动态作用域, 下面调用的函数也生效)
+  local redact=0; case "${1:-}" in redact|--redact) redact=1;; esac
   local dir="$HOME/Desktop"; [ -d "$dir" ] && [ -w "$dir" ] || dir="$HOME"   # 没有桌面目录 (或不可写) 就存到主目录
-  local f="$dir/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt"
-  if ! { echo "netdoctor report $(date)"; uname -a; sw_vers
-    cmd_doctor; cmd_overview; cmd_dhcp; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$f" 2>/dev/null || [ ! -s "$f" ]; then
-    bad "$(L "Could not write the report to $f" "无法写入报告: $f")"; return 1
+  local f="$dir/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt" gen
+  gen=$(mktemp) || { bad "$(L "Could not create a temporary file" "无法创建临时文件")"; return 1; }
+  { echo "netdoctor report $(date)"; uname -a; sw_vers
+    cmd_doctor; cmd_overview; cmd_dhcp; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$gen" 2>/dev/null
+  if [ "$redact" = 1 ]; then
+    { echo "# $(L "Personal info hidden (public IP, MAC, Wi-Fi name, host name, search domains)" "已隐藏个人信息 (公网 IP、MAC、Wi-Fi 名称、主机名、搜索域)")"; redact_filter <"$gen"; } >"$f"
+  else
+    cat "$gen" >"$f"
   fi
+  rm -f "$gen"
+  if [ ! -s "$f" ]; then bad "$(L "Could not write the report to $f" "无法写入报告: $f")"; return 1; fi
   ok "$(L "Saved: $f" "已保存: $f")"
-  warn "$(L "The report contains your IP addresses, MAC address and Wi-Fi name; check it before you share it." "报告包含你的 IP 地址、MAC 地址和 Wi-Fi 名称, 分享给别人前请先检查。")"
+  if [ "$redact" = 1 ]; then
+    warn "$(L "Personal info was hidden; skim the report once before you share it anyway." "已隐藏个人信息; 分享前仍请快速浏览一遍。")"
+  else
+    warn "$(L "The report contains your IP addresses, MAC address and Wi-Fi name; check it before you share it (netdoctor report redact hides them)." "报告包含你的 IP 地址、MAC 地址和 Wi-Fi 名称, 分享给别人前请先检查 (netdoctor report redact 可自动隐藏)。")"
+  fi
 }
 
 c=${1:-help}; [ $# -gt 0 ] && shift
@@ -858,7 +902,7 @@ case "$c" in
   quick|q) cmd_quick;; doctor|diagnose) cmd_doctor;; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
   ping) cmd_ping "$@";; port) cmd_port "$@";; http) cmd_http "$@";; tls) cmd_tls "$@";;
   mtu) cmd_mtu "$@";; speed) cmd_speed;; conns) cmd_conns;; proxy) cmd_proxy;;
-  capture) cmd_capture "$@";; fixdns) cmd_fixdns;; report) cmd_report;; tools) cmd_tools;;
+  capture) cmd_capture "$@";; fixdns) cmd_fixdns;; report) cmd_report "$@";; tools) cmd_tools;;
   version|-v|--version) echo "netdoctor $VERSION";;
   help|-h|--help) usage;;
   *) warn "$(L "Unknown command: $c (this is netdoctor $VERSION; if the command is in the README, update with: git pull)" "未知命令: $c (当前是 netdoctor $VERSION; 如果 README 里有这个命令, 请先更新: git pull)")"; usage; exit 2;;

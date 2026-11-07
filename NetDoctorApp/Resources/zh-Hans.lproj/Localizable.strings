@@ -95,3 +95,4 @@
 "extra domain (optional)" = "额外要测的域名(可选)";
 "DHCP / IP address" = "DHCP / IP 地址";
 "Check the DHCP lease and spot a self-assigned 169.254 address (DHCP failed)" = "查看 DHCP 租约, 识别 169.254 自分配地址 (DHCP 失败)";
+"Hide personal info (public IP, MAC, Wi-Fi name, host name)" = "隐藏个人信息(公网 IP、MAC、Wi-Fi 名称、主机名)";

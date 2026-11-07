@@ -9,6 +9,8 @@ struct ToolInput: Identifiable {
     var placeholder: String = ""
     var required: Bool = false
     var defaultValue: String = ""
+    /// Non-empty: shown as a checkbox; checked passes this word as the argument, unchecked passes nothing.
+    var flag: String = ""
     var id: String { name }
 }
 
@@ -88,7 +90,8 @@ struct Tool: Identifiable, Hashable {
         Tool(id: "fixdns", title: "Flush DNS", icon: "arrow.triangle.2.circlepath",
              summary: "Clear the DNS cache and restart mDNSResponder", admin: .required),
         Tool(id: "report", title: "Export report", icon: "doc.text",
-             summary: "Save a combined report to the Desktop"),
+             summary: "Save a combined report to the Desktop",
+             inputs: [ToolInput(name: "redact", label: "Hide personal info (public IP, MAC, Wi-Fi name, host name)", flag: "redact")]),
         Tool(id: "tools", title: "Tool check", icon: "wrench.and.screwdriver",
              summary: "Which system and third-party tools are installed"),
     ]

@@ -95,3 +95,4 @@
 "extra domain (optional)" = "extra domain (optional)";
 "DHCP / IP address" = "DHCP / IP address";
 "Check the DHCP lease and spot a self-assigned 169.254 address (DHCP failed)" = "Check the DHCP lease and spot a self-assigned 169.254 address (DHCP failed)";
+"Hide personal info (public IP, MAC, Wi-Fi name, host name)" = "Hide personal info (public IP, MAC, Wi-Fi name, host name)";

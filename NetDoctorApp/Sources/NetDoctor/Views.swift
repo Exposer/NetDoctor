@@ -46,6 +46,12 @@ struct ToolView: View {
             }
             HStack(alignment: .bottom, spacing: 12) {
                 ForEach(tool.inputs) { i in
+                    if !i.flag.isEmpty {
+                        Toggle(LocalizedStringKey(i.label), isOn: Binding(
+                            get: { runner.values[i.name] == i.flag },
+                            set: { runner.values[i.name] = $0 ? i.flag : "" }))
+                            .toggleStyle(.checkbox)
+                    } else {
                     VStack(alignment: .leading, spacing: 3) {
                         (Text(LocalizedStringKey(i.label)) + Text(i.required ? " *" : "")).font(.caption).foregroundStyle(.secondary)
                         TextField(loc(i.placeholder), text: Binding(
@@ -54,6 +60,7 @@ struct ToolView: View {
                             .textFieldStyle(.roundedBorder)
                             .frame(minWidth: 160, maxWidth: 280)
                             .onSubmit { runner.run() }
+                    }
                     }
                 }
                 if tool.admin == .optional {
