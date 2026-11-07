@@ -12,31 +12,20 @@
     <filter id="sh" x="-20%" y="-20%" width="140%" height="150%">
       <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#021a4d" flood-opacity=".38"/>
     </filter>
-    <filter id="ln" x="-10%" y="-10%" width="120%" height="125%">
+    <filter id="ln" x="-10%" y="-30%" width="120%" height="160%">
       <feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#032a73" flood-opacity=".35"/>
     </filter>
   </defs>
   <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)" filter="url(#sh)"/>
   <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#gloss)"/>
-
-  <g filter="url(#ln)">
-    <!-- Wi-Fi signal (the main symbol) -->
-    <g fill="none" stroke="#fff" stroke-width="54" stroke-linecap="round">
-      <path d="M 448.4 436.4 A 90 90 0 0 1 575.6 436.4"/>
-      <path d="M 384.7 372.7 A 180 180 0 0 1 639.3 372.7"/>
-      <path d="M 321.1 309.1 A 270 270 0 0 1 702.9 309.1"/>
-    </g>
-    <circle cx="512" cy="500" r="42" fill="#fff"/>
-    <!-- small stethoscope underneath, listening to the signal -->
-    <g fill="none" stroke="#fff" stroke-width="26" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M 380 616 C 380 704 436 744 512 744 C 588 744 644 704 644 616"/>
-      <path d="M 512 744 L 512 772 C 512 806 538 826 570 826"/>
-    </g>
-    <circle cx="380" cy="600" r="21" fill="#fff"/>
-    <circle cx="644" cy="600" r="21" fill="#fff"/>
-    <circle cx="614" cy="826" r="46" fill="#fff"/>
-    <circle cx="614" cy="826" r="22" fill="#1573dd"/>
-    <!-- heartbeat inside the stethoscope -->
-    <path d="M 412 676 L 456 676 L 478 626 L 504 718 L 532 650 L 552 676 L 612 676" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Wi-Fi arcs -->
+  <g fill="none" stroke="#fff" stroke-width="46" stroke-linecap="round" filter="url(#ln)">
+    <path d="M 434.2 442.2 A 110 110 0 0 1 589.8 442.2" opacity="1"/>
+    <path d="M 363.5 371.5 A 210 210 0 0 1 660.5 371.5" opacity=".94"/>
+    <path d="M 292.8 300.8 A 310 310 0 0 1 731.2 300.8" opacity=".84"/>
   </g>
+  <circle cx="512" cy="520" r="40" fill="#fff" filter="url(#ln)"/>
+  <!-- heartbeat line -->
+  <path d="M 190 724 L 372 724 L 428 626 L 498 826 L 572 664 L 616 724 L 834 724"
+        fill="none" stroke="#fff" stroke-width="42" stroke-linecap="round" stroke-linejoin="round" filter="url(#ln)"/>
 </svg>
