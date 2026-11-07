@@ -28,6 +28,12 @@ struct Tool: Identifiable, Hashable {
     static let all: [Tool] = [
         Tool(id: "quick", title: "Quick check", icon: "stethoscope",
              summary: "Gateway → public IP → DNS → HTTP, layer by layer, with a diagnosis"),
+        Tool(id: "overview", title: "Overview", icon: "list.bullet.rectangle",
+             summary: "Interface, IP, gateway, DNS, Wi-Fi, proxy and public IP at a glance"),
+        Tool(id: "ports", title: "Multi-port check", icon: "square.grid.3x3",
+             summary: "Check common or custom ports on a host in parallel",
+             inputs: [ToolInput(name: "host", label: "Host", placeholder: "example.com", required: true),
+                      ToolInput(name: "ports", label: "Ports", placeholder: "22,80,443 or 1-1024")]),
         Tool(id: "wifi", title: "Wi-Fi", icon: "wifi",
              summary: "SSID, signal, noise, channel, rate", admin: .optional),
         Tool(id: "dns", title: "DNS compare", icon: "magnifyingglass",

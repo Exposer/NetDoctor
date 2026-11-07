@@ -74,3 +74,8 @@
 "Finished (exit code %@) in %@s" = "Finished (exit code %@) in %@s";
 "Copied" = "Copied";
 "Saved: %@" = "Saved: %@";
+"Overview" = "Overview";
+"Interface, IP, gateway, DNS, Wi-Fi, proxy and public IP at a glance" = "Interface, IP, gateway, DNS, Wi-Fi, proxy and public IP at a glance";
+"Multi-port check" = "Multi-port check";
+"Check common or custom ports on a host in parallel" = "Check common or custom ports on a host in parallel";
+"Ports" = "Ports";

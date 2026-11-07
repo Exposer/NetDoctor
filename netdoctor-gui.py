@@ -12,6 +12,8 @@ TOKEN = secrets.token_urlsafe(16)
 # admin: True=required, "optional"=user can tick it, False=not needed
 COMMANDS = [
  {"id":"quick","label":"Quick check","icon":"🩺","desc":"Gateway → public IP → DNS → HTTP, layer by layer, with a diagnosis","inputs":[]},
+ {"id":"overview","label":"Overview","icon":"🗺️","desc":"Interface, IP, gateway, DNS, Wi-Fi, proxy and public IP at a glance","inputs":[]},
+ {"id":"ports","label":"Multi-port check","icon":"🔢","desc":"Check common or custom ports on a host in parallel","inputs":[{"name":"host","label":"Host","ph":"example.com","req":True},{"name":"ports","label":"Ports","ph":"22,80,443 or 1-1024"}]},
  {"id":"wifi","label":"Wi-Fi","icon":"📶","desc":"SSID, signal, noise, channel, rate","inputs":[],"admin":"optional"},
  {"id":"dns","label":"DNS compare","icon":"🔎","desc":"Answers and timings from the system and several public DNS servers","inputs":[{"name":"domain","label":"Domain","ph":"example.com","req":True}]},
  {"id":"http","label":"HTTP timing","icon":"🌐","desc":"DNS / TCP / TLS / first byte / total breakdown","inputs":[{"name":"url","label":"URL","ph":"https://example.com","req":True}]},
@@ -73,6 +75,11 @@ ZH = {
     "Failed to start": "启动失败",
     "[exit code %d]": "[退出码 %d]",
     "Quit": "退出",
+    "Overview": "网络概览",
+    "Interface, IP, gateway, DNS, Wi-Fi, proxy and public IP at a glance": "网卡、IP、网关、DNS、Wi-Fi、代理和公网 IP 一屏看全",
+    "Multi-port check": "多端口检测",
+    "Check common or custom ports on a host in parallel": "并行检测主机的常用或自定义端口",
+    "Ports": "端口",
     "Watchlist": "监控列表",
     "Pings every favorite and alerts when one goes down.": "逐个 ping 收藏的主机,有主机掉线时提醒。",
     "Slow above (ms)": "慢于(毫秒)",

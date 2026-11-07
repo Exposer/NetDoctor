@@ -4,6 +4,13 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- `netdoctor overview` and a matching **Overview** tool: one screen with the default interface and MTU, IPv4 / IPv6, MAC, gateway (with reachability), DNS servers and search domains, Wi-Fi network name, system proxy, VPN / tunnel interfaces and the public IP with its ISP. `report` includes it too.
+- `netdoctor ports <host> [ports]` and a matching **Multi-port check** tool: checks many ports in parallel. By default it tests 22 common ports; you can give `22,80,443`, `1-1024` or a mix, up to 1024 per run. It lists the open ports with well-known service names and open / closed counts. Scanning 1024 local ports takes about 0.6 s.
+- Both tools are available in the CLI, the web UI and the SwiftUI app, in English and Chinese.
+
 ## [1.1.6] - 2026-11-07
 
 ### Added

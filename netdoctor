@@ -25,6 +25,8 @@ netdoctor $VERSION - macOS 网络诊断
 
 用法: netdoctor <命令> [参数]
   quick                 一键体检: 网卡/网关/DNS/外网/HTTP (先跑这个)
+  overview              网络概览: 网卡/IP/网关/DNS/Wi-Fi/代理/公网 IP 一屏看全
+  ports <主机> [端口]   并行检测多个端口 (默认常用端口; 如 22,80 或 1-1024)
   wifi                  Wi-Fi 信号、信道、速率、SSID (部分信息需 sudo)
   dns <域名>            对比 系统/1.1.1.1/8.8.8.8/223.5.5.5 解析结果与耗时
   route <主机>          路由选择 + traceroute/mtr 路径
@@ -46,6 +48,8 @@ netdoctor $VERSION - macOS network diagnostics
 
 Usage: netdoctor <command> [args]
   quick                 one-shot check: interface/gateway/DNS/internet/HTTP (run this first)
+  overview              network snapshot: interface/IP/gateway/DNS/Wi-Fi/proxy/public IP
+  ports <host> [ports]  check many ports in parallel (common ports by default; e.g. 22,80 or 1-1024)
   wifi                  Wi-Fi signal, channel, rate, SSID (some details need sudo)
   dns <domain>          compare system/1.1.1.1/8.8.8.8/223.5.5.5 answers and timings
   route <host>          route selection + traceroute/mtr path
@@ -62,6 +66,86 @@ Usage: netdoctor <command> [args]
   report                save quick+wifi+dns+proxy output to a file
   tools                 check whether third-party tools are installed
 USAGE
+  fi
+}
+
+row() { printf '  %s: %s\n' "$1" "$(printf '%s' "$2" | sed 's/[[:space:]]*$//')"; }
+
+cmd_overview() {
+  local ifc gw ip4 ip6 mac mtu dns dom wn px vpn
+  hdr "$(L "Network overview" "网络概览")"
+  ifc=$(default_if); gw=$(gateway)
+  if [ -z "$ifc" ]; then bad "$(L "No default route (not connected?)" "没有默认路由 (未联网?)")"; return 1; fi
+  ip4=$(ipconfig getifaddr "$ifc" 2>/dev/null); [ -z "$ip4" ] && ip4=$(ifconfig "$ifc" 2>/dev/null | awk '/inet /{print $2; exit}')
+  ip6=$(ifconfig "$ifc" 2>/dev/null | awk '/inet6 / && $2 !~ /^fe80/{print $2; exit}')
+  mac=$(ifconfig "$ifc" 2>/dev/null | awk '/ether /{print $2; exit}')
+  mtu=$(ifconfig "$ifc" 2>/dev/null | sed -n 's/.*mtu \([0-9]*\).*/\1/p' | head -1)
+  row "$(L "Interface" "网卡")" "$ifc${mtu:+  (MTU $mtu)}"
+  row "IPv4" "${ip4:-$(L "none" "无")}"
+  row "IPv6" "${ip6:-$(L "none" "无")}"
+  row "MAC" "${mac:-$(L "unknown" "未知")}"
+  if [ -n "$gw" ]; then
+    if ping -c 1 -t 2 "$gw" >/dev/null 2>&1; then row "$(L "Gateway" "网关")" "$gw  $(L "(reachable)" "(可达)")"
+    else row "$(L "Gateway" "网关")" "$gw  $(L "(unreachable)" "(不通)")"; fi
+  else row "$(L "Gateway" "网关")" "$(L "none" "无")"; fi
+  dns=$(scutil --dns 2>/dev/null | awk '/nameserver\[[0-9]+\]/{print $3}' | awk '!seen[$0]++' | tr '\n' ' ')
+  dom=$(scutil --dns 2>/dev/null | awk '/search domain\[[0-9]+\]/{print $4}' | awk '!seen[$0]++' | tr '\n' ' ')
+  row "DNS" "${dns:-$(L "unknown" "未知")}"
+  [ -n "$dom" ] && row "$(L "Search domains" "搜索域")" "$dom"
+  if has networksetup; then
+    wn=$(networksetup -getairportnetwork "$(wifi_if)" 2>/dev/null | sed 's/^Current Wi-Fi Network: //')
+    [ -n "$wn" ] && row "Wi-Fi" "$wn"
+  fi
+  px=$(scutil --proxy 2>/dev/null | awk '/HTTPEnable : 1/{h=1} /HTTPProxy :/{hp=$3} /HTTPPort :/{hq=$3} /HTTPSEnable : 1/{s=1} /HTTPSProxy :/{sp=$3} /HTTPSPort :/{sq=$3} /SOCKSEnable : 1/{k=1} /SOCKSProxy :/{kp=$3} /SOCKSPort :/{kq=$3} END{if(h)printf "http=%s:%s ",hp,hq; if(s)printf "https=%s:%s ",sp,sq; if(k)printf "socks=%s:%s ",kp,kq}')
+  row "$(L "Proxy" "代理")" "${px:-$(L "none" "无")}"
+  vpn=$(ifconfig 2>/dev/null | awk '/^[a-z0-9]+:/{n=$1; sub(":","",n)} /inet /{if (n ~ /^(utun|ppp|ipsec|tun|tap)/) printf "%s=%s ", n, $2}')
+  row "$(L "VPN / tunnels" "VPN / 隧道")" "${vpn:-$(L "none" "无")}"
+  local geo; geo=$(curl -s -m 6 https://api.ip.sb/geoip 2>/dev/null)
+  if [ -n "$geo" ] && has jq; then row "$(L "Public IP" "公网 IP")" "$(echo "$geo" | jq -r '"\(.ip)  \(.country // "") \(.isp // .organization // "")"')"
+  elif [ -n "$geo" ]; then row "$(L "Public IP" "公网 IP")" "$(echo "$geo" | tr -d '\n' | cut -c1-120)"
+  else row "$(L "Public IP" "公网 IP")" "$(L "lookup failed" "获取失败")"; fi
+}
+
+svc() {
+  case "$1" in 21) echo ftp;; 22) echo ssh;; 23) echo telnet;; 25) echo smtp;; 53) echo dns;; 80) echo http;; 110) echo pop3;;
+    143) echo imap;; 443) echo https;; 465) echo smtps;; 587) echo submission;; 993) echo imaps;; 995) echo pop3s;;
+    1433) echo mssql;; 3306) echo mysql;; 3389) echo rdp;; 5432) echo postgres;; 5900) echo vnc;; 6379) echo redis;;
+    8080) echo http-alt;; 8443) echo https-alt;; 27017) echo mongodb;; *) echo "";; esac
+}
+
+cmd_ports() {
+  local h=${1:-} spec=${2:-} list="" tok a b i n=0 total tmp ncopt open p closed
+  [ -z "$h" ] && { echo "$(L "Usage: netdoctor ports <host> [ports]" "用法: netdoctor ports <主机> [端口]")"; return 1; }
+  [ -z "$spec" ] && spec="21,22,23,25,53,80,110,143,443,465,587,993,995,1433,3306,3389,5432,5900,6379,8080,8443,27017"
+  case "$spec" in *[!0-9,-]*) bad "$(L "Invalid port list: $spec" "端口列表无效: $spec")"; return 1;; esac
+  for tok in $(echo "$spec" | tr ',' ' '); do
+    case "$tok" in
+      *-*) a=${tok%%-*}; b=${tok#*-}
+           if [ -z "$a" ] || [ -z "$b" ] || [ -n "${b//[0-9]/}" ]; then bad "$(L "Invalid port list: $spec" "端口列表无效: $spec")"; return 1; fi ;;
+      *)   a=$tok; b=$tok ;;
+    esac
+    a=$((10#$a)); b=$((10#$b))
+    if [ "$a" -lt 1 ] || [ "$b" -gt 65535 ] || [ "$a" -gt "$b" ]; then bad "$(L "Port out of range (1-65535): $tok" "端口超出范围 (1-65535): $tok")"; return 1; fi
+    i=$a; while [ "$i" -le "$b" ]; do list="$list $i"; i=$((i+1)); n=$((n+1)); if [ "$n" -gt 1024 ]; then bad "$(L "Too many ports (max 1024 per run)" "端口过多 (每次最多 1024 个)")"; return 1; fi; done
+  done
+  has nc || { bad "$(L "nc (netcat) not found" "未找到 nc (netcat)")"; return 1; }
+  ncopt="-w 2"; if ! nc -G 2 -z 127.0.0.1 9 2>&1 | grep -qiE 'illegal option|invalid option|unknown option'; then ncopt="-G 2 -w 2"; fi
+  tmp=$(mktemp -d); n=0
+  for p in $list; do
+    ( nc -z $ncopt "$h" "$p" >/dev/null 2>&1 && : >"$tmp/$p" ) &
+    n=$((n+1)); [ $((n % 40)) -eq 0 ] && wait
+  done
+  wait
+  total=$n; open=$(ls "$tmp" | sort -n); rm -rf "$tmp"
+  hdr "$(L "Ports on $h ($total checked)" "$h 的端口 (已检测 $total 个)")"
+  if [ -z "$open" ]; then
+    warn "$(L "No open ports found (closed, filtered, or host unreachable)" "没有发现开放端口 (关闭 / 被过滤 / 主机不可达)")"; return 0
+  fi
+  n=0; for p in $open; do n=$((n+1)); ok "$p/tcp  $(svc "$p")"; done
+  echo "$(L "$n open, $((total - n)) closed or filtered" "$n 个开放, $((total - n)) 个关闭或被过滤")"
+  if [ "$total" -le 30 ]; then
+    closed=""; for p in $list; do case " $(echo $open) " in *" $p "*) ;; *) closed="$closed $p";; esac; done
+    [ -n "$closed" ] && echo "$(L "Closed or filtered:" "关闭或被过滤:")$closed"
   fi
 }
 
@@ -235,13 +319,13 @@ cmd_tools() {
 cmd_report() {
   local f="$HOME/Desktop/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt"
   { echo "netdoctor report $(date)"; uname -a; sw_vers
-    cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_proxy; } >"$f" 2>&1
+    cmd_overview; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_proxy; } >"$f" 2>&1
   ok "$(L "Saved: $f" "已保存: $f")"
 }
 
 c=${1:-help}; [ $# -gt 0 ] && shift
 case "$c" in
-  quick|q) cmd_quick;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
+  quick|q) cmd_quick;; overview) cmd_overview;; ports) cmd_ports "$@";; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
   ping) cmd_ping "$@";; port) cmd_port "$@";; http) cmd_http "$@";; tls) cmd_tls "$@";;
   mtu) cmd_mtu "$@";; speed) cmd_speed;; conns) cmd_conns;; proxy) cmd_proxy;;
   capture) cmd_capture "$@";; fixdns) cmd_fixdns;; report) cmd_report;; tools) cmd_tools;;

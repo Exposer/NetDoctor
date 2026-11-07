@@ -74,3 +74,8 @@
 "Finished (exit code %@) in %@s" = "结束(退出码 %@),用时 %@s";
 "Copied" = "已复制";
 "Saved: %@" = "已保存:%@";
+"Overview" = "网络概览";
+"Interface, IP, gateway, DNS, Wi-Fi, proxy and public IP at a glance" = "网卡、IP、网关、DNS、Wi-Fi、代理和公网 IP 一屏看全";
+"Multi-port check" = "多端口检测";
+"Check common or custom ports on a host in parallel" = "并行检测主机的常用或自定义端口";
+"Ports" = "端口";

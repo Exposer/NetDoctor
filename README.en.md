@@ -51,7 +51,9 @@ netdoctor tools                                          # see which tools are i
 | Wi-Fi slow or dropping | `netdoctor wifi`; Option-click the Wi-Fi icon → Wireless Diagnostics |
 | Pages won't load but ping works | `netdoctor dns x.com` → `netdoctor http URL` → `netdoctor proxy` |
 | Packet loss / high latency on some hop | `netdoctor route host` (mtr), `gping`, `trip` |
+| A snapshot of the whole network state | `netdoctor overview` (interface / IP / gateway / DNS / Wi-Fi / proxy / public IP) |
 | Port unreachable | `netdoctor port host 443`, `nmap -p 443 host` |
+| Check many ports at once | `netdoctor ports host` (common ports), `netdoctor ports host 22,80,443`, `netdoctor ports host 1-1024` |
 | HTTPS / certificate problems | `netdoctor tls host`, `testssl host` |
 | Some sites are slow over VPN | `netdoctor mtu`, `netdoctor route host` (see which utun is used) |
 | What is using the bandwidth | `sudo bandwhich`, `nettop -P`, `netdoctor conns` |

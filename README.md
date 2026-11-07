@@ -49,7 +49,9 @@ netdoctor tools                      # 查看装了哪些
 | Wi-Fi 卡/断 | `netdoctor wifi`;Option+点 Wi-Fi 图标 → 无线诊断 |
 | 网页打不开但 ping 通 | `netdoctor dns x.com` → `netdoctor http URL` → `netdoctor proxy` |
 | 某跳丢包/延迟高 | `netdoctor route host`(mtr)、`gping`、`trip` |
+| 想一眼看全网络状态 | `netdoctor overview`(网卡 / IP / 网关 / DNS / Wi-Fi / 代理 / 公网 IP) |
 | 端口不通 | `netdoctor port host 443`、`nmap -p 443 host` |
+| 一次查多个端口 | `netdoctor ports host`(常用端口)、`netdoctor ports host 22,80,443`、`netdoctor ports host 1-1024` |
 | HTTPS/证书问题 | `netdoctor tls host`、`testssl host` |
 | VPN 后部分网站卡 | `netdoctor mtu`、`netdoctor route host`(看走哪块 utun) |
 | 谁在占带宽 | `sudo bandwhich`、`nettop -P`、`netdoctor conns` |
