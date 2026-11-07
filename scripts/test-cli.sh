@@ -276,6 +276,9 @@ lcheck "leak: VPN, IPv6 outside"   utun4 en0 1 $'10.8.0.1 utun4\n'              
 lcheck "leak: VPN, no IPv6"        utun4 en0 0 $'10.8.0.1 utun4\n'                  "IPv6 cannot leak" 0
 lcheck "leak: fix hint on leak"    utun4 utun4 0 $'192.168.0.1 en0\n'               "kill switch" 1
 lcheck "leak: IPsec VPN counts"    ipsec0 ipsec0 0 $'10.8.0.1 ipsec0\n'            "VPN active" 0
+lcheck "leak: local resolver is not a leak" utun4 utun4 1 $'127.0.0.1 lo0\n'             "resolver on this Mac" 0
+lcheck "leak: local resolver ::1"           utun4 utun4 1 $'::1 lo0\n'                   "resolver on this Mac" 0
+lcheck "leak: a real leak is still found next to a local resolver" utun4 utun4 1 $'127.0.0.1 lo0\n192.168.0.1 en0\n' "DNS leak: 192.168.0.1" 1
 SD=$'0:36:43.593  Add        3   7 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3  15 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3   7 .                    _udp.local.          _sleep-proxy\n0:36:43.593  Rmv        3   7 .                    _tcp.local.          _gone'
 printf '%s\n' "$SD" > "$T/meta.txt"
 lib "bonjour: service types (dedupe, Rmv ignored)" 0 "_ssh._tcp" "bonjour_types $T/meta.txt"
@@ -331,6 +334,8 @@ fxlib "fix_apply: unknown action"    1 "" "fix_apply rm_rf_slash";              
 fxlib "fix_apply: open portal"       0 "" "fix_apply open_portal";                    fxlog_has "fix_apply: opens the portal URL" "open http://captive.apple.com"
 # cmd_fix with a stubbed cmd_doctor
 STUB='cmd_doctor() { DOCTOR_VERDICT=${V:-}; DOCTOR_IFC=en0; return 1; }'
+fxlib "fix: captive portal as root is not a failure" 1 "open http://captive.apple.com yourself" "$STUB; id() { echo 0; }; V=captive cmd_fix yes"; fxlog_empty "fix: captive portal as root does not run open"
+lib_not "fix: captive portal as root does not say Failed" "$STUB; id() { echo 0; }; V=captive cmd_fix yes" "Failed"
 fxlib "fix: healthy → nothing to fix"  0 "Nothing to fix" "$STUB; V= cmd_fix";        fxlog_empty "fix: healthy runs nothing"
 fxlib "fix: http cannot be fixed here" 1 "cannot be fixed from the Mac" "$STUB; V=http cmd_fix"; fxlog_empty "fix: http runs nothing"
 fxlib "fix: unstable has no fix"       1 "No automatic fix" "$STUB; V=unstable cmd_fix"
@@ -407,6 +412,10 @@ expect "compare: one argument"           1 "Usage"         /bin/bash $ND compare
 expect "compare: missing file"           1 "Cannot read"   /bin/bash $ND compare "$CD/a.txt" "$CD/nope.txt"
 printf '<html>' > "$CD/r.html"; expect "compare: html is refused" 1 "Only .txt reports" /bin/bash $ND compare "$CD/a.txt" "$CD/r.html"
 printf 'hello\n' > "$CD/x.txt"; expect "compare: not a report"   1 "Not a netdoctor report" /bin/bash $ND compare "$CD/a.txt" "$CD/x.txt"
+H2="$CD/home2"; mkdir -p "$H2/Desktop"; for f in "$H2/Desktop/netdoctor-report-1.txt" "$H2/netdoctor-report-2.txt" "$H2/netdoctor-report-3.txt"; do cp "$CD/a.txt" "$f"; done
+touch -t 202001010000 "$H2/Desktop/netdoctor-report-1.txt"; touch -t 202201010000 "$H2/netdoctor-report-2.txt"; touch -t 202301010000 "$H2/netdoctor-report-3.txt"
+expect "compare: picks the two newest across Desktop and home (older)" 0 "older: $H2/netdoctor-report-2.txt" env HOME="$H2" /bin/bash $ND compare
+expect "compare: picks the two newest across Desktop and home (newer)" 0 "newer: $H2/netdoctor-report-3.txt" env HOME="$H2" /bin/bash $ND compare
 expect "compare: no saved reports"       1 "found 0"       env HOME="$CD/home" /bin/bash $ND compare
 cp "$CD/a.txt" "$CD/home/Desktop/netdoctor-report-1.txt"; touch -t 202611070800 "$CD/home/Desktop/netdoctor-report-1.txt"
 expect "compare: only one saved report"  1 "found 1"       env HOME="$CD/home" /bin/bash $ND compare
@@ -482,6 +491,8 @@ fxlib "net_service: Wi-Fi"            0 "Wi-Fi"     "net_service en1"
 fxlib "net_service: Ethernet"         0 "Ethernet"  "net_service en0"
 fxlib "net_service: disabled service name has no star" 0 "Old VPN" "net_service ppp0"
 fxlib "net_service: unknown interface" 0 "[]"       "echo \"[\$(net_service en9)]\""
+for v in 2606:4700:4700::1111 ::1 2001:db8:: 1:2:3:4:5:6:7:8 fe80::1; do fxlib "dns_valid_ip: valid IPv6 $v" 0 "yes" "dns_valid_ip $v && echo yes || echo no"; done
+for v in :::: :: 1:2 :1:2:3:4:5:6:7 1::2::3 12345::1 1:2:3:4:5:6:7:8:9 1:2:3:4:5:6:7::8 abc: :abc; do fxlib "dns_valid_ip: invalid IPv6 $v" 0 "no" "dns_valid_ip $v && echo yes || echo no"; done
 fxlib "dns_service: normal default interface" 0 "Wi-Fi"     "default_if() { echo en1; }; dns_service"
 fxlib "dns_service: VPN default route falls back to the active Ethernet" 0 "Ethernet" "default_if() { echo utun3; }; ipconfig() { [ \"\$2\" = en0 ] && echo 10.0.0.2; }; dns_service"
 fxlib "dns_service: VPN default route, only Wi-Fi has an IP" 0 "Wi-Fi" "default_if() { echo utun3; }; ipconfig() { [ \"\$2\" = en1 ] && echo 10.0.0.3; }; dns_service"

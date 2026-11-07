@@ -28,7 +28,7 @@ struct HealthHistoryView: View {
     private func color(_ s: Severity) -> Color { s == .good ? .green : (s == .warning ? .orange : .red) }
 
     /// Records further apart than this are not joined: the app was closed or the Mac asleep in between.
-    private var gapLimit: TimeInterval { TimeInterval(max(health.intervalMinutes, 5) * 60 * 2) }
+    private var gapLimit: TimeInterval { HealthCheck.gap(forIntervalMinutes: health.intervalMinutes) }
 
     @ViewBuilder private func content(now: Date) -> some View {
         let from = now.addingTimeInterval(-range.seconds)

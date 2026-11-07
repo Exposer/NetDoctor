@@ -106,6 +106,38 @@ final class HealthTimelineTests: XCTestCase {
         XCTAssertNil(HealthCheck.code(from: "verdict=DROP TABLE\n"), "only lowercase letters and underscores are accepted")
     }
 
+    func testARecordKeepsItsOwnGapWhenTheSettingChangesLater() {
+        // Hourly checks recorded with a 2 h gap; the current setting (10 min) must not shrink them.
+        func rec(_ m: Double) -> HealthRecord { HealthRecord(time: t0.addingTimeInterval(m * 60), verdict: "ok", gap: 7200) }
+        let e = HealthTimeline.episodes([rec(0), rec(60), rec(120)], gapLimit: 10 * 60, now: t0.addingTimeInterval(130 * 60))
+        XCTAssertEqual(e.count, 1)
+        XCTAssertEqual(e[0].duration, 130 * 60, accuracy: 1)
+    }
+
+    func testRecordsWithoutAGapUseTheCurrentLimit() {
+        let e = HealthTimeline.episodes([r(0, "ok"), r(60, "ok")], gapLimit: 10 * 60, now: t0.addingTimeInterval(61 * 60))
+        XCTAssertEqual(e.count, 2, "the old behaviour for files written before the gap was stored")
+    }
+
+    func testOldHistoryFilesWithoutAGapStillLoad() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("nd-old-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let when = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-60))
+        try "[{\"id\":\"\(UUID().uuidString)\",\"time\":\"\(when)\",\"verdict\":\"dns\"}]".write(to: url, atomically: true, encoding: .utf8)
+        let h = HealthHistory(url: url)
+        XCTAssertEqual(h.records.map { $0.verdict }, ["dns"])
+        XCTAssertNil(h.records.first?.gap)
+    }
+
+    func testGapIsStoredAndReloaded() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("nd-gap-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        HealthHistory(url: url).add(verdict: "ok", at: Date().addingTimeInterval(-60), gap: 1800)
+        XCTAssertEqual(HealthHistory(url: url).records.first?.gap, 1800)
+        XCTAssertEqual(HealthCheck.gap(forIntervalMinutes: 60), 7200)
+        XCTAssertEqual(HealthCheck.gap(forIntervalMinutes: 0), 600)
+    }
+
     func testHistoryIsSavedAndReloaded() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("nd-test-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: dir) }

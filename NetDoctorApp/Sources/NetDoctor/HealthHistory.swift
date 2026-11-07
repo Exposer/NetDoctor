@@ -8,6 +8,9 @@ struct HealthRecord: Codable, Identifiable, Equatable {
     var id = UUID()
     let time: Date
     let verdict: String
+    /// How long this record may stand for when no newer record follows (set from the check interval in force
+    /// when it was taken, so changing the interval later does not rewrite the past). nil in older files.
+    var gap: TimeInterval? = nil
 
     var severity: Severity { HealthRecord.severity(of: verdict) }
     var label: String { HealthRecord.label(for: verdict) }
@@ -51,7 +54,7 @@ struct HealthEpisode: Identifiable, Equatable {
 
 enum HealthTimeline {
     /// Turns the records (any order) into episodes. A record describes the time until the next record, but at
-    /// most `gapLimit` (the app was closed or the Mac asleep: that time is unknown and left empty). The last
+    /// most the record's own `gap` (`gapLimit` for records without one; the app was closed or the Mac asleep: that time is unknown and left empty). The last
     /// record reaches up to `now` while it is recent. Consecutive records with the same verdict and no gap
     /// between them become one episode.
     static func episodes(_ records: [HealthRecord], gapLimit: TimeInterval, now: Date) -> [HealthEpisode] {
@@ -59,7 +62,7 @@ enum HealthTimeline {
         var out: [HealthEpisode] = []
         for (i, r) in sorted.enumerated() {
             let next = i + 1 < sorted.count ? sorted[i + 1].time : now
-            let end = max(r.time, min(next, r.time.addingTimeInterval(gapLimit)))
+            let end = max(r.time, min(next, r.time.addingTimeInterval(r.gap ?? gapLimit)))
             if let last = out.last, last.verdict == r.verdict, last.end >= r.time {
                 out[out.count - 1] = HealthEpisode(start: last.start, end: end, verdict: r.verdict)
             } else {
@@ -109,8 +112,8 @@ final class HealthHistory: ObservableObject {
         load()
     }
 
-    func add(verdict: String, at time: Date = Date()) {
-        records = HealthTimeline.pruned(records + [HealthRecord(time: time, verdict: verdict)], now: time,
+    func add(verdict: String, at time: Date = Date(), gap: TimeInterval? = nil) {
+        records = HealthTimeline.pruned(records + [HealthRecord(time: time, verdict: verdict, gap: gap)], now: time,
                                         maxAge: Self.maxAge, maxCount: Self.maxCount)
         save()
     }

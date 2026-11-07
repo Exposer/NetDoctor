@@ -39,6 +39,9 @@ final class HealthCheck: ObservableObject {
         if intervalMinutes > 0 { run(scheduled: true) }     // and once now, so the history has a point from the moment the app starts
     }
 
+    /// How long a record stands for when nothing newer follows: two check intervals (at least 10 minutes).
+    static func gap(forIntervalMinutes m: Int) -> TimeInterval { TimeInterval(max(m, 5) * 60 * 2) }
+
     private func reschedule() {
         timer?.invalidate(); timer = nil
         guard intervalMinutes > 0 else { return }
@@ -100,7 +103,7 @@ final class HealthCheck: ObservableObject {
                 } else {
                     self.healthy = (code == 0)
                     self.summary = "\(t.string(from: Date()))  \(verdict)"
-                    if let c = verdictCode { self.history.add(verdict: c) }
+                    if let c = verdictCode { self.history.add(verdict: c, gap: HealthCheck.gap(forIntervalMinutes: self.intervalMinutes)) }
                 }
             }
         }

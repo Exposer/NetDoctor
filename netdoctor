@@ -209,8 +209,14 @@ EOF_SV
 }
 dns_current() { networksetup -getdnsservers "$1" 2>/dev/null | grep -E '^[0-9A-Fa-f:.]+$' | tr '\n' ' ' | sed 's/ $//'; }   # 没手动设置时为空 (= 自动 / DHCP)
 dns_backup_file() { printf '%s/dns-backup/%s' "${NETDOCTOR_HOME:-$HOME/.netdoctor}" "$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')"; }
+dns_valid_v6() { # 只含十六进制和冒号的串是否是合法 IPv6: 每组 1-4 位, 至多一个 "::", 无 "::" 时恰好 8 组, 有时最多 7 组
+  printf '%s' "$1" | awk '{ s=$0; if (s ~ /:::/ || s ~ /^:[^:]/ || s ~ /[^:]:$/) exit 1
+    d=gsub(/::/,"&",s); if (d > 1) exit 1; k=split($0,g,":"); c=0
+    for (i=1;i<=k;i++) if (g[i] != "") { if (length(g[i]) > 4) exit 1; c++ }
+    if (d == 1) exit !(c >= 1 && c <= 7); exit !(k == 8 && c == 8) }'
+}
 dns_valid_ip() { case "$1" in
-    *[!0-9.]*) case "$1" in *:*) case "$1" in *[!0-9A-Fa-f:]*) return 1;; *) return 0;; esac;; *) return 1;; esac;;
+    *[!0-9.]*) case "$1" in *:*) case "$1" in *[!0-9A-Fa-f:]*) return 1;; *) dns_valid_v6 "$1";; esac;; *) return 1;; esac;;
     *) printf '%s' "$1" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' || return 1
        local o; for o in ${1//./ }; do [ "$((10#$o))" -le 255 ] || return 1; done; return 0;; esac; }
 dns_apply() { # $1=服务名, 其余=服务器 (空 = 恢复自动)
@@ -709,6 +715,9 @@ cmd_fix() {
   for a in $act; do
     desc=$(fix_describe "$a" "$ifc")
     echo "  → $desc"
+    if [ "$a" = open_portal ] && [ "$(id -u)" = 0 ]; then   # root 下 open 打不开用户的浏览器: 不算失败, 请用户自己打开
+      warn "$(L "Running as administrator, so the browser cannot be opened from here: open http://captive.apple.com yourself." "当前是管理员身份, 无法从这里打开浏览器: 请自己打开 http://captive.apple.com 登录。")"; skipped=$((skipped+1)); continue
+    fi
     if [ "$yes" != 1 ]; then
       if [ -t 0 ]; then printf '%s' "$(L "    Apply it? [y/N] " "    要执行吗? [y/N] ")"; read -r ans || ans=""; case "$ans" in y|Y|yes|YES) ;; *) skipped=$((skipped+1)); echo "    $(L "skipped" "已跳过")"; continue;; esac
       else skipped=$((skipped+1)); continue; fi
@@ -800,7 +809,7 @@ compare_count() { grep -c -- "$1" "$2" 2>/dev/null || true; }
 cmd_compare() {
   local a=${1:-} b=${2:-} d f list n d1 d2
   if [ -z "$a" ] && [ -z "$b" ]; then
-    list=$(for d in "$HOME/Desktop" "$HOME"; do ls -t "$d"/netdoctor-report-*.txt 2>/dev/null; done | awk '!s[$0]++' | head -2)
+    list=$(ls -t "$HOME/Desktop"/netdoctor-report-*.txt "$HOME"/netdoctor-report-*.txt 2>/dev/null | awk '!s[$0]++' | head -2)   # 一起按时间排序
     n=$(printf '%s\n' "$list" | grep -c .)
     if [ "$n" -lt 2 ]; then bad "$(L "Need two saved reports (netdoctor report) on the Desktop or in your home folder; found $n. Or: netdoctor compare <older.txt> <newer.txt>" "需要两份已保存的报告 (netdoctor report), 放在桌面或主目录里, 现在只找到 $n 份。也可以: netdoctor compare <旧报告.txt> <新报告.txt>")"; return 1; fi
     b=$(printf '%s\n' "$list" | sed -n 1p); a=$(printf '%s\n' "$list" | sed -n 2p)   # ls -t: 最新的在前
@@ -1137,6 +1146,7 @@ leak_assess() {
   ok "$(L "VPN active: IPv4 traffic goes through $v4if" "VPN 已生效: IPv4 流量走 $v4if")"
   while read -r ns ifc; do
     [ -z "$ns" ] && continue
+    case "$ns" in 127.*|::1) ok "$(L "DNS server $ns is a resolver on this Mac (its upstream is not checked here)" "DNS 服务器 $ns 是本机上的解析器 (它的上游不在这里检查)")"; continue;; esac
     if tunnel_if "$ifc"; then ok "$(L "DNS server $ns is reached through the tunnel ($ifc)" "DNS 服务器 $ns 经隧道访问 ($ifc)")"
     else bad "$(L "DNS leak: $ns is queried through $ifc, outside the VPN (your provider / router can see the sites you look up)" "DNS 泄漏: $ns 经 $ifc 查询, 绕过了 VPN (运营商 / 路由器能看到你访问了哪些网站)")"; leaks=1; fi
   done
