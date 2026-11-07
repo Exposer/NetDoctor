@@ -12,8 +12,10 @@ TOKEN = secrets.token_urlsafe(16)
 # admin: True=required, "optional"=user can tick it, False=not needed
 COMMANDS = [
  {"id":"quick","label":"Quick check","icon":"🩺","desc":"Gateway → public IP → DNS → HTTP, layer by layer, with a diagnosis","inputs":[]},
+ {"id":"doctor","label":"Diagnose","icon":"🩹","desc":"Layer-by-layer checks with a verdict and suggested next steps","inputs":[]},
  {"id":"overview","label":"Overview","icon":"🗺️","desc":"Interface, IP, gateway, DNS, Wi-Fi, proxy and public IP at a glance","inputs":[]},
  {"id":"ports","label":"Multi-port check","icon":"🔢","desc":"Check common or custom ports on a host in parallel","inputs":[{"name":"host","label":"Host","ph":"example.com","req":True},{"name":"ports","label":"Ports","ph":"22,80,443 or 1-1024"}]},
+ {"id":"tcpping","label":"TCP ping","icon":"⏱️","desc":"TCP connect latency to a port — for when ping is blocked","inputs":[{"name":"host","label":"Host","ph":"example.com","req":True},{"name":"port","label":"Port","ph":"443","req":True},{"name":"count","label":"Count","ph":"10","def":"10"}]},
  {"id":"lan","label":"LAN scan","icon":"🖧","desc":"Discover devices on the local network (IP, MAC, name)","inputs":[]},
  {"id":"wifi","label":"Wi-Fi","icon":"📶","desc":"SSID, signal, noise, channel, rate","inputs":[],"admin":"optional"},
  {"id":"dns","label":"DNS compare","icon":"🔎","desc":"Answers and timings from the system and several public DNS servers","inputs":[{"name":"domain","label":"Domain","ph":"example.com","req":True}]},
@@ -77,6 +79,10 @@ ZH = {
     "Failed to start": "启动失败",
     "[exit code %d]": "[退出码 %d]",
     "Quit": "退出",
+    "Diagnose": "智能诊断",
+    "Layer-by-layer checks with a verdict and suggested next steps": "逐层检查并给出结论和下一步建议",
+    "TCP ping": "TCP 延迟",
+    "TCP connect latency to a port — for when ping is blocked": "测量到某个端口的 TCP 连接延迟,适用于 ping 被屏蔽时",
     "DNS benchmark": "DNS 测速",
     "Compare the system and public DNS servers by speed and get a recommendation": "对比系统与多家公共 DNS 的速度并给出推荐",
     "LAN scan": "局域网扫描",

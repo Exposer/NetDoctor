@@ -51,6 +51,8 @@ netdoctor tools                                          # see which tools are i
 | Wi-Fi slow or dropping | `netdoctor wifi`; Option-click the Wi-Fi icon → Wireless Diagnostics |
 | Pages won't load but ping works | `netdoctor dns x.com` → `netdoctor http URL` → `netdoctor proxy` |
 | Packet loss / high latency on some hop | `netdoctor route host` (mtr), `gping`, `trip` |
+| Not sure what is broken | `netdoctor doctor` (layered checks with a verdict and next steps) |
+| Ping is blocked / measure a port's latency | `netdoctor tcpping host 443` (TCP connect latency and loss) |
 | Slow DNS / pick the fastest DNS | `netdoctor dnsbench` (compares and recommends, prints the switch command) |
 | Who is on my network | `netdoctor lan` (IP / MAC / name) |
 | A snapshot of the whole network state | `netdoctor overview` (interface / IP / gateway / DNS / Wi-Fi / proxy / public IP) |

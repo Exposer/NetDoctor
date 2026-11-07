@@ -49,6 +49,8 @@ netdoctor tools                      # 查看装了哪些
 | Wi-Fi 卡/断 | `netdoctor wifi`;Option+点 Wi-Fi 图标 → 无线诊断 |
 | 网页打不开但 ping 通 | `netdoctor dns x.com` → `netdoctor http URL` → `netdoctor proxy` |
 | 某跳丢包/延迟高 | `netdoctor route host`(mtr)、`gping`、`trip` |
+| 不知道哪里坏了 | `netdoctor doctor`(逐层检查,给出结论和下一步建议) |
+| ping 被屏蔽 / 想测端口延迟 | `netdoctor tcpping host 443`(TCP 连接延迟与丢包) |
 | DNS 慢 / 想选最快的 DNS | `netdoctor dnsbench`(对比并推荐,给出切换命令) |
 | 想知道网内有哪些设备 | `netdoctor lan`(IP / MAC / 主机名) |
 | 想一眼看全网络状态 | `netdoctor overview`(网卡 / IP / 网关 / DNS / Wi-Fi / 代理 / 公网 IP) |
