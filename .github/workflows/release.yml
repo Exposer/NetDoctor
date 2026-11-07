@@ -1,0 +1,57 @@
+name: Release
+
+# Pushing a tag like v1.2.1 builds the app and publishes the GitHub release:
+#   1. bump VERSION= in `netdoctor`, rename [Unreleased] in both CHANGELOGs to [1.2.1] - <date>, commit, push
+#   2. git tag -a v1.2.1 -m "NetDoctor v1.2.1" && git push origin v1.2.1
+# The workflow checks that the tag matches VERSION, runs the checks and tests, builds the universal app,
+# and creates (or updates) the release with the zip, its SHA-256 and the changelog section as notes.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: The tag must match VERSION
+        run: |
+          VER=$(sed -n 's/^VERSION=//p' netdoctor | head -1)
+          if [ "v$VER" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match VERSION=$VER in netdoctor"; exit 1
+          fi
+
+      - name: Checks and tests
+        run: |
+          python3 scripts/check.py
+          /bin/bash scripts/test-cli.sh
+
+      - name: Build, sign and zip the universal app
+        run: scripts/package-app.sh
+
+      - name: Release notes
+        run: |
+          VER=${GITHUB_REF_NAME#v}
+          scripts/release-notes.sh "$VER" dist/NetDoctor-"$VER"-macOS-universal.zip > dist/notes.md
+          cat dist/notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=${GITHUB_REF_NAME#v}
+          ZIP=dist/NetDoctor-"$VER"-macOS-universal.zip
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$ZIP" --clobber
+            gh release edit "$GITHUB_REF_NAME" --notes-file dist/notes.md
+          else
+            gh release create "$GITHUB_REF_NAME" "$ZIP" --verify-tag --latest \
+              --title "NetDoctor v$VER" --notes-file dist/notes.md
+          fi

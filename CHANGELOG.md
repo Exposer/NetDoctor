@@ -6,6 +6,12 @@
 
 ## [未发布]
 
+### 新增
+- 开发工具:`scripts/check.py`(工具列表、翻译、链接、版本与更新日志一致性检查)、`scripts/test-cli.sh`(68 个无网络、无 sudo 的 CLI 测试)、`scripts/package-app.sh`(构建通用架构 App、签名、校验、打包)、`scripts/release-notes.sh`;GitHub Actions:`ci.yml` 每次推送 / PR 自动检查并构建 App,`release.yml` 推送 `v*` 标签时自动校验版本、构建并发布 release。`netdoctor` 支持 `NETDOCTOR_SOURCE_ONLY=1` 作为函数库被 source(仅供测试)。
+- `netdoctor report redact` 与网页 / App 里“导出报告”的 **隐藏个人信息** 复选框:自动隐藏报告里的公网 IP、设备的全局 / 私有 IPv6 和链路本地地址、MAC 地址、Wi-Fi 名称与 BSSID、主机名(含 tailnet 域名)、搜索域、用户名路径和 VPN 隧道地址,换成 `<redacted>` 等占位符;局域网私有地址、网关、公共 DNS、延迟和丢包等诊断数据保留,发给别人仍然有用。文件首行会注明已脱敏。网页和 App 的输入框新增了“复选框”类型(`flag`)来支持它。
+- `netdoctor doctor`:HTTPS 打不开时不再只给泛泛的“代理、防火墙、认证网关或 TLS 拦截”,而是先区分原因——普通 HTTP 返回的是登录 / 跳转页 → 判定为**强制门户**,并给出登录办法;本机**时钟**与服务器相差超过 5 分钟(证书会因此校验失败)→ 判定为时钟错误,并给出开启自动校时 / `sudo sntp -sS time.apple.com` 的办法;都不是才是原来的结论。时钟用动态站点的 HTTP `Date` 头(并计入 `Age`)比对,不用缓存了一年的 `captive.apple.com`(它的 `Date` 会落后好几个小时,会把所有人都误判成时钟错误)。
+- `netdoctor dhcp` 与对应的 **DHCP / IP 地址** 工具(命令行、网页、App):显示当前网卡的 IPv4 地址、DHCP 服务器、子网掩码、路由器、DNS、搜索域和租期;识别 **169.254.x.x 自分配地址**(DHCP 服务器没有应答,连上 Wi-Fi 却上不了网的常见原因)并给出重新获取地址(`sudo ipconfig set <网卡> DHCP`)等步骤;提示租期过短、默认网关与 DHCP 下发的路由器不一致(VPN 改了默认路由)、手动 / 无租约地址。`netdoctor doctor` 的第 1 步也会识别自分配地址,给出“DHCP 失败”的结论而不是笼统的“没有网络”,`netdoctor report` 会包含 DHCP 信息。
+
 ### 修复
 - `netdoctor report`:从网页或 App 保存的报告文件里混着颜色转义码(`ESC[32m[ OK ]ESC[0m` 这类,一份报告约 48 处),用文本编辑器打开满是乱码;现在生成报告时一律不带颜色。
 - `netdoctor captive`:判断“没有强制门户”只看应答里有没有 “Success” 一词,登录页里随便出现该词(如 “Wi-Fi Success Stories”)就会被误判为正常;现在只认 Apple 固定应答的 `<TITLE>Success</TITLE>` 且没有跳转。发现疑似强制门户时退出码改为 1(原先是 0)。
@@ -22,9 +28,6 @@
 ## [1.2.0] - 2026-11-07
 
 ### 新增
-- `netdoctor report redact` 与网页 / App 里“导出报告”的 **隐藏个人信息** 复选框:自动隐藏报告里的公网 IP、设备的全局 / 私有 IPv6 和链路本地地址、MAC 地址、Wi-Fi 名称与 BSSID、主机名(含 tailnet 域名)、搜索域、用户名路径和 VPN 隧道地址,换成 `<redacted>` 等占位符;局域网私有地址、网关、公共 DNS、延迟和丢包等诊断数据保留,发给别人仍然有用。文件首行会注明已脱敏。网页和 App 的输入框新增了“复选框”类型(`flag`)来支持它。
-- `netdoctor doctor`:HTTPS 打不开时不再只给泛泛的“代理、防火墙、认证网关或 TLS 拦截”,而是先区分原因——普通 HTTP 返回的是登录 / 跳转页 → 判定为**强制门户**,并给出登录办法;本机**时钟**与服务器相差超过 5 分钟(证书会因此校验失败)→ 判定为时钟错误,并给出开启自动校时 / `sudo sntp -sS time.apple.com` 的办法;都不是才是原来的结论。时钟用动态站点的 HTTP `Date` 头(并计入 `Age`)比对,不用缓存了一年的 `captive.apple.com`(它的 `Date` 会落后好几个小时,会把所有人都误判成时钟错误)。
-- `netdoctor dhcp` 与对应的 **DHCP / IP 地址** 工具(命令行、网页、App):显示当前网卡的 IPv4 地址、DHCP 服务器、子网掩码、路由器、DNS、搜索域和租期;识别 **169.254.x.x 自分配地址**(DHCP 服务器没有应答,连上 Wi-Fi 却上不了网的常见原因)并给出重新获取地址(`sudo ipconfig set <网卡> DHCP`)等步骤;提示租期过短、默认网关与 DHCP 下发的路由器不一致(VPN 改了默认路由)、手动 / 无租约地址。`netdoctor doctor` 的第 1 步也会识别自分配地址,给出“DHCP 失败”的结论而不是笼统的“没有网络”,`netdoctor report` 会包含 DHCP 信息。
 - `netdoctor ipv6` 和对应的 **IPv6 检测** 工具:检查全局 IPv6 地址(排除链路本地和私有地址)、AAAA 解析以及 IPv4 / IPv6 的实际连通性;有 IPv6 地址却不通时给出判读。`report` 也包含该检查。
 - `netdoctor captive` 和对应的 **强制门户** 工具:检测连上 Wi-Fi 却要先登录才能上网的情况,并显示跳转地址。
 - 网页界面:**命令面板**。按 `⌘/Ctrl+K` 打开,输入名称、描述或中英文关键词即可搜索并跳转到任意工具或页面(含实时延迟、Wi-Fi 信号、监控列表、自动体检、历史、快捷键帮助),也能直接切换语言和主题;`↑` / `↓` 选择,`Enter` 打开,`Esc` 关闭。

@@ -1,0 +1,50 @@
+name: CI
+
+# Runs on every push to main and on every pull request.
+# Everything here is also runnable locally, with the same commands:
+#   python3 scripts/check.py && /bin/bash scripts/test-cli.sh && scripts/package-app.sh
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Checks, tests and app build
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags are needed to check that released changelog sections stay frozen
+
+      - name: Syntax
+        run: |
+          bash -n netdoctor
+          bash -n scripts/test-cli.sh
+          bash -n scripts/package-app.sh
+          bash -n scripts/release-notes.sh
+          python3 -m py_compile netdoctor-gui.py scripts/check.py
+
+      - name: Consistency checks (tools, translations, links, version, changelog)
+        run: python3 scripts/check.py
+
+      - name: CLI tests (hermetic, no network)
+        run: /bin/bash scripts/test-cli.sh
+
+      - name: Build, sign and zip the universal app
+        run: scripts/package-app.sh
+
+      - name: Keep the built app for download
+        uses: actions/upload-artifact@v4
+        with:
+          name: NetDoctor-app
+          path: dist/*.zip
+          retention-days: 7

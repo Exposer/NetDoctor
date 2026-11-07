@@ -897,6 +897,9 @@ cmd_report() {
   fi
 }
 
+# 被当作函数库 source 进来 (自动化测试用): NETDOCTOR_SOURCE_ONLY=1 . ./netdoctor ——只定义函数, 不执行命令分发
+[ -n "${NETDOCTOR_SOURCE_ONLY:-}" ] && { return 0 2>/dev/null || exit 0; }
+
 c=${1:-help}; [ $# -gt 0 ] && shift
 case "$c" in
   quick|q) cmd_quick;; doctor|diagnose) cmd_doctor;; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
