@@ -19,6 +19,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `netdoctor`: an unknown command now prints "Unknown command: xxx" with the running version (and a hint to `git pull`) before the usage text, and exits with status 2. Added `netdoctor --version` (also `version` and `-v`) as well as `help`, `-h` and `--help`. Previously an unrecognised command silently printed the usage text, which made it impossible to tell a typo from an outdated local copy.
 
 ### Fixed
+- Administrator path (`osascript` in the web UI and the SwiftUI app): `do shell script` converts line feeds to `\r` by default, which broke line breaks in copied / saved text and reports; it now uses `without altering line endings`.
+- Web UI: on narrow screens (phone width, half-screen windows) the page overflowed horizontally and buttons were clipped; at ≤720px the sidebar becomes a horizontally scrollable bar at the top, and the wide layout is unchanged.
 - Web UI Wi-Fi signal page: shows "Reading Wi-Fi… (this can take 10+ seconds on some Macs)" during the first read so it does not look stuck (`system_profiler` takes around 13 s on some Macs and there is no faster source without sudo).
 - Web UI: switching to another tool now clears the previous tool's output (before, the Diagnose page still showed the last Captive portal result and its timing, which was misleading); the output is kept while a run is in progress, when switching language and when viewing history.
 - Web UI Wi-Fi signal page: `system_profiler SPAirPortDataType` takes over ten seconds on some Macs while the server timed out after 12, so the page always said "unavailable"; the timeout is now 30 s. An SSID hidden by macOS (`<redacted>`) is no longer shown.

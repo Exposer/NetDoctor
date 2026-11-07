@@ -353,7 +353,7 @@ class H(BaseHTTPRequestHandler):
                 shlex.quote(os.path.expanduser("~")), shlex.quote(env["PATH"]), lang,
                 " ".join(shlex.quote(x) for x in ["/bin/bash", NETDOCTOR, spec["id"]] + args))
             inner = inner.replace("\\", "\\\\").replace('"', '\\"')
-            cmd = ["osascript", "-e", 'do shell script "%s" with administrator privileges' % inner]
+            cmd = ["osascript", "-e", 'do shell script "%s" with administrator privileges without altering line endings' % inner]
             self.wfile.write((tr(lang, "(Waiting for the system administrator password prompt…)") + "\n").encode()); self.wfile.flush()
         else:
             cmd = ["/bin/bash", NETDOCTOR, spec["id"]] + args
@@ -472,6 +472,18 @@ kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);b
 .bd{font-size:11px;border-radius:99px;padding:0 7px;margin-left:6px;color:#fff;white-space:nowrap}.bd.ok{background:#2fa84f}.bd.stopped{background:#b58105}.bd.failed{background:#d1342a}
 #help.on{display:flex}#help .box{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:18px 22px;max-width:520px;width:calc(100% - 32px);max-height:85vh;overflow:auto}
 #help h3{margin:0 0 10px;font-size:16px}#help table{width:100%;border-collapse:collapse}#help td{padding:5px 0;vertical-align:top}#help td:first-child{width:46%}
+/* 窄屏 (手机宽度 / 半屏窗口): 侧边栏改为顶部可横向滑动的工具条 */
+@media(max-width:720px){
+body{flex-direction:column;height:auto;min-height:100vh}
+nav{width:auto;border-right:0;border-bottom:1px solid var(--line);display:flex;flex-wrap:nowrap;align-items:center;gap:4px;overflow-x:auto;overflow-y:hidden;padding:8px;position:sticky;top:0;z-index:5}
+nav h1{display:none}#list{display:contents}
+nav button{width:auto;flex:none;white-space:nowrap;margin-top:0!important}
+main{padding:12px;min-height:calc(100vh - 56px)}
+#out{min-height:260px}
+.bar{flex-wrap:wrap}
+input[type=text]{min-width:0;width:100%}
+form{align-items:stretch}
+}
 </style><script>try{var th=localStorage.getItem('nd_theme');if(th==='light'||th==='dark')document.documentElement.dataset.theme=th}catch(e){}</script></head><body>
 <nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="toggleHist()" id="histbtn" style="margin-top:14px;color:var(--mut)">🕘 <span data-i="History">History</span></button><button onclick="toggleHelp()" id="helpbtn" style="color:var(--mut)">⌨ <span data-i="Shortcuts">Shortcuts</span></button><button onclick="toggleTheme()" id="theme" style="color:var(--mut)"></button><button onclick="toggleLang()" id="lang" style="color:var(--mut)"></button><button onclick="quit()" style="color:var(--mut)">⏻ <span data-i="Quit">Quit</span></button></nav>
 <main><div class="card"><h2 id="t"></h2><p id="d"></p><form id="f"></form><div id="favs" class="chips"></div></div>

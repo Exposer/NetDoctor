@@ -117,7 +117,7 @@ final class Runner: ObservableObject {
         let inner = "HOME=\(q(home)) PATH=\(q(Runner.env["PATH"] ?? "")) NETDOCTOR_COLOR=1 NETDOCTOR_LANG=\(Runner.language) /bin/bash "
             + ([script, tool.id] + args).map(q).joined(separator: " ") + " 2>&1"
         let esc = inner.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        let src = "do shell script \"\(esc)\" with administrator privileges"
+        let src = "do shell script \"\(esc)\" with administrator privileges without altering line endings"
         append(loc("(Waiting for the system administrator password prompt…)") + "\n")
         DispatchQueue.global().async { [weak self] in
             var err: NSDictionary?
