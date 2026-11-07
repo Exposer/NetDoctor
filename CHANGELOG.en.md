@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-07
+
 ### Added
 - App menu bar: **Run health check** (runs `doctor` in the background, shows the verdict in the menu), **Notify when the connection drops** (after 3 failed pings in a row, and again when it recovers, with the outage length) and **Open at login** (system login item). The live latency page gained **Export CSV** (up to the last two hours, one row per second: time, target, latency, lost).
 - `netdoctor speed` now gives a verdict: it parses the responsiveness (RPM) from `networkQuality`, detects bufferbloat (for example "latency is very high under upload load, so video calls lag while someone uploads") and suggests SQM / a speed cap; very low upload bandwidth is flagged too. If the figures cannot be read it says so instead of guessing.
