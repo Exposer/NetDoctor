@@ -72,6 +72,9 @@ final class HealthCheck: ObservableObject {
             env["NETDOCTOR_COLOR"] = nil          // plain text: we only read the verdict line
             env["NETDOCTOR_NOSUDO"] = "1"
             env["NETDOCTOR_VERDICT_LINE"] = "1"   // adds a last line "verdict=<code>" for the history
+            // Reading the Wi-Fi details (system_profiler) takes ~10 s and scans the radio: fine when the user
+            // asks for a check, too heavy for a timer that may fire every 5 minutes.
+            if scheduled { env["NETDOCTOR_NOWIFI"] = "1" }
             p.environment = env
             let pipe = Pipe(); p.standardOutput = pipe; p.standardError = pipe
             p.standardInput = FileHandle.nullDevice
