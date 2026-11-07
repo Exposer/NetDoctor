@@ -560,15 +560,46 @@ cmd_http() {
   fi
 }
 
+# 主机名是否匹配证书里的名字 (精确匹配, 或 *.example.com 恰好匹配一级子域名)
+host_matches() {
+  local h n; h=$(echo "$1" | tr 'A-Z' 'a-z'); shift
+  for n in "$@"; do
+    n=$(echo "$n" | tr 'A-Z' 'a-z')
+    case "$n" in
+      \*.*) [ "$h" != "${h#*.}" ] && [ "${h#*.}" = "${n#*.}" ] && return 0;;
+      *) [ "$h" = "$n" ] && return 0;;
+    esac
+  done
+  return 1
+}
+
 cmd_tls() {
   local h=${1:-}; local p=${2:-443}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor tls <host> [port]" "用法: netdoctor tls <主机> [端口]")"; return 1; }
-  local out; out=$(echo | openssl s_client -connect "$h:$p" -servername "$h" 2>&1)
+  # s_client 默认不校验主机名 (证书是别的域名的也会显示 Verification: OK)。OpenSSL 支持 -verify_hostname;
+  # 系统自带的 LibreSSL 不支持, 那种情况下下面自己比对 SAN。
+  local vh="" native=0
+  case "$h" in *[!0-9.]*) if openssl s_client -help 2>&1 | grep -q -- -verify_hostname; then vh="-verify_hostname $h"; native=1; fi;; esac
+  local out; out=$(echo | openssl s_client -connect "$h:$p" -servername "$h" $vh 2>&1)
   echo "$out" | grep -E 'Protocol|Cipher|Verif|verify|depth=|errno|error' | head -12
   local cert; cert=$(echo "$out" | openssl x509 2>/dev/null)
   if [ -z "$cert" ]; then bad "$(L "No certificate received ($h:$p unreachable or not a TLS service)" "未取得证书 ($h:$p 不可达或非 TLS 服务)")"; return 1; fi
+  local rc=0
+  echo "$out" | grep -qE 'Verification error|Verify return code: [1-9]' && rc=1
   echo "$cert" | openssl x509 -noout -subject -issuer -dates
-  echo "$cert" | openssl x509 -noout -text | grep -A1 'Subject Alternative Name' | sed 's/^ */SAN: /;/Subject Alternative/d'
+  local san; san=$(echo "$cert" | openssl x509 -noout -text | grep -A1 'Subject Alternative Name' | sed 's/^ */SAN: /;/Subject Alternative/d')
+  echo "$san"
+  if [ "$native" = 0 ]; then
+    case "$h" in *[!0-9.]*)
+      local names; names=$(echo "$san" | tr ',' '\n' | sed -n 's/^[ ]*\(SAN: \)\{0,1\}DNS://p')
+      [ -z "$names" ] && names=$(echo "$cert" | openssl x509 -noout -subject | sed -n 's/.*CN *= *\([^,/]*\).*/\1/p')
+      # shellcheck disable=SC2086
+      if ! host_matches "$h" $names; then
+        bad "$(L "Hostname mismatch: the certificate is not valid for $h" "主机名不匹配: 该证书不适用于 $h")"; rc=1
+      fi;;
+    esac
+  fi
   if has testssl; then echo "$(L "Full audit: testssl $h:$p" "完整体检: testssl $h:$p")"; fi
+  return $rc
 }
 
 cmd_mtu() {
