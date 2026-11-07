@@ -19,6 +19,7 @@
 - `netdoctor`:输入未知命令时先提示“未知命令: xxx”并显示当前版本号(提醒用 `git pull` 更新),再打印用法,退出码为 2;新增 `netdoctor --version`(也可用 `version`、`-v`)以及 `help`、`-h`、`--help`。此前遇到不认识的命令会悄悄打印用法,分不清是命令输错还是本地版本太旧。
 
 ### 修复
+- `netdoctor lan`:子网为 /22 及更小时扫描整个网段(原先超过 /24 只扫 /24,会漏掉设备);修复主机名带空格(如 `name lan`)时 IP 解析错位;本机不再重复出现;读不到 ARP 表时(例如在网页版 / App 中被 macOS 本地网络隐私限制)仍会列出有 ping 应答的设备,MAC 显示为 `?` 并提示授权。
 - `netdoctor` 脚本固定使用 `/bin/bash`(原先 `#!/usr/bin/env bash` 在网页版把 `/usr/local/bin` 放到 PATH 最前时,可能选中旧的 x86 版 bash,导致 `arp` 等命令输出异常);网页版也显式用 `/bin/bash` 调用。
 
 

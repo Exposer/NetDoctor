@@ -208,7 +208,7 @@ ip2int() { local IFS=.; set -- $1; echo $(( ($1<<24) + ($2<<16) + ($3<<8) + $4 )
 int2ip() { echo "$(( ($1>>24)&255 )).$(( ($1>>16)&255 )).$(( ($1>>8)&255 )).$(( $1&255 ))"; }
 
 cmd_lan() {
-  local ifc ip m mask ipi net size i addr n=0 popt gw selfmac found
+  local ifc ip m mask ipi net size i addr n=0 popt gw selfmac found tmp unk=0 t
   ifc=$(default_if); gw=$(gateway)
   if [ -z "$ifc" ]; then bad "$(L "No default route (not connected?)" "没有默认路由 (未联网?)")"; return 1; fi
   ip=$(ipconfig getifaddr "$ifc" 2>/dev/null); [ -z "$ip" ] && ip=$(ifconfig "$ifc" 2>/dev/null | awk '/inet /{print $2; exit}')
@@ -216,29 +216,45 @@ cmd_lan() {
   if [ -z "$ip" ] || [ -z "$m" ]; then bad "$(L "Cannot read the IPv4 address of $ifc" "无法读取 $ifc 的 IPv4 地址")"; return 1; fi
   case "$m" in 0x*) mask=$((16#${m#0x}));; *) mask=$(ip2int "$m");; esac
   ipi=$(ip2int "$ip"); net=$(( ipi & mask )); size=$(( (~mask) & 0xffffffff ))
-  if [ "$size" -gt 255 ]; then net=$(( ipi & 0xffffff00 )); size=255; fi
+  if [ "$size" -gt 1023 ]; then   # 大于 /22 的网段只扫本机所在的 /24, 避免扫描过久
+    warn "$(L "Subnet is larger than /22; scanning only this Mac's /24" "子网大于 /22, 仅扫描本机所在的 /24")"
+    net=$(( ipi & 0xffffff00 )); size=255
+  fi
   selfmac=$(ifconfig "$ifc" 2>/dev/null | awk '/ether /{print $2; exit}')
   hdr "$(L "Devices on the local network" "局域网设备") ($(int2ip $((net+1))) - $(int2ip $((net+size-1))))"
   echo "$(L "Scanning $((size-1)) addresses on $ifc …" "正在扫描 $ifc 上的 $((size-1)) 个地址 …")"
   popt="-W 1"; [ "$(uname)" = Darwin ] && popt="-t 1"
+  tmp=$(mktemp -t netdoctor-lan)
   for ((i=1; i<size; i++)); do
     addr=$(int2ip $((net+i))); [ "$addr" = "$ip" ] && continue
-    ( ping -c 1 $popt "$addr" >/dev/null 2>&1 ) &
+    ( ping -c 1 $popt "$addr" >/dev/null 2>&1 && echo "$addr" >>"$tmp" ) &
     n=$((n+1)); [ $((n % 64)) -eq 0 ] && wait
   done
   wait
-  found=$(
-    { arp -a 2>/dev/null; } | awk -v self="$ip" '
-      { name=$1; a=$2; gsub(/[()]/,"",a); mac=$4
-        if (mac=="(incomplete)" || mac=="" || mac ~ /ff:ff:ff:ff:ff:ff/ || a ~ /^(224|239)\./ || a ~ /\.255$/) next
-        k=split(mac,o,":"); m2=""; for(j=1;j<=k;j++){ if(length(o[j])==1) o[j]="0" o[j]; m2=m2 (j>1?":":"") o[j] }
-        if (name=="?") name="-"
-        if (!(a in nm) || (nm[a]=="-" && name!="-")) { nm[a]=name; mc[a]=m2 } }
+  # ARP 表 + 有应答的主机 (整表读不到时, 逐个按 IP 查询; 仍读不到 MAC 则显示 ?)
+  local rows; rows=$(arp -a -i "$ifc" 2>/dev/null | awk '/ at /')
+  for t in $(sort -u "$tmp" 2>/dev/null); do
+    echo "$rows" | grep -q "($t)" && continue
+    line=$(arp -n "$t" 2>/dev/null | grep " on $ifc " | head -1)
+    [ -z "$line" ] && { line="? ($t) at ? on $ifc"; unk=1; }
+    rows="$rows
+$line"
+  done
+  rm -f "$tmp"
+  found=$(echo "$rows" | awk '
+      { if (!match($0, /\([0-9.]+\)/)) next
+        a=substr($0, RSTART+1, RLENGTH-2); name=substr($0, 1, RSTART-2); sub(/ .*/, "", name)
+        if (!match($0, / at [^ ]+/)) next
+        mac=substr($0, RSTART+4, RLENGTH-4)
+        if (mac=="(incomplete)" || mac ~ /ff:ff:ff:ff:ff:ff/ || a ~ /^(224|239)\./ || a ~ /\.255$/) next
+        if (mac!="?") { k=split(mac,o,":"); mac=""; for(j=1;j<=k;j++){ if(length(o[j])==1) o[j]="0" o[j]; mac=mac (j>1?":":"") o[j] } }
+        if (name=="" || name=="?") name="-"
+        if (!(a in nm) || (nm[a]=="-" && name!="-")) { nm[a]=name; mc[a]=mac } }
       END { for (a in nm) print a, mc[a], nm[a] }' | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
   printf '  %-16s %-18s %s\n' "IP" "MAC" "Name"
   local cnt=0 line tag
   while read -r a2 mac name; do
-    [ -z "$a2" ] && continue
+    [ -z "$a2" ] || [ "$a2" = "$ip" ] && continue
     case "$(int2ip $(( $(ip2int "$a2") & mask )))" in "$(int2ip $net)") ;; *) continue;; esac
     tag=""; [ "$a2" = "$gw" ] && tag="  $(L "(gateway)" "(网关)")"
     printf '  %-16s %-18s %s%s\n' "$a2" "$mac" "$name" "$tag"; cnt=$((cnt+1))
@@ -247,6 +263,7 @@ $found
 EOF2
   printf '  %-16s %-18s %s\n' "$ip" "${selfmac:--}" "$(L "(this Mac)" "(本机)")"
   ok "$(L "$((cnt+1)) devices (including this Mac)" "共 $((cnt+1)) 台设备 (含本机)")"
+  [ "$unk" = 1 ] && warn "$(L "Some MAC addresses could not be read. If this runs inside the app or web UI, allow it under System Settings → Privacy & Security → Local Network, or run netdoctor lan in Terminal." "部分设备的 MAC 无法读取。若在 App/网页中运行, 请在 系统设置 → 隐私与安全性 → 本地网络 中允许, 或直接在终端运行 netdoctor lan。")"
   echo "$(L "Devices that block ping may be missing; the ARP table only lists hosts that answered recently." "屏蔽 ping 的设备可能不会出现; ARP 表只包含近期有应答的主机。")"
 }
 
