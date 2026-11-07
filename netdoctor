@@ -559,5 +559,7 @@ case "$c" in
   ping) cmd_ping "$@";; port) cmd_port "$@";; http) cmd_http "$@";; tls) cmd_tls "$@";;
   mtu) cmd_mtu "$@";; speed) cmd_speed;; conns) cmd_conns;; proxy) cmd_proxy;;
   capture) cmd_capture "$@";; fixdns) cmd_fixdns;; report) cmd_report;; tools) cmd_tools;;
-  *) usage;;
+  version|-v|--version) echo "netdoctor $VERSION";;
+  help|-h|--help) usage;;
+  *) warn "$(L "Unknown command: $c (this is netdoctor $VERSION; if the command is in the README, update with: git pull)" "未知命令: $c (当前是 netdoctor $VERSION; 如果 README 里有这个命令, 请先更新: git pull)")"; usage; exit 2;;
 esac
