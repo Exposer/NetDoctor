@@ -4,7 +4,7 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.7] - 2026-11-07
 
 ### Added
 - `netdoctor doctor` (alias `diagnose`) and a matching **Diagnose** tool: six layered checks — link → gateway → internet (by IP) → DNS → HTTPS → proxy / VPN — where later steps show "skipped" if an earlier one failed. It ends with a verdict (not connected / broken link to the router / router fine but no internet / DNS problem / web access blocked / unstable connection / healthy) and targeted next-step commands. The exit code is 1 when something is wrong, and `report` now includes the diagnosis.
