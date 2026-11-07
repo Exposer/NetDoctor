@@ -20,6 +20,7 @@ struct ContentView: View {
                 Section("Monitoring") {
                     Label("Live latency", systemImage: "chart.xyaxis.line").tag(Optional("monitor"))
                     Label("Health history", systemImage: "waveform.path.ecg").tag(Optional("health"))
+                    Label("Speed history", systemImage: "speedometer").tag(Optional("speed-history"))
                 }
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 260)
@@ -28,6 +29,8 @@ struct ContentView: View {
                 MonitorView()
             } else if nav.selection == "health" {
                 HealthHistoryView()
+            } else if nav.selection == "speed-history" {
+                SpeedHistoryView()
             } else if let t = Tool.all.first(where: { $0.id == nav.selection }) {
                 ToolView(runner: store.runner(for: t))
             } else {
