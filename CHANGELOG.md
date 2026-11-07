@@ -19,6 +19,8 @@
 - `netdoctor`:输入未知命令时先提示“未知命令: xxx”并显示当前版本号(提醒用 `git pull` 更新),再打印用法,退出码为 2;新增 `netdoctor --version`(也可用 `version`、`-v`)以及 `help`、`-h`、`--help`。此前遇到不认识的命令会悄悄打印用法,分不清是命令输错还是本地版本太旧。
 
 ### 修复
+- `netdoctor report`:在终端里运行时,生成报告途中会突然调 `sudo wdutil` 并弹出密码提示(输出已重定向到文件,很让人困惑);现在报告里只用 `sudo -n`,拿不到管理员信息就跳过。单独运行 `netdoctor wifi` 仍会正常询问密码。
+- `Brewfile`:cask `wireshark` 已改名为 `wireshark-app`(旧名只是别名),改用正式名称。
 - 管理员权限路径(网页界面和 SwiftUI App 的 `osascript`):`do shell script` 默认把换行转成 `\r`,导致复制 / 保存 / 报告里的换行不对;加上 `without altering line endings`。
 - 网页界面:窄屏(手机宽度、半屏窗口)下页面横向溢出、按钮被裁掉;≤720px 时侧边栏改为顶部可横向滑动的工具条,宽屏布局不变。
 - 网页界面 Wi-Fi 信号页:第一次读取期间显示“正在读取 Wi-Fi…(部分 Mac 需要十几秒)”,避免以为页面卡住(`system_profiler` 在有些 Mac 上要 13 秒左右,没有更快的免 sudo 来源)。

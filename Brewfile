@@ -24,4 +24,4 @@ brew "iftop"          # per-connection bandwidth (needs sudo)
 brew "whois"
 brew "speedtest-cli"
 brew "jq"
-cask "wireshark"      # GUI + tshark
+cask "wireshark-app"  # GUI + tshark (formerly "wireshark")

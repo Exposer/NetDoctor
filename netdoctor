@@ -15,8 +15,8 @@ warn(){ printf '%s[WARN]%s %s\n' "$Y" "$N" "$*"; }
 
 default_if()  { route -n get default 2>/dev/null | awk '/interface:/{print $2}'; }
 gateway()     { route -n get default 2>/dev/null | awk '/gateway:/{print $2}'; }
-# 提权: 已是 root 直接执行; 有终端时正常询问密码; 无终端(GUI 调用)用 -n 避免卡在密码提示
-priv() { if [ "$(id -u)" = 0 ]; then "$@"; elif [ -t 0 ]; then sudo "$@"; else sudo -n "$@"; fi; }
+# 提权: 已是 root 直接执行; 有终端时正常询问密码; 无终端(GUI 调用)或设了 NETDOCTOR_NOSUDO(如 report)用 -n, 避免卡在/弹出密码提示
+priv() { if [ "$(id -u)" = 0 ]; then "$@"; elif [ -t 0 ] && [ -z "${NETDOCTOR_NOSUDO:-}" ]; then sudo "$@"; else sudo -n "$@"; fi; }
 wifi_if()     { networksetup -listallhardwareports 2>/dev/null | awk '/Wi-Fi|AirPort/{getline; print $2; exit}'; }
 
 usage() {
@@ -626,6 +626,7 @@ cmd_tools() {
 }
 
 cmd_report() {
+  local NETDOCTOR_NOSUDO=1   # 输出被重定向到文件, 不要在中途弹出 sudo 密码提示
   local f="$HOME/Desktop/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt"
   { echo "netdoctor report $(date)"; uname -a; sw_vers
     cmd_doctor; cmd_overview; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$f" 2>&1
