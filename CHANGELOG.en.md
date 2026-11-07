@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-07
+
 ### Added
 - `netdoctor mtr <host> [count]` and a matching **Per-hop loss (mtr)** tool (CLI, web UI, app): finds every hop with traceroute and pings them in parallel, without root; shows loss and latency per hop and says which hop the problem is at (your router / your ISP's access network / further away). It tells "a middle router merely rate-limits ping (harmless)" from "loss that continues to the destination (a real problem)" and spots latency that jumps at one hop and stays high.
 - `netdoctor leak` and a **VPN leak check** tool: decides whether a VPN is really in use (by which interface carries traffic to the internet, so VPNs that use 0/1 + 128/1 routes work), checks that every DNS server is reached through the tunnel and that IPv6 does not bypass it, and shows the public IPv4 / IPv6 and DNS exit the outside world sees; gives a fix when something leaks. With no VPN it says nothing needs checking. The result is a routing-based judgement, not packet-capture proof.

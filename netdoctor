@@ -1,7 +1,7 @@
 #!/bin/bash
 # netdoctor - unified entry point for macOS network diagnostics (works with the stock bash 3.2)
 set -u
-VERSION=1.3.0
+VERSION=1.4.0
 B=$'\033[1m'; G=$'\033[32m'; R=$'\033[31m'; Y=$'\033[33m'; N=$'\033[0m'
 [ -t 1 ] || [ -n "${NETDOCTOR_COLOR:-}" ] || { B=; G=; R=; Y=; N=; }
 # Language: NETDOCTOR_LANG=zh|en, otherwise taken from the locale (LC_ALL / LANG)
