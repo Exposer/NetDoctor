@@ -141,10 +141,12 @@ cmd_ports() {
       *)   a=$tok; b=$tok ;;
     esac
     a=$((10#$a)); b=$((10#$b))
-    if [ "$a" -lt 1 ] || [ "$b" -gt 65535 ] || [ "$a" -gt "$b" ]; then bad "$(L "Port out of range (1-65535): $tok" "端口超出范围 (1-65535): $tok")"; return 1; fi
+    if [ "$a" -lt 1 ] || [ "$b" -gt 65535 ]; then bad "$(L "Port out of range (1-65535): $tok" "端口超出范围 (1-65535): $tok")"; return 1; fi
+    if [ "$a" -gt "$b" ]; then bad "$(L "Invalid port range (start is greater than end): $tok" "端口范围无效 (起始大于结束): $tok")"; return 1; fi
     i=$a; while [ "$i" -le "$b" ]; do list="$list $i"; i=$((i+1)); n=$((n+1)); if [ "$n" -gt 1024 ]; then bad "$(L "Too many ports (max 1024 per run)" "端口过多 (每次最多 1024 个)")"; return 1; fi; done
   done
   has nc || { bad "$(L "nc (netcat) not found" "未找到 nc (netcat)")"; return 1; }
+  if cannot_resolve "$h"; then bad "$(L "Cannot resolve $h; check the host name or DNS (try: netdoctor dns $h)" "无法解析 $h, 检查域名或 DNS (可试: netdoctor dns $h)")"; return 1; fi
   ncopt="-w 2"; if ! nc -G 2 -z 127.0.0.1 9 2>&1 | grep -qiE 'illegal option|invalid option|unknown option'; then ncopt="-G 2 -w 2"; fi
   tmp=$(mktemp -d); n=0
   for p in $list; do
@@ -540,6 +542,7 @@ cmd_dns() {
 
 # 主机名能否被系统解析 (用 ping 的解析结果, 与系统解析器一致; IP 直接视为可解析)
 cannot_resolve() {
+  case "$1" in *:*) return 1;; esac   # IPv6 字面量: macOS 的 ping 只认 IPv4, 不能用它判断
   case "$1" in *[!0-9.]*) ;; *) return 1;; esac
   ping -c 1 -t 1 "$1" 2>&1 | grep -qi 'cannot resolve\|unknown host'
 }
@@ -652,6 +655,7 @@ cmd_tls() {
 
 cmd_mtu() {
   local h=${1:-1.1.1.1} s
+  case "$h" in *:*) bad "$(L "MTU probing supports IPv4 only (the system ping cannot send IPv6 with the DF bit)" "MTU 探测只支持 IPv4 (系统 ping 无法发送带 DF 位的 IPv6 包)")"; return 1;; esac
   if cannot_resolve "$h"; then bad "$(L "Cannot resolve $h; check the host name or DNS (try: netdoctor dns $h)" "无法解析 $h, 检查域名或 DNS (可试: netdoctor dns $h)")"; return 1; fi
   hdr "$(L "Path MTU probe -> $h (DF bit)" "路径 MTU 探测 -> $h (DF 位)")"
   for s in 1472 1452 1432 1412 1372 1272 1172; do
