@@ -6,6 +6,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-07
+
 ### Added
 - `netdoctor ipv6` and a matching **IPv6 check** tool: checks for a global IPv6 address (link-local and private ones are ignored), AAAA resolution and real IPv4 / IPv6 reachability, and explains the problem when an IPv6 address exists but traffic fails. `report` includes it too.
 - `netdoctor captive` and a matching **Captive portal** tool: detects Wi-Fi that needs a login before it gives internet access, and shows the redirect URL.
