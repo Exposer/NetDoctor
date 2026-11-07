@@ -19,6 +19,7 @@
 - `netdoctor`:输入未知命令时先提示“未知命令: xxx”并显示当前版本号(提醒用 `git pull` 更新),再打印用法,退出码为 2;新增 `netdoctor --version`(也可用 `version`、`-v`)以及 `help`、`-h`、`--help`。此前遇到不认识的命令会悄悄打印用法,分不清是命令输错还是本地版本太旧。
 
 ### 修复
+- `netdoctor quick`:公网 IP 查询失败时现在会提示“获取失败”(原先 `|| warn` 永远不会触发,什么都不显示);没有默认路由或任一检查失败时退出码为 1(原先总是 0)。
 - `netdoctor port` / `http` / `mtu` / `speed`:失败时退出码误为 0(`bad` 本身返回 0),网页版和 App 会据此显示“退出码 0”;现在失败返回 1。
 - SwiftUI App:点“停止”现在会终止整棵进程树(原先只杀直接子进程,`ports`、`dnsbench`、`lan` 等用后台子 shell 启动的 `nc` / `ping` 会残留)。
 - 构建脚本:`Info.plist` 的版本号改为从 `netdoctor` 的 `VERSION` 读取(原先写死);两个 App 都加上 `NSLocalNetworkUsageDescription`,让 macOS 能弹出“本地网络”授权,`lan` 才能读到局域网设备的 MAC。

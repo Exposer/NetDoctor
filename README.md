@@ -68,6 +68,7 @@ netdoctor tools                      # 查看装了哪些
 | 需要看包 | `netdoctor capture 'host x'` → Wireshark 打开 |
 | 测速 | `netdoctor speed`(networkQuality);局域网用 `iperf3 -s` / `iperf3 -c` |
 | DNS 异常 | `netdoctor fixdns` |
+| 要把排查结果发给别人 / 留档 | `netdoctor report`(诊断、概览、体检、Wi-Fi、DNS、IPv6、代理等保存到桌面文件) |
 
 ## 常用速查(系统自带)
 - `scutil --dns` / `scutil --proxy`:真实生效的 DNS、代理

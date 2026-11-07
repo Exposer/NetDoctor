@@ -449,32 +449,37 @@ cmd_captive() {
 
 cmd_quick() {
   hdr "$(L "Interface and gateway" "网卡与网关")"
-  local ifc gw; ifc=$(default_if); gw=$(gateway)
-  if [ -z "$ifc" ]; then bad "$(L "No default route (not connected?)" "没有默认路由 (未联网?)")"; ifconfig | grep -E '^[a-z0-9]+:|inet ' ; return; fi
+  local ifc gw ip d u code nf=0; ifc=$(default_if); gw=$(gateway)
+  if [ -z "$ifc" ]; then bad "$(L "No default route (not connected?)" "没有默认路由 (未联网?)")"; ifconfig | grep -E '^[a-z0-9]+:|inet ' ; return 1; fi
   ok "$(L "Default interface $ifc  gateway ${gw:-none}" "默认网卡 $ifc  网关 ${gw:-无}")"
   ifconfig "$ifc" | awk '/inet |inet6 |ether|status/{print "   "$0}'
   hdr "$(L "Gateway reachability" "网关连通性")"
   if [ -n "$gw" ]; then
-    ping -c 3 -t 5 "$gw" >/dev/null 2>&1 && ok "$(L "Gateway $gw reachable" "网关 $gw 可达")" || bad "$(L "Gateway $gw unreachable (Wi-Fi / cable / router problem)" "网关 $gw 不通 (Wi-Fi/网线/路由器问题)")"
+    if ping -c 3 -t 5 "$gw" >/dev/null 2>&1; then ok "$(L "Gateway $gw reachable" "网关 $gw 可达")"
+    else bad "$(L "Gateway $gw unreachable (Wi-Fi / cable / router problem)" "网关 $gw 不通 (Wi-Fi/网线/路由器问题)")"; nf=$((nf+1)); fi
   fi
   hdr "$(L "Internet reachability by IP (bypassing DNS)" "外网 IP 连通性 (绕开 DNS)")"
   for ip in 1.1.1.1 8.8.8.8 223.5.5.5; do
-    ping -c 2 -t 4 "$ip" >/dev/null 2>&1 && ok "ping $ip" || bad "ping $ip"
+    if ping -c 2 -t 4 "$ip" >/dev/null 2>&1; then ok "ping $ip"; else bad "ping $ip"; nf=$((nf+1)); fi
   done
   hdr "DNS"
   scutil --dns | awk '/nameserver\[/{print "   "$0}' | sort -u | head -6
   for d in apple.com baidu.com; do
-    if dig +short +time=3 +tries=1 "$d" 2>/dev/null | grep -q .; then ok "$(L "Resolve $d" "解析 $d")"; else bad "$(L "Failed to resolve $d" "解析 $d 失败")"; fi
+    if dig +short +time=3 +tries=1 "$d" 2>/dev/null | grep -q .; then ok "$(L "Resolve $d" "解析 $d")"; else bad "$(L "Failed to resolve $d" "解析 $d 失败")"; nf=$((nf+1)); fi
   done
   hdr "HTTP/HTTPS"
   for u in https://www.apple.com https://www.baidu.com https://www.google.com; do
     code=$(curl -s -o /dev/null -m 8 -w '%{http_code} %{time_total}s' "$u" 2>/dev/null)
-    case "$code" in 2*|3*) ok "$u  $code";; *) bad "$u  ${code:-$(L "timeout" "超时")}";; esac
+    case "$code" in 2*|3*) ok "$u  $code";; *) bad "$u  ${code:-$(L "timeout" "超时")}"; nf=$((nf+1));; esac
   done
   hdr "$(L "Public IP" "公网出口 IP")"
-  curl -s -m 6 https://api.ip.sb/geoip 2>/dev/null | (has jq && jq -r '"   \(.ip)  \(.country) \(.isp // .organization)"' || cat) || warn "$(L "Lookup failed" "获取失败")"
+  local geo; geo=$(curl -s -m 6 https://api.ip.sb/geoip 2>/dev/null)
+  if [ -z "$geo" ]; then warn "$(L "Lookup failed" "获取失败")"
+  elif has jq; then echo "$geo" | jq -r '"   \(.ip)  \(.country // "") \(.isp // .organization // "")"' 2>/dev/null || echo "$geo"
+  else echo "$geo"; fi
   echo
   echo "$(L "Reading: gateway down → local link; IP works but names fail → DNS; names work but HTTP fails → proxy/firewall/TLS." "判读: 网关不通→本地链路; IP通但域名失败→DNS; 域名通但HTTP失败→代理/防火墙/TLS。")"
+  [ "$nf" -eq 0 ]
 }
 
 cmd_wifi() {

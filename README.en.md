@@ -70,6 +70,7 @@ netdoctor tools                                          # see which tools are i
 | Need to inspect packets | `netdoctor capture 'host x'` → open in Wireshark |
 | Speed test | `netdoctor speed` (networkQuality); on a LAN use `iperf3 -s` / `iperf3 -c` |
 | Odd DNS behavior | `netdoctor fixdns` |
+| Need to send results to someone / keep a record | `netdoctor report` (saves diagnosis, overview, quick check, Wi-Fi, DNS, IPv6 and proxy info to a Desktop file) |
 
 ## Handy built-in commands
 - `scutil --dns` / `scutil --proxy`: the DNS and proxy settings actually in effect
