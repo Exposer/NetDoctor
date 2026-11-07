@@ -296,7 +296,14 @@ cmd_doctor() {
   # 2. gateway
   if [ -z "$verdict" ] && [ -n "$gw" ]; then
     set -- $(ping_stats "$gw" 3); l=${1:-100}; avg=${2:-}
-    if [ -z "$avg" ]; then bad "$(L "2/6 Gateway $gw: no reply (Wi-Fi / cable / router)" "2/6 网关 $gw: 无应答 (Wi-Fi / 网线 / 路由器)")"; FAILS=$((FAILS+1)); verdict=gateway
+    if [ -z "$avg" ]; then
+      # 有些路由器禁 ping。先探测外网: 只要外网 IP 通, 就不是链路故障, 只提示网关不回应 ping
+      for ip in 1.1.1.1 223.5.5.5 8.8.8.8; do set -- $(ping_stats "$ip" 1); [ -n "${2:-}" ] && { ip_ok=$ip; break; }; done
+      if [ -n "$ip_ok" ]; then
+        warn "$(L "2/6 Gateway $gw: does not answer ping, but the internet is reachable (the router probably blocks ICMP)" "2/6 网关 $gw: 不回应 ping, 但外网可达 (路由器可能禁了 ICMP)")"; WARNS=$((WARNS+1)); ip_ok=""
+      else
+        bad "$(L "2/6 Gateway $gw: no reply (Wi-Fi / cable / router)" "2/6 网关 $gw: 无应答 (Wi-Fi / 网线 / 路由器)")"; FAILS=$((FAILS+1)); verdict=gateway
+      fi
     elif [ "${l%.*}" -gt 0 ]; then warn "$(L "2/6 Gateway $gw: ${l}% packet loss (avg $avg ms)" "2/6 网关 $gw: 丢包 ${l}% (平均 $avg ms)")"; WARNS=$((WARNS+1)); verdict=${verdict:-unstable}
     else ok "$(L "2/6 Gateway $gw: reachable (avg $avg ms)" "2/6 网关 $gw: 可达 (平均 $avg ms)")"; fi
   elif [ -z "$verdict" ]; then warn "$(L "2/6 Gateway: none reported (VPN-only or unusual setup); skipped" "2/6 网关: 未取得 (仅 VPN 或特殊配置); 已跳过")"
@@ -459,6 +466,8 @@ cmd_quick() {
   hdr "$(L "Gateway reachability" "网关连通性")"
   if [ -n "$gw" ]; then
     if ping -c 3 -t 5 "$gw" >/dev/null 2>&1; then ok "$(L "Gateway $gw reachable" "网关 $gw 可达")"
+    elif ping -c 1 -t 3 1.1.1.1 >/dev/null 2>&1 || ping -c 1 -t 3 223.5.5.5 >/dev/null 2>&1; then
+      warn "$(L "Gateway $gw does not answer ping, but the internet is reachable (the router probably blocks ICMP)" "网关 $gw 不回应 ping, 但外网可达 (路由器可能禁了 ICMP)")"
     else bad "$(L "Gateway $gw unreachable (Wi-Fi / cable / router problem)" "网关 $gw 不通 (Wi-Fi/网线/路由器问题)")"; nf=$((nf+1)); fi
   fi
   hdr "$(L "Internet reachability by IP (bypassing DNS)" "外网 IP 连通性 (绕开 DNS)")"

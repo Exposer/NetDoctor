@@ -7,6 +7,7 @@
 ## [未发布]
 
 ### 修复
+- `netdoctor doctor` / `quick`:路由器禁了 ICMP(不回应 ping)时,网关一步被直接判为失败,`doctor` 还会跳过后面所有检查并给出“到路由器的链路不通,请重启路由器”的结论,而网络其实是通的;现在网关不回应时先探测外网 IP,外网可达就只给出提示(“路由器可能禁了 ICMP”)并继续检查,外网也不通才判定为链路故障。真正的断网场景(网关和外网都不通 / 只有外网不通)的结论不变。
 - `netdoctor fixdns` / `capture`:没有管理员权限且没有终端时(例如被脚本或 GUI 调用),只会冒出 sudo 的英文原话 `a password is required`(`capture` 还会先打印“抓包 →”,像是已经开始);现在先判断能否提权,不能就直接提示“需要管理员权限: 请在终端运行 sudo netdoctor …”并返回 1,`fixdns` 在密码错误时也会给出明确的失败信息。有终端或已是 root 时行为不变。
 - `NetDoctorApp/build-app.sh`:在 iCloud 同步的目录(`~/Documents`、`~/Desktop`)里构建时,系统会给 App 加上 `com.apple.FinderInfo`,`codesign` 因此失败,而脚本用 `|| true` 把失败悄悄吞掉,得到的是签名无效的 App;现在会先清除扩展属性,签名后再校验,失败时给出警告和修复办法(在同步目录之外构建,或复制出去重新签名)。
 
