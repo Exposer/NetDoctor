@@ -27,6 +27,8 @@ netdoctor $VERSION - macOS 网络诊断
   quick                 一键体检: 网卡/网关/DNS/外网/HTTP (先跑这个)
   overview              网络概览: 网卡/IP/网关/DNS/Wi-Fi/代理/公网 IP 一屏看全
   ports <主机> [端口]   并行检测多个端口 (默认常用端口; 如 22,80 或 1-1024)
+  dnsbench [域名]       DNS 测速: 对比系统与多家公共 DNS 的速度并给出推荐
+  lan                   局域网设备发现: 扫描本网段, 列出 IP / MAC / 主机名
   wifi                  Wi-Fi 信号、信道、速率、SSID (部分信息需 sudo)
   dns <域名>            对比 系统/1.1.1.1/8.8.8.8/223.5.5.5 解析结果与耗时
   route <主机>          路由选择 + traceroute/mtr 路径
@@ -50,6 +52,8 @@ Usage: netdoctor <command> [args]
   quick                 one-shot check: interface/gateway/DNS/internet/HTTP (run this first)
   overview              network snapshot: interface/IP/gateway/DNS/Wi-Fi/proxy/public IP
   ports <host> [ports]  check many ports in parallel (common ports by default; e.g. 22,80 or 1-1024)
+  dnsbench [domain]     DNS benchmark: compare the system and public DNS servers and recommend one
+  lan                   discover devices on the local network (IP / MAC / name)
   wifi                  Wi-Fi signal, channel, rate, SSID (some details need sudo)
   dns <domain>          compare system/1.1.1.1/8.8.8.8/223.5.5.5 answers and timings
   route <host>          route selection + traceroute/mtr path
@@ -147,6 +151,95 @@ cmd_ports() {
     closed=""; for p in $list; do case " $(echo $open) " in *" $p "*) ;; *) closed="$closed $p";; esac; done
     [ -n "$closed" ] && echo "$(L "Closed or filtered:" "关闭或被过滤:")$closed"
   fi
+}
+
+cmd_dnsbench() {
+  local extra=${1:-} domains="example.com apple.com baidu.com github.com wikipedia.org"
+  local servers="system 1.1.1.1 8.8.8.8 9.9.9.9 223.5.5.5 119.29.29.29 114.114.114.114 180.76.76.76" tmp s best_line rank=0 avg srv ok n mn
+  has dig || { bad "$(L "dig not found (brew install bind)" "未找到 dig (brew install bind)")"; return 1; }
+  if [ -n "$extra" ]; then
+    case "$extra" in *[!A-Za-z0-9.-]*|-*) bad "$(L "Invalid domain: $extra" "域名无效: $extra")"; return 1;; esac
+    domains="$domains $extra"
+  fi
+  hdr "$(L "DNS benchmark" "DNS 测速") ($(echo $domains | wc -w | tr -d ' ') $(L "domains" "个域名"))"
+  tmp=$(mktemp -d)
+  for s in $servers; do
+    (
+      sum=0; ok=0; n=0; mn=999999; at=""; [ "$s" != system ] && at="@$s"
+      for d in $domains; do
+        out=$(dig $at +tries=1 +time=2 "$d" A 2>/dev/null)
+        t=$(printf '%s\n' "$out" | awk '/Query time:/{print $4; exit}'); n=$((n+1))
+        if [ -n "$t" ] && printf '%s\n' "$out" | grep -q 'status: NOERROR'; then ok=$((ok+1)); sum=$((sum+t)); [ "$t" -lt "$mn" ] && mn=$t; fi
+      done
+      if [ "$ok" -gt 0 ]; then echo "$((sum/ok)) $s $ok $n $mn" >"$tmp/$s"; else echo "999999 $s 0 $n 0" >"$tmp/$s"; fi
+    ) &
+  done
+  wait
+  printf '  %-3s %-17s %9s %9s  %s\n' "#" "Server" "Avg ms" "Min ms" "OK"
+  best_line=""
+  while read -r avg srv ok n mn; do
+    rank=$((rank+1)); [ -z "$best_line" ] && [ "$ok" -gt 0 ] && best_line="$avg $srv"
+    if [ "$ok" -gt 0 ]; then printf '  %-3s %-17s %9s %9s  %s/%s\n' "$rank" "$srv" "$avg" "$mn" "$ok" "$n"
+    else printf '  %-3s %-17s %9s %9s  %s/%s\n' "$rank" "$srv" "-" "-" "$ok" "$n"; fi
+  done <<EOF2
+$(cat "$tmp"/* | sort -n)
+EOF2
+  local sysavg; sysavg=$(awk '$2=="system"{print $1}' "$tmp"/system 2>/dev/null); rm -rf "$tmp"
+  [ -z "$best_line" ] && { bad "$(L "No DNS server answered (network down?)" "没有 DNS 服务器应答 (网络不通?)")"; return 1; }
+  set -- $best_line
+  ok "$(L "Fastest: $2 (avg $1 ms)" "最快: $2 (平均 $1 ms)")"
+  if [ "$2" != system ] && [ -n "$sysavg" ] && [ "$sysavg" -lt 999999 ] && [ "$sysavg" -gt $(( $1 * 13 / 10 )) ]; then
+    echo "$(L "The system DNS (avg $sysavg ms) is noticeably slower. To switch (Wi-Fi):" "系统 DNS (平均 $sysavg ms) 明显偏慢。可切换 (Wi-Fi):")"
+    echo "  networksetup -setdnsservers Wi-Fi $2"
+    echo "$(L "To undo: networksetup -setdnsservers Wi-Fi empty" "恢复默认: networksetup -setdnsservers Wi-Fi empty")"
+  fi
+  echo "$(L "Note: popular domains are usually cached, so this measures the resolver's nearest cache." "注: 热门域名通常有缓存, 测得的是解析器最近缓存的响应速度。")"
+}
+
+ip2int() { local IFS=.; set -- $1; echo $(( ($1<<24) + ($2<<16) + ($3<<8) + $4 )); }
+int2ip() { echo "$(( ($1>>24)&255 )).$(( ($1>>16)&255 )).$(( ($1>>8)&255 )).$(( $1&255 ))"; }
+
+cmd_lan() {
+  local ifc ip m mask ipi net size i addr n=0 popt gw selfmac found
+  ifc=$(default_if); gw=$(gateway)
+  if [ -z "$ifc" ]; then bad "$(L "No default route (not connected?)" "没有默认路由 (未联网?)")"; return 1; fi
+  ip=$(ipconfig getifaddr "$ifc" 2>/dev/null); [ -z "$ip" ] && ip=$(ifconfig "$ifc" 2>/dev/null | awk '/inet /{print $2; exit}')
+  m=$(ifconfig "$ifc" 2>/dev/null | awk '/inet /{print $4; exit}')
+  if [ -z "$ip" ] || [ -z "$m" ]; then bad "$(L "Cannot read the IPv4 address of $ifc" "无法读取 $ifc 的 IPv4 地址")"; return 1; fi
+  case "$m" in 0x*) mask=$((16#${m#0x}));; *) mask=$(ip2int "$m");; esac
+  ipi=$(ip2int "$ip"); net=$(( ipi & mask )); size=$(( (~mask) & 0xffffffff ))
+  if [ "$size" -gt 255 ]; then net=$(( ipi & 0xffffff00 )); size=255; fi
+  selfmac=$(ifconfig "$ifc" 2>/dev/null | awk '/ether /{print $2; exit}')
+  hdr "$(L "Devices on the local network" "局域网设备") ($(int2ip $((net+1))) - $(int2ip $((net+size-1))))"
+  echo "$(L "Scanning $((size-1)) addresses on $ifc …" "正在扫描 $ifc 上的 $((size-1)) 个地址 …")"
+  popt="-W 1"; [ "$(uname)" = Darwin ] && popt="-t 1"
+  for ((i=1; i<size; i++)); do
+    addr=$(int2ip $((net+i))); [ "$addr" = "$ip" ] && continue
+    ( ping -c 1 $popt "$addr" >/dev/null 2>&1 ) &
+    n=$((n+1)); [ $((n % 64)) -eq 0 ] && wait
+  done
+  wait
+  found=$(
+    { arp -a 2>/dev/null; } | awk -v self="$ip" '
+      { name=$1; a=$2; gsub(/[()]/,"",a); mac=$4
+        if (mac=="(incomplete)" || mac=="" || mac ~ /ff:ff:ff:ff:ff:ff/ || a ~ /^(224|239)\./ || a ~ /\.255$/) next
+        k=split(mac,o,":"); m2=""; for(j=1;j<=k;j++){ if(length(o[j])==1) o[j]="0" o[j]; m2=m2 (j>1?":":"") o[j] }
+        if (name=="?") name="-"
+        if (!(a in nm) || (nm[a]=="-" && name!="-")) { nm[a]=name; mc[a]=m2 } }
+      END { for (a in nm) print a, mc[a], nm[a] }' | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n)
+  printf '  %-16s %-18s %s\n' "IP" "MAC" "Name"
+  local cnt=0 line tag
+  while read -r a2 mac name; do
+    [ -z "$a2" ] && continue
+    case "$(int2ip $(( $(ip2int "$a2") & mask )))" in "$(int2ip $net)") ;; *) continue;; esac
+    tag=""; [ "$a2" = "$gw" ] && tag="  $(L "(gateway)" "(网关)")"
+    printf '  %-16s %-18s %s%s\n' "$a2" "$mac" "$name" "$tag"; cnt=$((cnt+1))
+  done <<EOF2
+$found
+EOF2
+  printf '  %-16s %-18s %s\n' "$ip" "${selfmac:--}" "$(L "(this Mac)" "(本机)")"
+  ok "$(L "$((cnt+1)) devices (including this Mac)" "共 $((cnt+1)) 台设备 (含本机)")"
+  echo "$(L "Devices that block ping may be missing; the ARP table only lists hosts that answered recently." "屏蔽 ping 的设备可能不会出现; ARP 表只包含近期有应答的主机。")"
 }
 
 cmd_quick() {
@@ -325,7 +418,7 @@ cmd_report() {
 
 c=${1:-help}; [ $# -gt 0 ] && shift
 case "$c" in
-  quick|q) cmd_quick;; overview) cmd_overview;; ports) cmd_ports "$@";; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
+  quick|q) cmd_quick;; overview) cmd_overview;; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
   ping) cmd_ping "$@";; port) cmd_port "$@";; http) cmd_http "$@";; tls) cmd_tls "$@";;
   mtu) cmd_mtu "$@";; speed) cmd_speed;; conns) cmd_conns;; proxy) cmd_proxy;;
   capture) cmd_capture "$@";; fixdns) cmd_fixdns;; report) cmd_report;; tools) cmd_tools;;

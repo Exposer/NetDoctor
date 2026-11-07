@@ -79,3 +79,7 @@
 "Multi-port check" = "Multi-port check";
 "Check common or custom ports on a host in parallel" = "Check common or custom ports on a host in parallel";
 "Ports" = "Ports";
+"DNS benchmark" = "DNS benchmark";
+"Compare the system and public DNS servers by speed and get a recommendation" = "Compare the system and public DNS servers by speed and get a recommendation";
+"LAN scan" = "LAN scan";
+"Discover devices on the local network (IP, MAC, name)" = "Discover devices on the local network (IP, MAC, name)";

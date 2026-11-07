@@ -79,3 +79,7 @@
 "Multi-port check" = "多端口检测";
 "Check common or custom ports on a host in parallel" = "并行检测主机的常用或自定义端口";
 "Ports" = "端口";
+"DNS benchmark" = "DNS 测速";
+"Compare the system and public DNS servers by speed and get a recommendation" = "对比系统与多家公共 DNS 的速度并给出推荐";
+"LAN scan" = "局域网扫描";
+"Discover devices on the local network (IP, MAC, name)" = "发现局域网设备 (IP、MAC、名称)";

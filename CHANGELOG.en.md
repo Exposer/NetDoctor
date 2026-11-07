@@ -7,9 +7,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
+- `netdoctor dnsbench [domain]` and a matching **DNS benchmark** tool: compares the system DNS with 1.1.1.1, 8.8.8.8, 9.9.9.9, 223.5.5.5, 119.29.29.29, 114.114.114.114 and 180.76.76.76 in parallel, using 5 common domains (plus one of your own), and ranks them by average / minimum latency and success rate. When the system DNS is noticeably slower it prints the `networksetup -setdnsservers` commands to switch and to undo (it never changes anything itself).
+- `netdoctor lan` and a matching **LAN scan** tool: pings the local subnet in parallel (only the surrounding /24 if the network is larger), then reads the ARP table and lists IP / MAC / name, marking the gateway and this Mac. Duplicates, broadcast and multicast addresses and other subnets are filtered out.
 - `netdoctor overview` and a matching **Overview** tool: one screen with the default interface and MTU, IPv4 / IPv6, MAC, gateway (with reachability), DNS servers and search domains, Wi-Fi network name, system proxy, VPN / tunnel interfaces and the public IP with its ISP. `report` includes it too.
 - `netdoctor ports <host> [ports]` and a matching **Multi-port check** tool: checks many ports in parallel. By default it tests 22 common ports; you can give `22,80,443`, `1-1024` or a mix, up to 1024 per run. It lists the open ports with well-known service names and open / closed counts. Scanning 1024 local ports takes about 0.6 s.
-- Both tools are available in the CLI, the web UI and the SwiftUI app, in English and Chinese.
+- All of these tools are available in the CLI, the web UI and the SwiftUI app, in English and Chinese.
 
 ## [1.1.6] - 2026-11-07
 
