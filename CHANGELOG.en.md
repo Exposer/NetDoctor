@@ -7,7 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
-- App icon: a Wi-Fi signal with a stethoscope. Ships as `assets/icon.svg`, `assets/AppIcon.icns` (all sizes from 16 to 1024 px) and PNGs. Both the SwiftUI app and the web-UI `NetDoctor.app` include it when built, and the web UI uses it as its browser-tab icon. `assets/make_icns.py` packs PNGs into an `.icns` without needing `iconutil`.
+- App icon: a Wi-Fi signal with a stethoscope that has a heartbeat line inside. Ships as `assets/icon.svg`, `assets/AppIcon.icns` (all sizes from 16 to 1024 px) and PNGs. Both the SwiftUI app and the web-UI `NetDoctor.app` include it when built, and the web UI uses it as its browser-tab icon. `assets/make_icns.py` packs PNGs into an `.icns` without needing `iconutil`.
 - Web UI: a **Watchlist** page, opened from the 📋 sidebar entry or with `f`. It pings every favorite and shows its status (Up / Slow / Down), now / average / loss and a trend sparkline. The "slow above N ms" threshold is adjustable, and hosts can be added or removed right on the page.
 - Web UI: down alerts. With **Notify** ticked, a desktop notification is sent when a host misses 3 pings in a row and again when it recovers; while a host is down the browser tab title shows `⚠ N`.
 - Web UI: **Copy as Markdown** copies the current result as Markdown with a heading, arguments, timestamp and a code block, ready to paste into a ticket or chat.
