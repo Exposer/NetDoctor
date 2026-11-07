@@ -410,6 +410,109 @@ expect "compare: only one saved report"  1 "found 1"       env HOME="$CD/home" /
 cp "$CD/c.txt" "$CD/home/Desktop/netdoctor-report-2.txt"; touch -t 202611071000 "$CD/home/Desktop/netdoctor-report-2.txt"
 expect "compare: picks the two newest, older first" 0 "was  [ OK ] 2/6 Gateway 192.168.0.1" env HOME="$CD/home" /bin/bash $ND compare
 
+# ---- 13. Wi-Fi quality in doctor -------------------------------------------------------------------------
+SPROF='Wi-Fi:\n  Interfaces:\n    en0:\n      Status: Connected\n      Current Network Information:\n        Home:\n          PHY Mode: 802.11ax\n          Channel: 36 (5GHz, 80MHz)\n          Signal / Noise: %s dBm / %s dBm\n          Transmit Rate: 286\n      Other Local Wi-Fi Networks:\n        Neighbour:\n          Channel: 6 (2GHz, 20MHz)\n'
+sp() { printf "$SPROF" "$1" "$2"; }
+lib "wifi_read: signal, noise, rate, channel" 0 "-49|-89|286|36 (5GHz, 80MHz)" "sp() { printf '$SPROF' -49 -89; }; sp | wifi_read"
+lib "wifi_read: ignores other networks' channel" 0 "|||" "printf 'Other Local Wi-Fi Networks:\n  X:\n    Channel: 6 (2GHz)\n' | wifi_read"
+lib "wifi_read: no data" 0 "|||" "printf '' | wifi_read"
+lib "wifi_weak: strong signal and quiet" 1 "" "wifi_weak -50 -90"
+lib "wifi_weak: -70 is weak"             0 "signal is weak (-70 dBm" "wifi_weak -70 -95"
+lib "wifi_weak: -69 is fine"             1 "" "wifi_weak -69 -95"
+lib "wifi_weak: noisy (SNR 15)"          0 "SNR 15 dB" "wifi_weak -60 -75"
+lib "wifi_weak: SNR 20 is not flagged"   1 "" "wifi_weak -60 -80"
+lib "wifi_weak: no noise value, strong"  1 "" "wifi_weak -50 ''"
+lib "wifi_weak: no noise value, weak"    0 "signal is weak" "wifi_weak -80 ''"
+lib "wifi_weak: garbage input"           1 "" "wifi_weak abc 5"
+# doctor with everything else healthy (stubbed), only the Wi-Fi numbers vary
+DR='default_if() { echo en0; }; gateway() { echo 192.168.0.1; }; self_assigned_if() { :; }; ping_stats() { echo "0 5.0"; }; resolves() { return 0; }
+curl() { echo 200; }; scutil() { :; }; ifconfig() { :; }; wifi_if() { echo ${WIFI_IF:-en0}; }'
+drwifi() { echo "$DR; system_profiler() { printf '$SPROF' $1 $2; }; $3"; }
+lib "doctor: good Wi-Fi is shown and healthy" 0 "Wi-Fi: signal -50 dBm, noise -90 dBm, 286 Mbps, channel 36 (5GHz, 80MHz)" "$(drwifi -50 -90 cmd_doctor)"
+lib "doctor: good Wi-Fi stays healthy"        0 "Everything looks healthy" "$(drwifi -50 -90 cmd_doctor)"
+lib "doctor: weak Wi-Fi is the verdict"       1 "the Wi-Fi link itself is weak" "$(drwifi -80 -92 cmd_doctor)"
+lib "doctor: weak Wi-Fi explains the reason"  1 "the signal is weak (-80 dBm" "$(drwifi -80 -92 cmd_doctor)"
+lib "doctor: weak Wi-Fi suggests next steps"  1 "Move closer to the router" "$(drwifi -80 -92 cmd_doctor)"
+lib "doctor: weak Wi-Fi sets the verdict variable" 0 "wifi" "$(drwifi -80 -92 'cmd_doctor >/dev/null; echo $DOCTOR_VERDICT')"
+lib "doctor: noisy Wi-Fi is flagged"          1 "too much noise (SNR 15 dB" "$(drwifi -60 -75 cmd_doctor)"
+lib "doctor: a real fault wins over weak Wi-Fi" 1 "DNS resolution is the problem" "$(drwifi -80 -92 'resolves() { return 1; }; cmd_doctor')"
+lib "doctor: unstable + weak Wi-Fi blames Wi-Fi" 1 "the Wi-Fi link itself is weak" "$(drwifi -80 -92 'ping_stats() { echo "20 30.0"; }; cmd_doctor')"
+lib "doctor: wired default interface skips Wi-Fi" 0 "Everything looks healthy" "$(drwifi -80 -92 'WIFI_IF=en9; export WIFI_IF; cmd_doctor')"
+lib_not "doctor: wired default interface prints no Wi-Fi line" "$(drwifi -80 -92 'WIFI_IF=en9; export WIFI_IF; cmd_doctor')" "Wi-Fi:"
+lib "doctor: no Wi-Fi data in the profile is silent" 0 "Everything looks healthy" "$DR; system_profiler() { :; }; cmd_doctor"
+lib "fix: weak Wi-Fi has no automatic fix"    1 "weak Wi-Fi signal" "$(drwifi -80 -92 cmd_fix)"
+
+# ---- 14. dnsset and dnsbench apply -----------------------------------------------------------------------
+# a fake networksetup that keeps the DNS setting of "Wi-Fi" in a file and logs what it was asked to do
+DNSST="$T/dns.state"
+cat > "$T/fx/networksetup" <<E
+#!/bin/sh
+case "\$1" in
+  -listnetworkserviceorder) printf 'An asterisk (*) denotes that a network service is disabled.\n(1) Ethernet\n(Hardware Port: Ethernet, Device: en0)\n\n(2) Wi-Fi\n(Hardware Port: Wi-Fi, Device: en1)\n\n(*) Old VPN\n(Hardware Port: VPN, Device: ppp0)\n';;
+  -getdnsservers) if [ -s "$DNSST" ]; then tr ' ' '\n' < "$DNSST"; else echo "There aren't any DNS Servers set on \$2."; fi;;
+  -setdnsservers) echo "networksetup \$*" >> "$T/fx.log"; svc=\$2; shift 2; if [ "\$1" = empty ]; then : > "$DNSST"; else echo "\$*" > "$DNSST"; fi;;
+esac
+E
+cat > "$T/fx/dig" <<'E'
+#!/bin/sh
+srv=system; for a in "$@"; do case "$a" in @*) srv=${a#@};; esac; done
+case "$srv" in
+  system) ms=${ND_DIG_SYS:-100};; 1.1.1.1) ms=10;; 8.8.8.8) ms=20;; 9.9.9.9) ms=30;; *) exit 9;;
+esac
+printf ';; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 1\n;; Query time: %s msec\n' "$ms"
+E
+chmod +x "$T/fx/networksetup" "$T/fx/dig"
+NH="$T/nh"; DNSENV="NETDOCTOR_HOME=$NH; export NETDOCTOR_HOME; default_if() { echo en1; }; resolves() { return 0; }"
+dreset() { rm -rf "$NH"; : > "$DNSST"; }
+fxlib "net_service: Wi-Fi"            0 "Wi-Fi"     "net_service en1"
+fxlib "net_service: Ethernet"         0 "Ethernet"  "net_service en0"
+fxlib "net_service: disabled service name has no star" 0 "Old VPN" "net_service ppp0"
+fxlib "net_service: unknown interface" 0 "[]"       "echo \"[\$(net_service en9)]\""
+dreset; fxlib "dnsset: sets two servers"  0 "automatic → 1.1.1.1 8.8.8.8" "$DNSENV; cmd_dnsset 1.1.1.1 8.8.8.8"
+fxlog_has "dnsset: calls networksetup once with the servers" "networksetup -setdnsservers Wi-Fi 1.1.1.1 8.8.8.8"
+[ "$(grep -c 'setdnsservers' "$T/fx.log")" = 1 ] && pass || fail "dnsset: servers must not be passed twice" "$(tr '\n' ';' < "$T/fx.log")"
+fxlog_has "dnsset: flushes the DNS cache" "dscacheutil -flushcache"
+[ -f "$NH/dns-backup/Wi-Fi" ] && pass || fail "dnsset: writes a backup"
+dreset; fxlib "dnsset: commas are accepted" 0 "1.1.1.1 8.8.8.8" "$DNSENV; cmd_dnsset 1.1.1.1,8.8.8.8"
+dreset; fxlib "dnsset: IPv6 is accepted"    0 "2606:4700:4700::1111" "$DNSENV; cmd_dnsset 2606:4700:4700::1111"
+# the backup keeps the FIRST original, even after several changes
+dreset; fxlib "dnsset: first change" 0 "" "$DNSENV; cmd_dnsset 1.1.1.1 >/dev/null; cmd_dnsset 9.9.9.9 >/dev/null; cmd_dnsset show"
+fxlib "dnsset: show lists the saved original" 0 "saved original: automatic" "$DNSENV; cmd_dnsset 1.1.1.1 >/dev/null; cmd_dnsset 9.9.9.9 >/dev/null; cmd_dnsset show"
+fxlib "dnsset: restore goes back to automatic" 0 "Restored" "$DNSENV; cmd_dnsset restore"
+fxlog_has "dnsset: restore uses empty" "setdnsservers Wi-Fi empty"
+[ ! -f "$NH/dns-backup/Wi-Fi" ] && pass || fail "dnsset: restore removes the backup"
+dreset; echo "192.168.0.1" > "$DNSST"
+fxlib "dnsset: an existing manual DNS is remembered" 0 "192.168.0.1 → 1.1.1.1" "$DNSENV; cmd_dnsset 1.1.1.1"
+fxlib "dnsset: restore brings the manual DNS back"   0 "Restored \"Wi-Fi\": 192.168.0.1" "$DNSENV; cmd_dnsset restore"
+fxlib "dnsset: restore without backup" 1 "No saved original" "$DNSENV; rm -rf $NH; cmd_dnsset restore"
+dreset; echo "192.168.0.1" > "$DNSST"
+fxlib "dnsset: rolls back when nothing resolves" 1 "going back to the previous setting" "$DNSENV; resolves() { return 1; }; cmd_dnsset 1.1.1.1"
+[ "$(cat "$DNSST")" = "192.168.0.1" ] && pass || fail "dnsset: rollback restored the old servers" "state: $(cat "$DNSST")"
+[ ! -f "$NH/dns-backup/Wi-Fi" ] && pass || fail "dnsset: failed change leaves no backup behind"
+dreset; fxlib "dnsset: auto" 0 "→ automatic" "$DNSENV; echo 1.1.1.1 > $DNSST; cmd_dnsset auto"
+fxlib "dnsset: not an IP"            1 "Not an IP address" "$DNSENV; cmd_dnsset 'bad;host'"
+fxlib "dnsset: injection attempt"    1 "Not an IP address" "$DNSENV; cmd_dnsset '1.1.1.1;ls'"
+fxlib "dnsset: IPv6-looking injection" 1 "Not an IP address" "$DNSENV; cmd_dnsset '2606::1;ls'"
+fxlib "dnsset: letters without colon"  1 "Not an IP address" "$DNSENV; cmd_dnsset abcd"
+fxlib "dnsset: out of shape IPv4"    1 "Not an IP address" "$DNSENV; cmd_dnsset 1.1.1"
+fxlib "dnsset: too many servers"     1 "1 to 4"            "$DNSENV; cmd_dnsset 1.1.1.1 8.8.8.8 9.9.9.9 4.4.4.4 5.5.5.5"
+if [ "$(id -u)" != 0 ]; then
+  lib "dnsset: no admin rights" 1 "Administrator rights" "default_if() { echo en1; }; networksetup() { :; }; cmd_dnsset 1.1.1.1"
+fi
+dreset; fxlib "dnsset: show without changes" 0 "automatic (from DHCP)" "$DNSENV; cmd_dnsset show"
+# dnsbench apply: fake dig (system 100 ms, 1.1.1.1 10 ms, 8.8.8.8 20 ms, 9.9.9.9 30 ms, the rest fail)
+dreset; fxlib "dnsbench: plan only without yes" 0 "Nothing was changed" "$DNSENV; cmd_dnsbench apply"
+fxlib "dnsbench: plan names the two fastest" 0 "Set the DNS of \"Wi-Fi\" to 1.1.1.1 8.8.8.8" "$DNSENV; cmd_dnsbench apply"
+[ ! -s "$DNSST" ] && pass || fail "dnsbench: plan only must not change anything" "state: $(cat "$DNSST")"
+dreset; fxlib "dnsbench: yes switches" 0 "automatic → 1.1.1.1 8.8.8.8" "$DNSENV; cmd_dnsbench yes"
+[ "$(cat "$DNSST")" = "1.1.1.1 8.8.8.8" ] && pass || fail "dnsbench: yes sets the two fastest" "state: $(cat "$DNSST")"
+dreset; fxlib "dnsbench: without apply it only suggests" 0 "netdoctor dnsbench yes" "$DNSENV; cmd_dnsbench"
+[ ! -s "$DNSST" ] && pass || fail "dnsbench without apply must not change anything"
+dreset; fxlib "dnsbench: fast system DNS is left alone" 0 "not noticeably slower" "$DNSENV; ND_DIG_SYS=11; export ND_DIG_SYS; cmd_dnsbench yes"
+[ ! -s "$DNSST" ] && pass || fail "dnsbench: nothing to switch must not change anything"
+dreset; fxlib "dnsbench: fastest is the system DNS" 0 "already the fastest" "$DNSENV; ND_DIG_SYS=3; export ND_DIG_SYS; cmd_dnsbench yes"
+fxlib "dnsbench: domain argument still works" 0 "DNS benchmark" "$DNSENV; cmd_dnsbench example.org"
+
 # ---- result ------------------------------------------------------------------------------------------
 echo
 if [ "$FAIL" -eq 0 ]; then echo "all $PASS tests passed"; exit 0; fi

@@ -57,7 +57,7 @@ netdoctor tools                      # 查看装了哪些
 | 连上 Wi-Fi 却打不开网页(要登录?) | `netdoctor captive` |
 | 某些网站慢 / IPv6 异常 | `netdoctor ipv6` |
 | ping 被屏蔽 / 想测端口延迟 | `netdoctor tcpping host 443`(TCP 连接延迟与丢包) |
-| DNS 慢 / 想选最快的 DNS | `netdoctor dnsbench`(对比并推荐,给出切换命令) |
+| DNS 慢 / 想选最快的 DNS | `netdoctor dnsbench`(对比并推荐);`netdoctor dnsbench yes` 直接切到最快的两个;`netdoctor dnsset restore` 一键还原原设置(改前自动备份,改完解析不了会自动改回) |
 | 想知道网内有哪些设备 | `netdoctor lan`(IP / MAC / 主机名) |
 | 连上 Wi-Fi / 网线却上不了网, IP 以 169.254 开头 | `netdoctor dhcp`(查看 DHCP 租约;识别“自分配地址 = DHCP 失败”,`doctor` 也会自动判断) |
 | 网络时好时坏、不知道卡在哪一段 | `netdoctor mtr <主机>`(逐跳丢包和延迟,并判断问题出在你的路由器、运营商还是更远处;中间路由器限速 ping 会被识别为无害) |

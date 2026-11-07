@@ -119,3 +119,7 @@
 "Diagnose, then fix what can be fixed on this Mac (renew DHCP, flush DNS, sync the clock, open the login page) and re-check" = "先诊断, 再修复这台 Mac 上能修的问题 (重新获取 DHCP、刷新 DNS、校准时钟、打开登录页), 然后复查";
 "Apply the fixes (otherwise it only shows the plan)" = "执行修复 (不勾选则只显示计划)";
 "Save as an HTML page (collapsible sections, colours)" = "保存为 HTML 页面 (可折叠分区, 带颜色)";
+"Switch to the fastest DNS if it is clearly faster (otherwise only measure)" = "明显更快时切换到最快的 DNS (不勾选则只测速)";
+"DNS settings" = "DNS 设置";
+"Show, change or restore the DNS servers of the current network (backs up first, rolls back if names stop resolving)" = "查看、修改或还原当前网络的 DNS 服务器 (改前备份, 改完解析不了会自动改回)";
+"Servers (show / restore / auto, or IPs like 1.1.1.1 8.8.8.8)" = "服务器 (show / restore / auto, 或 IP 如 1.1.1.1 8.8.8.8)";

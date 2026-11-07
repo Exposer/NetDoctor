@@ -119,3 +119,7 @@
 "Diagnose, then fix what can be fixed on this Mac (renew DHCP, flush DNS, sync the clock, open the login page) and re-check" = "Diagnose, then fix what can be fixed on this Mac (renew DHCP, flush DNS, sync the clock, open the login page) and re-check";
 "Apply the fixes (otherwise it only shows the plan)" = "Apply the fixes (otherwise it only shows the plan)";
 "Save as an HTML page (collapsible sections, colours)" = "Save as an HTML page (collapsible sections, colours)";
+"Switch to the fastest DNS if it is clearly faster (otherwise only measure)" = "Switch to the fastest DNS if it is clearly faster (otherwise only measure)";
+"DNS settings" = "DNS settings";
+"Show, change or restore the DNS servers of the current network (backs up first, rolls back if names stop resolving)" = "Show, change or restore the DNS servers of the current network (backs up first, rolls back if names stop resolving)";
+"Servers (show / restore / auto, or IPs like 1.1.1.1 8.8.8.8)" = "Servers (show / restore / auto, or IPs like 1.1.1.1 8.8.8.8)";

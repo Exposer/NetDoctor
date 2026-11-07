@@ -28,6 +28,7 @@ netdoctor $VERSION - macOS 网络诊断
 
 用法: netdoctor <命令> [参数]
   quick                 一键体检: 网卡/网关/DNS/外网/HTTP (先跑这个)
+  dnsset <ip..>|restore|auto|show  修改 / 还原当前网络的 DNS (需 sudo): 改前自动备份, 改后验证能解析, 失败自动改回; dnsbench yes 可直接切到最快的
   compare [旧 新]       对比两份 report (默认最新的两份): 忽略延迟波动, 只列出真正变化的内容 (IP、DNS、网关、检查结论…)
   watch [主机] [秒]     持续 ping (默认 1.1.1.1, 60 秒): 断线 / 恢复即时提示并响铃, 结束后给出丢包、延迟、抖动和断线汇总
   doctor                智能诊断: 逐层检查并给出结论和下一步建议 (遇到问题先跑这个)
@@ -64,6 +65,7 @@ netdoctor $VERSION - macOS network diagnostics
 
 Usage: netdoctor <command> [args]
   quick                 one-shot check: interface/gateway/DNS/internet/HTTP (run this first)
+  dnsset <ip..>|restore|auto|show  change / restore the DNS of the current network (needs sudo): backs up first, verifies afterwards, rolls back on failure; dnsbench yes switches to the fastest
   compare [old new]     compare two saved reports (default: the two newest), ignoring timing noise: shows what really changed (IP, DNS, gateway, verdicts...)
   watch [host] [secs]   keep pinging (default 1.1.1.1, 60 s): tells you at once when it drops and recovers (bell), then summarises loss, latency, jitter and outages
   doctor                smart diagnosis: layer-by-layer checks with a verdict and next steps
@@ -182,8 +184,62 @@ cmd_ports() {
   return 0
 }
 
+# ---- dnsset: 修改 / 还原当前网络服务的 DNS ----------------------------------------------------------------
+# 先备份原设置 (只备份第一次, 连续改几次也能还原到最初的样子), 改完刷新 DNS 缓存并验证能解析; 验证失败自动改回去。
+net_service() { # $1=网卡 → networksetup 的服务名 (如 Wi-Fi / Ethernet)
+  networksetup -listnetworkserviceorder 2>/dev/null | awk -v d="$1" '
+    /^\([0-9*]+\) /{ name=$0; sub(/^\([0-9*]+\) /, "", name) }
+    /Device: /{ dev=$0; sub(/.*Device: /, "", dev); sub(/\).*/, "", dev); if (dev == d) { print name; exit } }'
+}
+dns_current() { networksetup -getdnsservers "$1" 2>/dev/null | grep -E '^[0-9A-Fa-f:.]+$' | tr '\n' ' ' | sed 's/ $//'; }   # 没手动设置时为空 (= 自动 / DHCP)
+dns_backup_file() { printf '%s/dns-backup/%s' "${NETDOCTOR_HOME:-$HOME/.netdoctor}" "$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')"; }
+dns_valid_ip() { case "$1" in
+    *[!0-9.]*) case "$1" in *:*) case "$1" in *[!0-9A-Fa-f:]*) return 1;; *) return 0;; esac;; *) return 1;; esac;;
+    *) printf '%s' "$1" | grep -Eq '^[0-9]{1,3}(\.[0-9]{1,3}){3}$';; esac; }
+dns_apply() { # $1=服务名, 其余=服务器 (空 = 恢复自动)
+  local svc=$1; shift
+  if [ $# -gt 0 ]; then priv networksetup -setdnsservers "$svc" "$@" || return 1
+  else priv networksetup -setdnsservers "$svc" empty || return 1; fi
+  priv dscacheutil -flushcache 2>/dev/null; priv killall -HUP mDNSResponder 2>/dev/null; return 0
+}
+cmd_dnsset() {
+  local sub=${1:-show} ifc svc cur bk new list t n=0 created=0
+  ifc=$(default_if); [ -z "$ifc" ] && ifc=$(wifi_if); svc=$(net_service "$ifc"); svc=${svc:-Wi-Fi}
+  cur=$(dns_current "$svc"); bk=$(dns_backup_file "$svc")
+  case "$sub" in
+    show)
+      hdr "$(L "DNS servers of \"$svc\"" "\"$svc\" 的 DNS 服务器")"
+      echo "  $(L "now" "当前"): ${cur:-$(L "automatic (from DHCP)" "自动 (来自 DHCP)")}"
+      if [ -f "$bk" ]; then t=$(cat "$bk"); echo "  $(L "saved original" "已保存的原设置"): ${t:-$(L "automatic (from DHCP)" "自动 (来自 DHCP)")}"; echo "  $(L "undo with" "还原"): netdoctor dnsset restore"; fi
+      return 0;;
+  esac
+  can_priv || { need_admin "dnsset $*"; return 1; }
+  case "$sub" in
+    restore)
+      [ -f "$bk" ] || { bad "$(L "No saved original DNS setting for \"$svc\" (nothing to restore). To go back to automatic DNS: netdoctor dnsset auto" "没有 \"$svc\" 的原 DNS 设置备份, 无法还原。想回到自动 DNS: netdoctor dnsset auto")"; return 1; }
+      new=$(cat "$bk")
+      if dns_apply "$svc" $new; then rm -f "$bk"; ok "$(L "Restored \"$svc\": ${new:-automatic (from DHCP)}" "已还原 \"$svc\": ${new:-自动 (来自 DHCP)}")"; return 0; fi
+      bad "$(L "Restoring failed (wrong password or no admin rights)" "还原失败 (密码错误或没有管理员权限)")"; return 1;;
+    auto) new="";;
+    *) list=$(printf '%s ' "$@" | tr ',' ' ')
+       set -f; for t in $list; do dns_valid_ip "$t" || { set +f; bad "$(L "Not an IP address: $t (usage: netdoctor dnsset <ip> [ip...] | auto | restore | show)" "不是 IP 地址: $t (用法: netdoctor dnsset <ip> [ip...] | auto | restore | show)")"; return 1; }; n=$((n+1)); new="$new $t"; done; set +f
+       [ "$n" -ge 1 ] && [ "$n" -le 4 ] || { bad "$(L "Give 1 to 4 DNS server addresses" "请给 1 到 4 个 DNS 服务器地址")"; return 1; }
+       new=${new# };;
+  esac
+  if [ ! -f "$bk" ]; then mkdir -p "$(dirname "$bk")" 2>/dev/null && printf '%s\n' "$cur" >"$bk" && created=1; fi
+  if ! dns_apply "$svc" $new; then [ "$created" = 1 ] && rm -f "$bk"; bad "$(L "Setting DNS failed (wrong password or no admin rights)" "设置 DNS 失败 (密码错误或没有管理员权限)")"; return 1; fi
+  sleep 1
+  if [ -n "$new" ] && ! { resolves apple.com || resolves baidu.com; }; then
+    bad "$(L "Names no longer resolve with $new; going back to the previous setting." "改成 $new 后域名无法解析, 已改回原设置。")"
+    dns_apply "$svc" $cur; [ "$created" = 1 ] && rm -f "$bk"; return 1
+  fi
+  ok "$(L "\"$svc\" DNS: ${cur:-automatic} → ${new:-automatic}" "\"$svc\" 的 DNS: ${cur:-自动} → ${new:-自动}")"
+  echo "$(L "To undo: netdoctor dnsset restore. Note: a fixed DNS overrides what the router / VPN / company network hands out (internal names may stop resolving)." "还原: netdoctor dnsset restore。注意: 手动设置的 DNS 会覆盖路由器 / VPN / 公司网络下发的 DNS (内网域名可能解析不了)。")"
+}
+
 cmd_dnsbench() {
-  local extra=${1:-} domains="example.com apple.com baidu.com github.com wikipedia.org"
+  local extra="" apply=0 yes=0 a top1="" top2="" domains="example.com apple.com baidu.com github.com wikipedia.org"
+  for a in "$@"; do case "$a" in apply|--apply) apply=1;; yes|--yes) apply=1; yes=1;; *) extra=$a;; esac; done
   local servers="system 1.1.1.1 8.8.8.8 9.9.9.9 223.5.5.5 119.29.29.29 114.114.114.114 180.76.76.76" tmp s best_line rank=0 avg srv ok n mn
   has dig || { bad "$(L "dig not found (brew install bind)" "未找到 dig (brew install bind)")"; return 1; }
   if [ -n "$extra" ]; then
@@ -208,6 +264,7 @@ cmd_dnsbench() {
   best_line=""
   while read -r avg srv ok n mn; do
     rank=$((rank+1)); [ -z "$best_line" ] && [ "$ok" -gt 0 ] && best_line="$avg $srv"
+    if [ "$ok" -gt 0 ] && [ "$srv" != system ]; then if [ -z "$top1" ]; then top1=$srv; elif [ -z "$top2" ]; then top2=$srv; fi; fi
     if [ "$ok" -gt 0 ]; then printf '  %-3s %-17s %9s %9s  %s/%s\n' "$rank" "$srv" "$avg" "$mn" "$ok" "$n"
     else printf '  %-3s %-17s %9s %9s  %s/%s\n' "$rank" "$srv" "-" "-" "$ok" "$n"; fi
   done <<EOF2
@@ -218,11 +275,24 @@ EOF2
   set -- $best_line
   ok "$(L "Fastest: $2 (avg $1 ms)" "最快: $2 (平均 $1 ms)")"
   if [ "$2" != system ] && [ -n "$sysavg" ] && [ "$sysavg" -lt 999999 ] && [ "$sysavg" -gt $(( $1 * 13 / 10 )) ]; then
-    echo "$(L "The system DNS (avg $sysavg ms) is noticeably slower. To switch (Wi-Fi):" "系统 DNS (平均 $sysavg ms) 明显偏慢。可切换 (Wi-Fi):")"
-    echo "  networksetup -setdnsservers Wi-Fi $2"
-    echo "$(L "To undo: networksetup -setdnsservers Wi-Fi empty" "恢复默认: networksetup -setdnsservers Wi-Fi empty")"
+    echo "$(L "The system DNS (avg $sysavg ms) is noticeably slower. To switch:" "系统 DNS (平均 $sysavg ms) 明显偏慢。可切换:")"
+    echo "  netdoctor dnsbench yes        $(L "(switch to the fastest; asks for the administrator password)" "(切换到最快的; 会要管理员密码)")"
+    echo "  netdoctor dnsset restore      $(L "(undo; goes back to the original setting)" "(撤销, 回到原来的设置)")"
   fi
   echo "$(L "Note: popular domains are usually cached, so this measures the resolver's nearest cache." "注: 热门域名通常有缓存, 测得的是解析器最近缓存的响应速度。")"
+  if [ "$apply" = 1 ]; then
+    local svc ans cur; svc=$(net_service "$(default_if)"); svc=${svc:-Wi-Fi}; cur=$(dns_current "$svc")
+    hdr "$(L "Switch DNS" "切换 DNS")"
+    if [ -z "$top1" ]; then warn "$(L "No public DNS server answered; nothing to switch to." "没有公共 DNS 服务器应答, 没有可切换的目标。")"; return 1
+    elif [ "$2" = system ]; then ok "$(L "The system DNS is already the fastest; nothing to change." "系统 DNS 已经是最快的, 不需要改。")"; return 0
+    elif [ -n "$sysavg" ] && [ "$sysavg" -lt 999999 ] && [ "$sysavg" -le $(( $1 * 13 / 10 )) ]; then ok "$(L "The system DNS (avg $sysavg ms) is not noticeably slower than $2 (avg $1 ms); nothing to change." "系统 DNS (平均 $sysavg ms) 和 $2 (平均 $1 ms) 差不多, 不需要改。")"; return 0; fi
+    echo "  → $(L "Set the DNS of \"$svc\" to $top1${top2:+ $top2}   (now: ${cur:-automatic})" "把 \"$svc\" 的 DNS 设为 $top1${top2:+ $top2}   (当前: ${cur:-自动})")"
+    if [ "$yes" != 1 ]; then
+      if [ -t 0 ]; then printf '%s' "$(L "    Apply it? [y/N] " "    要执行吗? [y/N] ")"; read -r ans || ans=""; case "$ans" in y|Y|yes|YES) ;; *) echo "    $(L "skipped" "已跳过")"; return 0;; esac
+      else echo "$(L "Nothing was changed. To apply it, run  netdoctor dnsbench yes  (in the app: tick the box)." "没有做任何修改。要执行, 请运行  netdoctor dnsbench yes  (App / 网页里勾选对应选项)。")"; return 0; fi
+    fi
+    cmd_dnsset $top1 $top2
+  fi
 }
 
 ip2int() { local IFS=.; set -- $1; echo $(( ($1<<24) + ($2<<16) + ($3<<8) + $4 )); }
@@ -392,10 +462,31 @@ resolves() { # $1 = name, $2 = optional DNS server
 
 skipped() { printf '[ -- ] %s\n' "$(L "$1/6 $2: skipped (an earlier step failed)" "$1/6 $3: 已跳过 (前面的步骤失败)")"; }
 
+# ---- Wi-Fi 质量 (doctor 用) ---------------------------------------------------------------------------
+# 从 system_profiler SPAirPortDataType 的输出 (标准输入) 取当前网络的 "信号|噪声|速率|信道"; 取不到的字段留空。
+wifi_read() {
+  awk '/Current Network Information/{f=1} /Other Local Wi-Fi/{f=0}
+       f && /Signal \/ Noise:/ { gsub(/dBm/, ""); n = split($0, a, /[ \t\/]+/); for (i = 1; i <= n; i++) if (a[i] ~ /^-[0-9]+$/) { if (r == "") r = a[i]; else if (nz == "") nz = a[i] } }
+       f && /Transmit Rate:/ { rate = $NF }
+       f && /Channel:/ && ch == "" { sub(/^[ \t]*Channel: */, ""); ch = $0 }
+       END { print r "|" nz "|" rate "|" ch }'
+}
+# 信号弱或噪声大时返回 0 并给出原因; 经验值: RSSI > -60 好, -70 一般, < -75 差; SNR (信号 - 噪声) 至少 25 才稳, 低于 20 明确偏差
+wifi_weak() { # $1=RSSI $2=噪声 (可空)
+  local r=$1 n=${2:-} snr="" why=""
+  case "$r" in ""|*[!0-9-]*) return 1;; esac
+  case "$n" in *[!0-9-]*) n="";; esac
+  [ -n "$n" ] && snr=$((r - n))
+  [ "$r" -le -70 ] && why="$(L "the signal is weak ($r dBm; better than -60 is good)" "信号偏弱 ($r dBm; 好于 -60 才算好)")"
+  if [ -n "$snr" ] && [ "$snr" -lt 20 ]; then why="${why:+$why; }$(L "too much noise (SNR $snr dB; 25+ is stable)" "噪声太大 (信噪比 $snr dB; 25 以上才稳)")"; fi
+  [ -n "$why" ] && { printf '%s' "$why"; return 0; }
+  return 1
+}
+
 cmd_doctor() {
   case "${1:-}" in --fix|fix) shift; cmd_fix "$@"; return;; esac   # netdoctor doctor --fix = netdoctor fix
   local ifc gw verdict="" l avg ip_ok="" ip dns_ok dns_pub http_ok="" code u px vpn steps="" detail
-  local FAILS=0 WARNS=0 skew=""
+  local FAILS=0 WARNS=0 skew="" wfpid="" wftmp="" wf="" wr wn wrate wch wsnr wwhy
   hdr "$(L "Diagnosis" "智能诊断")"
   # 1. link
   ifc=$(default_if); gw=$(gateway)
@@ -405,6 +496,10 @@ cmd_doctor() {
   elif [ -z "$ifc" ]; then
     bad "$(L "1/6 Link: no default route (not connected)" "1/6 链路: 没有默认路由 (未联网)")"; FAILS=$((FAILS+1)); verdict=link
   else ok "$(L "1/6 Link: $ifc is the default interface" "1/6 链路: 默认网卡为 $ifc")"; fi
+  # Wi-Fi 的详细数据要 system_profiler, 很慢 (十几秒): 放到后台跑, 和后面的检查并行, 最后再收结果
+  if [ -n "$ifc" ] && [ "$ifc" = "$(wifi_if)" ] && has system_profiler && wftmp=$(mktemp); then
+    system_profiler SPAirPortDataType >"$wftmp" 2>/dev/null & wfpid=$!
+  fi
   # 2. gateway
   if [ -z "$verdict" ] && [ -n "$gw" ]; then
     set -- $(ping_stats "$gw" 3); l=${1:-100}; avg=${2:-}
@@ -471,6 +566,20 @@ cmd_doctor() {
     [ -n "$vpn" ] && detail="${detail:+$detail; }$(L "tunnels: $vpn" "隧道: $vpn")"
     warn "$(L "6/6 Proxy / VPN: $detail (these can change what you see)" "6/6 代理 / VPN: $detail (可能影响判断)")"; WARNS=$((WARNS+1))
   else ok "$(L "6/6 Proxy / VPN: none active" "6/6 代理 / VPN: 未启用")"; fi
+  if [ -n "$wfpid" ]; then
+    wait "$wfpid" 2>/dev/null; IFS='|' read -r wr wn wrate wch <<EOF_WF
+$(wifi_read <"$wftmp")
+EOF_WF
+    if [ -n "$wr" ]; then
+      wsnr=""; [ -n "$wn" ] && wsnr=", $(L "noise" "噪声") $wn dBm"
+      detail="$(L "signal" "信号") $wr dBm$wsnr${wrate:+, $wrate Mbps}${wch:+, $(L "channel" "信道") $wch}"
+      if wwhy=$(wifi_weak "$wr" "$wn"); then warn "$(L "Wi-Fi: $detail — $wwhy" "Wi-Fi: $detail — $wwhy")"; WARNS=$((WARNS+1)); wf=1
+      else ok "$(L "Wi-Fi: $detail" "Wi-Fi: $detail")"; fi
+    fi
+  fi
+  [ -n "$wftmp" ] && rm -f "$wftmp"
+  # Wi-Fi 太弱是网络慢 / 不稳的常见原因: 其他层都没有硬故障时, 把它作为结论
+  if [ -n "$wf" ] && { [ -z "$verdict" ] || [ "$verdict" = unstable ]; }; then verdict=wifi; fi
 
   hdr "$(L "Verdict" "结论")"
   case "$verdict" in
@@ -503,6 +612,11 @@ netdoctor http https://www.apple.com|$(L "Then check HTTPS again" "然后再确�
               steps="netdoctor proxy|$(L "Check proxy and VPN settings" "检查代理和 VPN 设置")
 netdoctor http https://www.apple.com|$(L "See which phase fails" "看是哪个阶段失败")
 netdoctor tls www.apple.com|$(L "Check for a replaced certificate" "检查证书是否被替换")";;
+    wifi)     warn "$(L "Connectivity works, but the Wi-Fi link itself is weak ($wwhy); that is the likely cause of slow or unstable connections." "网络可用, 但 Wi-Fi 链路本身偏弱 ($wwhy), 这很可能就是网速慢或不稳的原因。")"
+              steps="netdoctor wifi|$(L "See the full Wi-Fi details" "查看完整的 Wi-Fi 信息")
+-|$(L "Move closer to the router or remove obstacles (walls, metal, microwaves)" "靠近路由器, 或移开障碍物 (墙、金属、微波炉)")
+-|$(L "Noisy: change the router's Wi-Fi channel, or use the 5 GHz band when you are near it" "噪声大: 换路由器的 Wi-Fi 信道, 离得近时优先用 5 GHz 频段")
+netdoctor mtr 1.1.1.1|$(L "Check whether the loss is at the first hop (your Wi-Fi)" "看丢包是不是出在第一跳 (你的 Wi-Fi)")";;
     unstable) warn "$(L "Connectivity works but is unstable (packet loss or high latency)." "网络可用, 但不稳定 (丢包或延迟高)。")"
               steps="netdoctor wifi|$(L "Check the Wi-Fi signal and noise" "检查 Wi-Fi 信号和噪声")
 netdoctor route 1.1.1.1|$(L "Find the lossy hop" "找出丢包的那一跳")
@@ -516,7 +630,7 @@ netdoctor mtu|$(L "Rule out MTU problems (VPN)" "排除 MTU 问题 (VPN)")";;
     done
   fi
   DOCTOR_VERDICT=$verdict; DOCTOR_IFC=$ifc   # 给 cmd_fix 用 (cmd_doctor 不在子 shell 里运行, 全局变量可见)
-  [ "$FAILS" -eq 0 ] && [ "$verdict" != unstable ]
+  [ "$FAILS" -eq 0 ] && [ "$verdict" != unstable ] && [ "$verdict" != wifi ]
 }
 
 # ---- fix: 按 doctor 的结论执行修复动作 ------------------------------------------------------------------
@@ -557,7 +671,7 @@ cmd_fix() {
   hdr "$(L "Fix" "修复")"
   if [ -z "$act" ]; then
     if [ -z "$verdict" ]; then ok "$(L "Nothing to fix." "没有需要修复的问题。")"; return 0; fi
-    if [ "$verdict" = unstable ]; then warn "$(L "No automatic fix for an unstable connection; see the suggested steps above." "网络不稳定没有自动修复手段, 请按上面的建议排查。")"
+    if [ "$verdict" = unstable ] || [ "$verdict" = wifi ]; then warn "$(L "No automatic fix for an unstable connection or a weak Wi-Fi signal; see the suggested steps above." "网络不稳定或 Wi-Fi 信号弱没有自动修复手段, 请按上面的建议排查。")"
     else warn "$(L "This problem cannot be fixed from the Mac (router, ISP, proxy or certificate); see the suggested steps above." "这类问题无法在这台 Mac 上自动修复 (路由器、运营商、代理或证书), 请按上面的建议处理。")"; fi
     return 1
   fi
@@ -1465,7 +1579,7 @@ $v";; esac
 
 c=${1:-help}; [ $# -gt 0 ] && shift
 case "$c" in
-  quick|q) cmd_quick;; doctor|diagnose) cmd_doctor "$@";; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; mtr) cmd_mtr "$@";; watch) cmd_watch "$@";; compare) cmd_compare "$@";; leak) cmd_leak;; bonjour) cmd_bonjour "$@";; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
+  quick|q) cmd_quick;; doctor|diagnose) cmd_doctor "$@";; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; mtr) cmd_mtr "$@";; watch) cmd_watch "$@";; dnsset) cmd_dnsset "$@";; compare) cmd_compare "$@";; leak) cmd_leak;; bonjour) cmd_bonjour "$@";; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
   ping) cmd_ping "$@";; port) cmd_port "$@";; http) cmd_http "$@";; tls) cmd_tls "$@";;
   mtu) cmd_mtu "$@";; speed) cmd_speed;; conns) cmd_conns;; proxy) cmd_proxy;;
   capture) cmd_capture "$@";; fixdns) cmd_fixdns;; fix) cmd_fix "$@";; report) cmd_report "$@";; tools) cmd_tools;;

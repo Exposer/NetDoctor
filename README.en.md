@@ -59,7 +59,7 @@ netdoctor tools                                          # see which tools are i
 | Wi-Fi connected but pages won't load (login needed?) | `netdoctor captive` |
 | Some sites slow / IPv6 problems | `netdoctor ipv6` |
 | Ping is blocked / measure a port's latency | `netdoctor tcpping host 443` (TCP connect latency and loss) |
-| Slow DNS / pick the fastest DNS | `netdoctor dnsbench` (compares and recommends, prints the switch command) |
+| Slow DNS / pick the fastest DNS | `netdoctor dnsbench` (compares and recommends); `netdoctor dnsbench yes` switches to the two fastest; `netdoctor dnsset restore` puts the original back (backed up first, rolled back if names stop resolving) |
 | Who is on my network | `netdoctor lan` (IP / MAC / name) |
 | Connected to Wi-Fi / cable but not online, IP starts with 169.254 | `netdoctor dhcp` (DHCP lease details; spots a "self-assigned address = DHCP failed", and `doctor` detects it too) |
 | The connection is flaky and you do not know which segment is to blame | `netdoctor mtr <host>` (per-hop loss and latency, and whether the problem is in your router, your ISP or further away; a middle router that only rate-limits ping is recognised as harmless) |
