@@ -19,6 +19,7 @@
 - `netdoctor`:输入未知命令时先提示“未知命令: xxx”并显示当前版本号(提醒用 `git pull` 更新),再打印用法,退出码为 2;新增 `netdoctor --version`(也可用 `version`、`-v`)以及 `help`、`-h`、`--help`。此前遇到不认识的命令会悄悄打印用法,分不清是命令输错还是本地版本太旧。
 
 ### 修复
+- `netdoctor http`:服务器返回 404 / 500 等错误状态码时只列出数字,既没有提示也返回退出码 0;现在 2xx 显示通过,3xx / 4xx / 5xx 给出说明(区分“网络是通的但服务器拒绝 / 出错”)并返回 1。
 - `netdoctor tls`:不校验主机名,证书是别的域名的(如 `wrong.host.badssl.com` 用了 `*.badssl.com`)也显示 “Verification: OK”。现在 OpenSSL 用 `-verify_hostname`,系统自带的 LibreSSL(不支持该参数)则自己比对 SAN / CN(含通配符只匹配一级子域名),不匹配时报错;证书验证失败(过期、自签名、主机名不符)时退出码为 1。
 - 网页界面和 SwiftUI App:输入框里的占位符提示(“22,80,443 or 1-1024”“extra domain (optional)”)在中文界面下仍是英文,现在会被翻译。
 - `netdoctor-gui.py`:指定的端口已被占用时,第二个实例不会报错而是悄悄和第一个共用同一端口(macOS 上 `SO_REUSEADDR` 允许这样),请求随机落到其中一个,令牌对不上就出现莫名的 forbidden;现在启动前先探测端口,被占用就提示并改用空闲端口。`--port` 超出 0–65535 时给出清晰的错误而不是 traceback。

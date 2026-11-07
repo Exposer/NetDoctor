@@ -555,9 +555,21 @@ cmd_http() {
   Download speed  %{speed_download} B/s
 '
   fi
-  if ! curl -sS -o /dev/null -L -m 30 -w "$fmt" "$u"; then
+  local res
+  if ! res=$(curl -sS -o /dev/null -L -m 30 -w "$fmt
+@@%{http_code}" "$u"); then
+    printf '%s\n' "${res%@@*}"
     bad "$(L "Request failed; investigate with: curl -v $u" "请求失败, 加 -v 排查: curl -v $u")"; return 1
   fi
+  printf '%s\n' "${res%@@*}"
+  local code=${res##*@@}
+  case "$code" in
+    2*) ok "$(L "HTTP $code: the server answered normally" "HTTP $code: 服务器响应正常")";;
+    3*) warn "$(L "HTTP $code: still a redirect after following the limit; check the Location header" "HTTP $code: 跟随重定向后仍是跳转, 检查 Location 头")"; return 1;;
+    4*) bad "$(L "HTTP $code: the network works but the server rejected the request (check the URL, login or permissions)" "HTTP $code: 网络是通的, 但服务器拒绝了请求 (检查网址、登录或权限)")"; return 1;;
+    5*) bad "$(L "HTTP $code: the network works but the server has a problem (try again later or contact the site)" "HTTP $code: 网络是通的, 但服务器自身出错 (稍后重试或联系站点)")"; return 1;;
+    *) warn "$(L "Unexpected HTTP status: $code" "异常的 HTTP 状态码: $code")"; return 1;;
+  esac
 }
 
 # 主机名是否匹配证书里的名字 (精确匹配, 或 *.example.com 恰好匹配一级子域名)
