@@ -73,6 +73,33 @@ ZH = {
     "Failed to start": "启动失败",
     "[exit code %d]": "[退出码 %d]",
     "Quit": "退出",
+    "Export": "导出",
+    "Import": "导入",
+    "Imported %s run(s), %s favorite(s)": "已导入 %s 条记录、%s 个收藏",
+    "Import failed: invalid file": "导入失败:文件无效",
+    "Compare": "对比",
+    "Tick two runs to compare": "勾选两次运行进行对比",
+    "Compare runs": "对比两次运行",
+    "Older": "较早",
+    "Newer": "较新",
+    "Only changes": "仅显示差异",
+    "Ignore numbers": "忽略数字",
+    "+%s / −%s lines": "+%s / −%s 行",
+    "No differences": "没有差异",
+    "… %s unchanged lines …": "… %s 行未变 …",
+    "(only the first 1500 lines are compared)": "(仅对比前 1500 行)",
+    "Favorites": "收藏",
+    "Add to favorites": "加入收藏",
+    "Remove from favorites": "取消收藏",
+    "Wi-Fi signal": "Wi-Fi 信号",
+    "Signal": "信号",
+    "Noise": "噪声",
+    "SNR": "信噪比",
+    "Channel": "信道",
+    "Rate": "速率",
+    "Wi-Fi info unavailable": "无法获取 Wi-Fi 信息",
+    "Reads the link every few seconds (macOS only). Rule of thumb: > −60 dBm good, −70 fair, < −75 poor.": "每隔几秒读取一次(仅 macOS)。经验值:> −60 dBm 好,−70 一般,< −75 差。",
+    "Open Wi-Fi signal": "打开 Wi-Fi 信号",
     "Live latency": "实时延迟",
     "Pings once a second; red lines mark packet loss.": "每秒 ping 一次,红线表示丢包。",
     "Target": "目标",
@@ -150,6 +177,27 @@ def ping_once(host):
     m = re.search(r"time[=<]([0-9.]+)", out)
     return float(m.group(1)) if m else None
 
+def wifi_info():
+    """Current Wi-Fi link info via system_profiler (macOS, no sudo). Returns a dict or {"error": ...}."""
+    try:
+        out = subprocess.run([os.environ.get("NETDOCTOR_SYSTEM_PROFILER", "system_profiler"), "SPAirPortDataType"],
+                             stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=12).stdout
+    except Exception:
+        return {"error": "unavailable"}
+    m = re.search(r"Current Network Information:\s*\n(.*?)(?:\n\s*Other Local Wi-Fi Networks:|\Z)", out, re.S)
+    if not m:
+        return {"error": "not connected"}
+    blk = m.group(1)
+    sn = re.search(r"Signal / Noise:\s*(-?\d+) dBm / (-?\d+) dBm", blk)
+    if not sn:
+        return {"error": "no signal info"}
+    def field(name):
+        mm = re.search(name + r":\s*(.+)", blk)
+        return mm.group(1).strip()[:60] if mm else ""
+    first = blk.strip().splitlines()[0].strip().rstrip(":") if blk.strip() else ""
+    return {"rssi": int(sn.group(1)), "noise": int(sn.group(2)), "channel": field("Channel"),
+            "rate": field("Transmit Rate"), "phy": field("PHY Mode"), "ssid": first[:60]}
+
 def build_args(spec, values, lang="en"):
     args = []
     for i in spec["inputs"]:
@@ -189,6 +237,8 @@ class H(BaseHTTPRequestHandler):
             return self._send(403, "forbidden")
         if self.path == "/quit":
             self._send(200, "bye"); threading.Thread(target=self.server.shutdown, daemon=True).start(); return
+        if self.path == "/wifi":
+            return self._send(200, json.dumps(wifi_info()), "application/json")
         if self.path == "/ping":
             try:
                 n = int(self.headers.get("Content-Length") or 0)
@@ -273,6 +323,22 @@ input[type=text]{padding:7px 9px;border:1px solid var(--line);border-radius:7px;
 .b{font-weight:700}.g{color:#32d74b}.r{color:#ff453a}.y{color:#ffd60a}.d{opacity:.55}
 .bar{display:flex;gap:8px;align-items:center}.sp{flex:1}
 main.mon>:not(#mon){display:none}main:not(.mon)>#mon{display:none}
+main.wf>:not(#wf){display:none}main:not(.wf)>#wf{display:none}
+#wf{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}#wf .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+#wf .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+#wf .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px}#wf .stat small{display:block;color:var(--mut);font-size:11px}#wf .stat b{font:600 16px ui-monospace,Menlo,monospace}
+#wchart{width:100%;flex:1;min-height:220px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+.fw{display:flex;gap:4px}.star{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:7px;cursor:pointer;font-size:14px;padding:0 8px}.star.on{color:#e6a700}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:10px}.chips:empty{display:none}.chips small{color:var(--mut);font-size:11px}
+.chip{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--line);background:var(--bg);border-radius:99px;padding:2px 4px 2px 10px;font-size:12px;cursor:pointer}.chip:hover{border-color:var(--acc)}
+.chip i{font-style:normal;color:var(--mut);padding:0 5px;border-radius:99px}.chip i:hover{background:var(--line);color:var(--fg)}
+.hbar{display:flex;gap:6px;padding:0 14px 6px;flex-wrap:wrap}.hbar .btn{padding:4px 10px;font-size:12px}
+.hi .hc{margin-top:3px}
+#cmp{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:10}#cmp.on{display:flex}
+#cmp .box{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:16px 18px;width:min(980px,calc(100% - 24px));height:min(86vh,800px);display:flex;flex-direction:column;gap:10px}
+#cmp h3{margin:0;font-size:16px}#cmpmeta{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px}#cmpmeta div{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:6px 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#cmp .row{display:flex;gap:14px;align-items:center;flex-wrap:wrap}#cmpout{flex:1;min-height:0;overflow:auto;background:var(--term);color:var(--termfg);border-radius:10px;padding:8px 0;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;margin:0}
+.dl{padding:0 10px;white-space:pre-wrap;word-break:break-all}.dl.add{background:rgba(47,168,79,.22)}.dl.del{background:rgba(209,52,42,.25)}.dl.gap{color:#8b93a1;text-align:center}
 #mon{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}
 #mon .row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
 #mon .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
@@ -293,16 +359,25 @@ kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);b
 #help h3{margin:0 0 10px;font-size:16px}#help table{width:100%;border-collapse:collapse}#help td{padding:5px 0;vertical-align:top}#help td:first-child{width:46%}
 </style><script>try{var th=localStorage.getItem('nd_theme');if(th==='light'||th==='dark')document.documentElement.dataset.theme=th}catch(e){}</script></head><body>
 <nav><h1>🛰️ NetDoctor</h1><div id="list"></div><button onclick="toggleHist()" id="histbtn" style="margin-top:14px;color:var(--mut)">🕘 <span data-i="History">History</span></button><button onclick="toggleHelp()" id="helpbtn" style="color:var(--mut)">⌨ <span data-i="Shortcuts">Shortcuts</span></button><button onclick="toggleTheme()" id="theme" style="color:var(--mut)"></button><button onclick="toggleLang()" id="lang" style="color:var(--mut)"></button><button onclick="quit()" style="color:var(--mut)">⏻ <span data-i="Quit">Quit</span></button></nav>
-<main><div class="card"><h2 id="t"></h2><p id="d"></p><form id="f"></form></div>
+<main><div class="card"><h2 id="t"></h2><p id="d"></p><form id="f"></form><div id="favs" class="chips"></div></div>
+<datalist id="favlist"></datalist>
 <div class="bar"><span class="sp" id="st" style="color:var(--mut)"></span><button class="btn sec" onclick="copy()" data-i="Copy">Copy</button><button class="btn sec" onclick="save()" data-i="Save">Save</button><button class="btn sec" id="stop" onclick="stop()" data-i="Stop" disabled>Stop</button></div>
 <pre id="out"></pre>
 <section id="mon"><div class="card"><h2>📈 <span data-i="Live latency">Live latency</span></h2><p data-i="Pings once a second; red lines mark packet loss.">Pings once a second; red lines mark packet loss.</p>
-<div class="row"><label><span data-i="Target">Target</span><input type="text" id="mhost" value="1.1.1.1" list="mpre" spellcheck="false"><datalist id="mpre"><option value="1.1.1.1"><option value="8.8.8.8"><option value="223.5.5.5"><option value="114.114.114.114"></datalist></label>
+<div class="row"><label><span data-i="Target">Target</span><span class="fw"><input type="text" id="mhost" value="1.1.1.1" list="mpre" spellcheck="false" oninput="renderFavs()"><button type="button" class="star" id="mstar" onclick="toggleFav($('#mhost').value)">☆</button></span><datalist id="mpre"></datalist></label>
 <button class="btn" id="mgo" onclick="monToggle()" data-i="Start">Start</button><button class="btn sec" onclick="monClear()" data-i="Clear">Clear</button></div></div>
 <div class="stats"><div class="stat"><small data-i="Now">Now</small><b id="s_now">—</b></div><div class="stat"><small data-i="Average">Average</small><b id="s_avg">—</b></div><div class="stat"><small data-i="Min / Max">Min / Max</small><b id="s_mm">—</b></div><div class="stat"><small data-i="Jitter">Jitter</small><b id="s_jit">—</b></div><div class="stat"><small data-i="Loss">Loss</small><b id="s_loss">—</b></div></div>
-<canvas id="mchart"></canvas></section></main>
+<div id="mfavs" class="chips"></div>
+<canvas id="mchart"></canvas></section>
+<section id="wf"><div class="card"><h2>📶 <span data-i="Wi-Fi signal">Wi-Fi signal</span></h2><p data-i="Reads the link every few seconds (macOS only). Rule of thumb: > −60 dBm good, −70 fair, < −75 poor.">Reads the link every few seconds (macOS only). Rule of thumb: > −60 dBm good, −70 fair, < −75 poor.</p>
+<div class="row"><button class="btn" id="wgo" onclick="wfToggle()" data-i="Start">Start</button><button class="btn sec" onclick="wfClear()" data-i="Clear">Clear</button><span id="wmsg" style="color:var(--mut);font-size:12px"></span></div></div>
+<div class="stats"><div class="stat"><small data-i="Signal">Signal</small><b id="w_rssi">—</b></div><div class="stat"><small data-i="Noise">Noise</small><b id="w_noise">—</b></div><div class="stat"><small data-i="SNR">SNR</small><b id="w_snr">—</b></div><div class="stat"><small data-i="Channel">Channel</small><b id="w_ch">—</b></div><div class="stat"><small data-i="Rate">Rate</small><b id="w_rate">—</b></div></div>
+<canvas id="wchart"></canvas></section></main>
 <aside id="hist"><header><h3>🕘 <span data-i="History">History</span></h3><button class="btn sec" onclick="clearHist()" data-i="Clear all">Clear all</button><button class="btn sec" onclick="toggleHist(false)" data-i="Close">Close</button></header>
+<div class="hbar"><button class="btn sec" onclick="exportHist()" data-i="Export">Export</button><button class="btn sec" onclick="$('#hfile').click()" data-i="Import">Import</button><button class="btn" id="cmpbtn" onclick="cmpOpen()" data-i="Compare" disabled>Compare</button><input type="file" id="hfile" accept="application/json,.json" style="display:none" onchange="importHist(this)"></div>
 <input type="text" id="hq" oninput="renderHist()"><p class="note" data-i="Stored in this browser only (last 50 runs).">Stored in this browser only (last 50 runs).</p><div id="hlist"></div></aside>
+<div id="cmp" onclick="if(event.target===this)cmpClose()"><div class="box"><h3>⇄ <span data-i="Compare runs">Compare runs</span></h3><div id="cmpmeta"></div>
+<div class="row"><label class="chk"><input type="checkbox" id="cmpchg" checked onchange="cmpRender()"><span data-i="Only changes">Only changes</span></label><label class="chk"><input type="checkbox" id="cmpnum" checked onchange="cmpRender()"><span data-i="Ignore numbers">Ignore numbers</span></label><span id="cmpsum" class="sp"></span><button class="btn sec" onclick="cmpClose()" data-i="Close">Close</button></div><div id="cmpout"></div></div></div>
 <div id="help" onclick="if(event.target===this)toggleHelp(false)"><div class="box"><h3 id="helph"></h3><table id="helpt"></table><p style="margin:12px 0 0;text-align:right"><button class="btn sec" onclick="toggleHelp(false)" data-i="Close">Close</button></p></div></div>
 <script>
 const TOKEN="__TOKEN__",CMDS=__CMDS__,ZH=__ZH__;let cur=null,ctl=null,raw="",idle=true,lang="en";
@@ -317,8 +392,10 @@ function toggleTheme(){theme={auto:'light',light:'dark',dark:'auto'}[theme];try{
 const INTRO='Pick a tool on the left and click “Run”. Start with “Quick check”.';
 CMDS.forEach(c=>{const b=document.createElement('button');b.innerHTML=`<span>${c.icon}</span><span class="nl"></span>`;b.onclick=()=>pick(c.id);b.id='b_'+c.id;$('#list').append(b)});
 {const b=document.createElement('button');b.id='b_mon';b.innerHTML='<span>📈</span><span class="nl"></span>';b.onclick=showMon;$('#list').append(b)}
+{const b=document.createElement('button');b.id='b_wf';b.innerHTML='<span>📶</span><span class="nl"></span>';b.onclick=showWf;$('#list').append(b)}
 const MAXS=120;let msamples=[],mtimer=null,mbusy=false;
-function showMon(){const m=document.querySelector('main');m.classList.add('mon');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_mon'));cur=null;drawMon()}
+function leaveViews(){monStop();wfStop();const m=document.querySelector('main');m.classList.remove('mon');m.classList.remove('wf')}
+function showMon(){leaveViews();const m=document.querySelector('main');m.classList.add('mon');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_mon'));cur=null;drawMon();renderFavs()}
 function monToggle(){if(mtimer){monStop()}else{monStart()}}
 function monStart(){if(mtimer)return;$('#mgo').textContent=t('Stop');mtimer=setInterval(monTick,1000);monTick()}
 function monStop(){if(mtimer){clearInterval(mtimer);mtimer=null}$('#mgo').textContent=t('Start')}
@@ -341,19 +418,88 @@ const X=i=>L+pw-(n-1-i)*pw/(MAXS-1);
 g.strokeStyle='rgba(209,52,42,.7)';msamples.forEach((v,i)=>{if(v===null){g.beginPath();g.moveTo(X(i),T);g.lineTo(X(i),T+ph);g.stroke()}});
 g.strokeStyle=acc;g.lineWidth=2;g.lineJoin='round';g.beginPath();let pen=false;
 msamples.forEach((v,i)=>{if(v===null){pen=false;return}const y=T+ph-ph*v/top;if(pen)g.lineTo(X(i),y);else{g.moveTo(X(i),y);pen=true}});g.stroke()}
-window.addEventListener('resize',()=>{if(document.querySelector('main').classList.contains('mon'))drawMon()});
-function applyLang(){$('#b_mon .nl').textContent=t('Live latency');if(!mtimer)$('#mgo').textContent=t('Start');else $('#mgo').textContent=t('Stop');document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
+window.addEventListener('resize',()=>{const m=document.querySelector('main');if(m.classList.contains('mon'))drawMon();if(m.classList.contains('wf'))drawWf()});
+/* ---- Wi-Fi signal ---- */
+let wsamples=[],wrun=false,wto=null,wmeta={};
+function showWf(){leaveViews();const m=document.querySelector('main');m.classList.add('wf');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_wf'));cur=null;drawWf();renderFavs()}
+function wfToggle(){wrun?wfStop():wfStart()}
+function wfStart(){if(wrun)return;wrun=true;$('#wgo').textContent=t('Stop');wfLoop()}
+function wfStop(){wrun=false;clearTimeout(wto);$('#wgo').textContent=t('Start')}
+function wfClear(){wsamples=[];wmeta={};$('#wmsg').textContent='';drawWf()}
+async function wfLoop(){if(!wrun)return;let d=null;try{const r=await fetch('/wifi',{method:'POST',headers:{'X-Token':TOKEN},body:'{}'});d=await r.json()}catch(e){d={error:'unavailable'}}
+if(!wrun)return;if(d.error){$('#wmsg').textContent=t('Wi-Fi info unavailable')+' ('+d.error+')';wsamples.push(null)}else{$('#wmsg').textContent=d.ssid||'';wmeta=d;wsamples.push({r:d.rssi,n:d.noise})}
+if(wsamples.length>MAXS)wsamples.shift();drawWf();wto=setTimeout(wfLoop,1500)}
+function drawWf(){const last=[...wsamples].reverse().find(x=>x);const q=v=>v>-60?'#2fa84f':v>-70?'#c98a00':'#d1342a';
+$('#w_rssi').textContent=last?last.r+' dBm':'—';$('#w_rssi').style.color=last?q(last.r):'';$('#w_noise').textContent=last?last.n+' dBm':'—';
+$('#w_snr').textContent=last?(last.r-last.n)+' dB':'—';$('#w_ch').textContent=wmeta.channel||'—';$('#w_rate').textContent=wmeta.rate?wmeta.rate+' Mbps':'—';
+const cv=$('#wchart');if(!cv.clientWidth)return;const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);
+const cs=getComputedStyle(document.documentElement),mut=cs.getPropertyValue('--mut').trim(),line=cs.getPropertyValue('--line').trim(),acc=cs.getPropertyValue('--acc').trim();
+const L=46,T=10,B=8,R=10,pw=w-L-R,ph=h-T-B,LO=-100,HI=-30,Y=v=>T+ph*(HI-Math.max(LO,Math.min(HI,v)))/(HI-LO);
+[[HI,-60,'rgba(47,168,79,.12)'],[-60,-70,'rgba(201,138,0,.12)'],[-70,LO,'rgba(209,52,42,.10)']].forEach(([a,b,c])=>{g.fillStyle=c;g.fillRect(L,Y(a),pw,Y(b)-Y(a))});
+g.font='11px ui-monospace,Menlo,monospace';g.lineWidth=1;for(let v=LO;v<=HI;v+=10){const y=Y(v);g.strokeStyle=line;g.beginPath();g.moveTo(L,y);g.lineTo(w-R,y);g.stroke();g.fillStyle=mut;g.fillText(String(v),6,y+4)}
+const n=wsamples.length,X=i=>L+pw-(n-1-i)*pw/(MAXS-1);
+const path=(key,color,dash)=>{g.strokeStyle=color;g.lineWidth=2;g.setLineDash(dash);g.lineJoin='round';g.beginPath();let pen=false;wsamples.forEach((s,i)=>{if(!s){pen=false;return}const y=Y(s[key]);if(pen)g.lineTo(X(i),y);else{g.moveTo(X(i),y);pen=true}});g.stroke();g.setLineDash([])};
+path('n',mut,[5,4]);path('r',acc,[])}
+/* ---- favorites ---- */
+const FKEY='nd_favs',FMAX=30,FAVN=['host','domain','url'];let favs=[];
+try{favs=JSON.parse(localStorage.getItem(FKEY)||'[]').filter(x=>typeof x=='string'&&x.length<=300)}catch(e){}
+function saveFavs(){try{localStorage.setItem(FKEY,JSON.stringify(favs))}catch(e){}}
+function favTarget(){const m=document.querySelector('main');if(m.classList.contains('mon'))return $('#mhost');if(m.classList.contains('wf'))return null;return document.querySelector(FAVN.map(n=>'#f input[name='+n+']').join(','))}
+function toggleFav(v){v=(v||'').trim();if(!v)return;const i=favs.indexOf(v);if(i>=0)favs.splice(i,1);else{favs.unshift(v);favs=favs.slice(0,FMAX)}saveFavs();renderFavs()}
+function fillFav(i){const el=favTarget(),v=favs[i];if(!el||v===undefined)return;let x=v;
+if(el.name=='url'&&!/^https?:\/\//.test(x))x='https://'+x;else if(el.name&&el.name!='url'&&/^https?:\/\//.test(x))x=x.replace(/^https?:\/\//,'').split(/[\/?#]/)[0];
+el.value=x;el.focus();renderFavs()}
+function rmFav(i){favs.splice(i,1);saveFavs();renderFavs()}
+function renderFavs(){const html=favs.length?'<small>★ '+esc(t('Favorites'))+'</small>'+favs.map((v,i)=>`<span class="chip" onclick="fillFav(${i})">${esc(v)}<i title="${esc(t('Remove from favorites'))}" onclick="event.stopPropagation();rmFav(${i})">×</i></span>`).join(''):'';
+const m=document.querySelector('main'),mon=m.classList.contains('mon');$('#favs').innerHTML=mon||!document.querySelector('#f input[name=host],#f input[name=domain],#f input[name=url]')?'':html;$('#mfavs').innerHTML=mon?html:'';
+$('#favlist').innerHTML=favs.map(v=>`<option value="${esc(v)}">`).join('');$('#mpre').innerHTML=[...favs,'1.1.1.1','8.8.8.8','223.5.5.5','114.114.114.114'].filter((v,i,a)=>a.indexOf(v)==i).map(v=>`<option value="${esc(v)}">`).join('');
+document.querySelectorAll('#f .star').forEach(b=>{const on=favs.includes(b.previousSibling.value.trim());b.classList.toggle('on',on);b.textContent=on?'★':'☆';b.title=t(on?'Remove from favorites':'Add to favorites')});
+const ms=$('#mstar'),mon2=favs.includes($('#mhost').value.trim());ms.classList.toggle('on',mon2);ms.textContent=mon2?'★':'☆';ms.title=t(mon2?'Remove from favorites':'Add to favorites')}
+/* ---- compare two runs ---- */
+let hcmp=[];
+function cmpToggle(id,on){hcmp=hcmp.filter(x=>x!=id);if(on)hcmp.push(id);if(hcmp.length>2)hcmp.shift();renderHist()}
+const stripAnsi=x=>x.replace(/\x1b\[\d+m/g,'');
+function diffOps(a,b,key){const n=a.length,m=b.length,A=a.map(key),B=b.map(key),dp=Array.from({length:n+1},()=>new Uint16Array(m+1));
+for(let i=n-1;i>=0;i--)for(let j=m-1;j>=0;j--)dp[i][j]=A[i]===B[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+const ops=[];let i=0,j=0;while(i<n&&j<m){if(A[i]===B[j]){ops.push(['=',b[j]]);i++;j++}else if(dp[i+1][j]>=dp[i][j+1]){ops.push(['-',a[i]]);i++}else{ops.push(['+',b[j]]);j++}}
+while(i<n)ops.push(['-',a[i++]]);while(j<m)ops.push(['+',b[j++]]);return ops}
+function cmpOpen(){if(hcmp.length!=2)return;$('#cmp').classList.add('on');cmpRender()}
+function cmpClose(){$('#cmp').classList.remove('on')}
+function cmpRender(){const [x,y]=hcmp.map(id=>hist.find(h=>h.id==id)).filter(Boolean).sort((a,b)=>a.ts-b.ts);if(!y){cmpClose();return}
+const lab=h=>{const c=CMDS.find(c=>c.id==h.cmd);return (c?c.icon+' '+t(c.label):h.cmd)+' · '+Object.values(h.values||{}).filter(Boolean).join(' ')+' · '+new Date(h.ts).toLocaleString(lang=='zh'?'zh-CN':'en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})};
+$('#cmpmeta').innerHTML='<div title="'+esc(lab(x))+'"><b>'+esc(t('Older'))+':</b> '+esc(lab(x))+'</div><div title="'+esc(lab(y))+'"><b>'+esc(t('Newer'))+':</b> '+esc(lab(y))+'</div>';
+const CAP=1500,lines=h=>stripAnsi(h.out).split('\n').map(l=>l.replace(/\s+$/,'')),la=lines(x),lb=lines(y),cut=la.length>CAP||lb.length>CAP;
+const key=$('#cmpnum').checked?l=>l.replace(/\d+(\.\d+)?/g,'#'):l=>l;const ops=diffOps(la.slice(0,CAP),lb.slice(0,CAP),key);
+const add=ops.filter(o=>o[0]=='+').length,del=ops.filter(o=>o[0]=='-').length;
+$('#cmpsum').textContent=(add||del?t('+%s / −%s lines').replace('%s',add).replace('%s',del):t('No differences'))+(cut?' '+t('(only the first 1500 lines are compared)'):'');
+const only=$('#cmpchg').checked,show=new Array(ops.length).fill(!only);if(only){ops.forEach((o,i)=>{if(o[0]!='='){for(let k=Math.max(0,i-2);k<=Math.min(ops.length-1,i+2);k++)show[k]=true}})}
+let html='',hidden=0;const flush=()=>{if(hidden){html+='<div class="dl gap">'+esc(t('… %s unchanged lines …').replace('%s',hidden))+'</div>';hidden=0}};
+ops.forEach((o,i)=>{if(!show[i]){hidden++;return}flush();html+='<div class="dl '+({'+':'add','-':'del','=':''}[o[0]])+'">'+esc((o[0]=='='?'  ':o[0]+' ')+o[1])+'</div>'});flush();$('#cmpout').innerHTML=html}
+/* ---- history export / import ---- */
+function exportHist(){const data={app:'netdoctor',version:1,exported:new Date().toISOString(),history:hist,favorites:favs};
+const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));a.download='netdoctor-history-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+async function importHist(inp){const f=inp.files[0];inp.value='';if(!f)return;
+try{if(f.size>8e6)throw 0;const d=JSON.parse(await f.text());if(!d||d.app!='netdoctor'||!Array.isArray(d.history||[]))throw 0;
+const ids=new Set(hist.map(h=>h.id)),okS=['ok','stopped','failed'];let nh=0,nf=0;
+(d.history||[]).forEach(h=>{if(!h||typeof h.cmd!='string'||!CMDS.some(c=>c.id==h.cmd)||typeof h.out!='string'||typeof h.id!='string'||!/^[\w.-]{1,40}$/.test(h.id)||ids.has(h.id))return;
+const vals={};if(h.values&&typeof h.values=='object')Object.keys(h.values).forEach(k=>{if(typeof h.values[k]=='string')vals[k.slice(0,40)]=h.values[k].slice(0,300)});
+hist.push({id:h.id,ts:Number.isFinite(+h.ts)?+h.ts:Date.now(),cmd:h.cmd,values:vals,admin:!!h.admin,state:okS.includes(h.state)?h.state:'ok',sec:Number.isFinite(+h.sec)?+h.sec:0,out:h.out.slice(-OMAX)});ids.add(h.id);nh++});
+hist.sort((a,b)=>b.ts-a.ts);hist=hist.slice(0,HMAX);saveHist();
+(Array.isArray(d.favorites)?d.favorites:[]).forEach(v=>{if(typeof v=='string'&&v.trim()&&v.length<=300&&!favs.includes(v)&&favs.length<FMAX){favs.push(v);nf++}});saveFavs();
+renderHist();renderFavs();$('#st').textContent=t('Imported %s run(s), %s favorite(s)').replace('%s',nh).replace('%s',nf)}
+catch(e){$('#st').textContent=t('Import failed: invalid file')}}
+function applyLang(){$('#b_mon .nl').textContent=t('Live latency');$('#b_wf .nl').textContent=t('Wi-Fi signal');if(wrun)$('#wgo').textContent=t('Stop');else $('#wgo').textContent=t('Start');if($('#cmp').classList.contains('on'))cmpRender();if(!mtimer)$('#mgo').textContent=t('Start');else $('#mgo').textContent=t('Stop');document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
 document.querySelectorAll('[data-i]').forEach(e=>e.textContent=t(e.dataset.i));
 CMDS.forEach(c=>{$('#b_'+c.id+' .nl').textContent=t(c.label)});
 $('#lang').textContent='🌐 '+(lang=='zh'?'English':'中文');if(idle)$('#out').textContent=t(INTRO);
-applyTheme();if($('#hist').classList.contains('on'))renderHist();$('#stop').title='Esc';$('#histbtn').title='h';$('#lang').title='l';$('#theme').title='t';$('#helpbtn').title='?';if(cur)pick(cur.id,true,true)}
+applyTheme();renderFavs();if($('#hist').classList.contains('on'))renderHist();if(document.querySelector('main').classList.contains('wf'))drawWf();$('#stop').title='Esc';$('#histbtn').title='h';$('#lang').title='l';$('#theme').title='t';$('#helpbtn').title='?';if(cur)pick(cur.id,true,true)}
 function toggleLang(){lang=lang=='zh'?'en':'zh';try{localStorage.setItem('nd_lang',lang)}catch(e){}applyLang()}
-function pick(id,keep,nofocus){monStop();document.querySelector('main').classList.remove('mon');const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
+function pick(id,keep,nofocus){leaveViews();const old={};if(keep)document.querySelectorAll('#f input').forEach(i=>{old[i.name]=i.type=='checkbox'?i.checked:i.value});cur=CMDS.find(c=>c.id==id);document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_'+id));
 $('#t').textContent=cur.icon+' '+t(cur.label);$('#d').textContent=t(cur.desc);const f=$('#f');f.innerHTML='';
-cur.inputs.forEach(i=>{const l=document.createElement('label');l.textContent=t(i.label)+(i.req?' *':'');const x=document.createElement('input');x.type='text';x.name=i.name;x.placeholder=i.ph||'';x.value=(keep&&old[i.name]!==undefined)?old[i.name]:(i.def||'');l.append(x);f.append(l)});
+cur.inputs.forEach(i=>{const l=document.createElement('label');l.textContent=t(i.label)+(i.req?' *':'');const x=document.createElement('input');x.type='text';x.name=i.name;x.placeholder=i.ph||'';x.value=(keep&&old[i.name]!==undefined)?old[i.name]:(i.def||'');if(FAVN.includes(i.name)){x.setAttribute('list','favlist');x.setAttribute('spellcheck','false');const star=document.createElement('button');star.type='button';star.className='star';star.onclick=()=>toggleFav(x.value);x.addEventListener('input',renderFavs);const w=document.createElement('span');w.className='fw';w.append(x,star);l.append(w)}else l.append(x);f.append(l)});
 if(cur.admin===true||cur.admin==='optional'){const l=document.createElement('label');l.className='chk';l.innerHTML=`<input type="checkbox" name="_admin" ${cur.admin===true?'checked disabled':''}>${t('Requires administrator rights')}${cur.admin===true?'':' '+t('(fuller details)')}`;f.append(l);if(keep&&old._admin!==undefined&&cur.admin!==true)l.querySelector('input').checked=old._admin}
 const r=document.createElement('button');r.className='btn';r.id='run';r.textContent=t('Run');r.title=MOD+'+Enter';r.type='submit';f.append(r);
-f.onsubmit=e=>{e.preventDefault();run()};const first=f.querySelector('input[type=text]');first&&!nofocus&&first.focus()}
+f.onsubmit=e=>{e.preventDefault();run()};const first=f.querySelector('input[type=text]');renderFavs();first&&!nofocus&&first.focus()}
 function ansi(s){const esc=t=>t.replace(/&/g,'&amp;').replace(/</g,'&lt;');let open=0,o='';
 return esc(s).replace(/\x1b\[(\d+)m/g,(m,c)=>{let r='';if(c=='0'||c=='22'){r='</span>'.repeat(open);open=0;return r}
 const k={1:'b',31:'r',32:'g',33:'y',2:'d'}[c];if(!k)return '';open++;return `<span class="${k}">`})+'</span>'.repeat(open)}
@@ -376,25 +522,25 @@ function saveHist(){for(;;){try{localStorage.setItem(HKEY,JSON.stringify(hist));
 function addHist(h){if(h.out.length>OMAX)h.out='…'+t('(output truncated)')+'\n'+h.out.slice(-OMAX);
 h.id=Date.now()+'-'+Math.random().toString(36).slice(2,6);h.ts=Date.now();hist.unshift(h);hist=hist.slice(0,HMAX);hsel=h.id;saveHist();if($('#hist').classList.contains('on'))renderHist()}
 const esc=x=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-function renderHist(){const q=$('#hq').value.trim().toLowerCase();$('#hq').placeholder=t('Search…');
+function renderHist(){$('#cmpbtn').disabled=hcmp.length!=2;const q=$('#hq').value.trim().toLowerCase();$('#hq').placeholder=t('Search…');
 const rows=hist.filter(h=>{if(!q)return true;const c=CMDS.find(c=>c.id==h.cmd),lab=c?c.label:h.cmd;return (t(lab)+' '+lab+' '+Object.values(h.values||{}).join(' ')).toLowerCase().includes(q)});
 $('#hlist').innerHTML=rows.length?rows.map(h=>{const c=CMDS.find(c=>c.id==h.cmd)||{icon:'•',label:h.cmd};
 const args=Object.values(h.values||{}).filter(Boolean).join(' ')+(h.admin?' 🔒':'');
 const when=new Date(h.ts).toLocaleString(lang=='zh'?'zh-CN':'en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'});
 const lbl={ok:'Done',stopped:'Stopped',failed:'Failed'}[h.state]||'Done';
-return `<div class="hi${h.id==hsel?' sel':''}" onclick="viewHist('${h.id}')"><span>${c.icon}</span><div class="m"><div class="n">${esc(t(c.label))}<span class="bd ${h.state}">${esc(t(lbl))}</span></div><div class="a">${esc(args)||'&nbsp;'}</div><div class="w">${esc(when)} · ${h.sec}s</div></div><div class="x"><button onclick="event.stopPropagation();rerunHist('${h.id}')">${esc(t('Re-run'))}</button><button onclick="event.stopPropagation();delHist('${h.id}')">${esc(t('Delete'))}</button></div></div>`}).join(''):`<p style="color:var(--mut);padding:8px">${esc(t(hist.length?'No matches':'No history yet'))}</p>`}
+return `<div class="hi${h.id==hsel?' sel':''}" onclick="viewHist('${h.id}')"><input type="checkbox" class="hc" title="${esc(t('Tick two runs to compare'))}" ${hcmp.includes(h.id)?'checked':''} onclick="event.stopPropagation();cmpToggle('${h.id}',this.checked)"><span>${c.icon}</span><div class="m"><div class="n">${esc(t(c.label))}<span class="bd ${h.state}">${esc(t(lbl))}</span></div><div class="a">${esc(args)||'&nbsp;'}</div><div class="w">${esc(when)} · ${h.sec}s</div></div><div class="x"><button onclick="event.stopPropagation();rerunHist('${h.id}')">${esc(t('Re-run'))}</button><button onclick="event.stopPropagation();delHist('${h.id}')">${esc(t('Delete'))}</button></div></div>`}).join(''):`<p style="color:var(--mut);padding:8px">${esc(t(hist.length?'No matches':'No history yet'))}</p>`}
 function toggleHist(on){const h=$('#hist');const open=on===undefined?!h.classList.contains('on'):on;h.classList.toggle('on',open);if(open){renderHist()}}
 function viewHist(id){const h=hist.find(x=>x.id==id);if(!h)return;hsel=id;pick(h.cmd,false,true);
 document.querySelectorAll('#f input').forEach(i=>{if(i.name=='_admin'){if(!i.disabled)i.checked=!!h.admin}else if(h.values&&h.values[i.name]!==undefined)i.value=h.values[i.name]});
 raw=h.out;idle=false;$('#out').innerHTML=ansi(raw);$('#out').scrollTop=0;
 $('#st').textContent=t('Viewing history')+': '+new Date(h.ts).toLocaleString(lang=='zh'?'zh-CN':'en-US');renderHist()}
 function rerunHist(id){viewHist(id);if(!$('#run').disabled)run()}
-function delHist(id){hist=hist.filter(h=>h.id!=id);saveHist();renderHist()}
-function clearHist(){if(hist.length&&confirm(t('Clear all history?'))){hist=[];hsel=null;saveHist();renderHist()}}
+function delHist(id){hist=hist.filter(h=>h.id!=id);hcmp=hcmp.filter(x=>x!=id);saveHist();renderHist()}
+function clearHist(){if(hist.length&&confirm(t('Clear all history?'))){hist=[];hsel=null;hcmp=[];saveHist();renderHist()}}
 const MOD=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
 const SC=[[[MOD+' + Enter'],'Run the current tool'],[['Esc'],'Stop a running command; otherwise leave the input box'],
 [['j','↓'],'Previous / next tool'],[['1'],'Jump to tool 1–9'],[['/'],'Focus the first input'],[['Enter'],'Run (when not typing)'],
-[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['m'],'Open live latency'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
+[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['m'],'Open live latency'],[['w'],'Open Wi-Fi signal'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
 SC[2][0]=['j / ↓  ·  k / ↑'];SC[3][0]=['1 … 9'];
 function toggleHelp(on){const h=$('#help');const open=on===undefined?!h.classList.contains('on'):on;
 if(open){$('#helph').textContent='⌨ '+t('Keyboard shortcuts');$('#helpt').innerHTML=SC.map(([k,d])=>`<tr><td>${k.map(x=>'<kbd>'+x.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</kbd>').join('')}</td><td>${t(d)}</td></tr>`).join('')}
@@ -402,10 +548,11 @@ h.classList.toggle('on',open)}
 function go(delta,abs){const i=CMDS.findIndex(c=>c.id==(cur&&cur.id));const n=abs!==undefined?abs:Math.max(0,Math.min(CMDS.length-1,i+delta));if(CMDS[n]){pick(CMDS[n].id,false,true);$('#b_'+CMDS[n].id).scrollIntoView({block:'nearest'})}}
 document.addEventListener('keydown',e=>{
 const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&e.target.type!='checkbox';
-const helpOpen=$('#help').classList.contains('on'),histOpen=$('#hist').classList.contains('on');
-if(e.key=='Escape'){if(helpOpen){toggleHelp(false)}else if(histOpen&&$('#stop').disabled){toggleHist(false)}else if(!$('#stop').disabled){stop()}else if(typing){e.target.blur()}else return;e.preventDefault();return}
+const helpOpen=$('#help').classList.contains('on'),histOpen=$('#hist').classList.contains('on'),cmpIsOpen=$('#cmp').classList.contains('on');
+if(e.key=='Escape'){if(cmpIsOpen){cmpClose()}else if(helpOpen){toggleHelp(false)}else if(histOpen&&$('#stop').disabled){toggleHist(false)}else if(!$('#stop').disabled){stop()}else if(typing){e.target.blur()}else return;e.preventDefault();return}
 if((e.metaKey||e.ctrlKey)&&e.key=='Enter'){if(!$('#run').disabled){e.preventDefault();run()}return}
 if(e.metaKey||e.ctrlKey||e.altKey||typing)return;
+if(cmpIsOpen)return;
 if(helpOpen){if(e.key=='?'){toggleHelp(false);e.preventDefault()}return}
 if(histOpen&&e.key!='h'&&e.key!='?')return;
 const k=e.key;let used=true;
@@ -418,6 +565,7 @@ else if(k=='Enter'&&e.target.tagName!='BUTTON'){if(!$('#run').disabled)run()}
 else if(k=='c'){if(raw)copy()}
 else if(k=='s'){if(raw)save()}
 else if(k=='m')showMon();
+else if(k=='w')showWf();
 else if(k=='h')toggleHist();
 else if(k=='l')toggleLang();
 else if(k=='t')toggleTheme();

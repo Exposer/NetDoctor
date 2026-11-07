@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
+- Web UI: a **Wi-Fi signal** page. Every ~1.5 s it reads signal / noise / SNR / channel / rate and draws the signal and noise curves over bands for good (> −60 dBm), fair and poor. Open it from the 📶 sidebar entry or with `w`. Data comes from `system_profiler`, needs no sudo, macOS only.
+- Web UI: **favorite hosts**. The ☆ next to a host / domain / URL input saves it; favorites are shared by every tool and the live latency page, shown as chips that fill the input on click (URLs and hostnames are converted automatically), × removes one, up to 30.
+- Web UI: **compare two runs**. Tick two entries in the history panel and press Compare for a line diff with additions and deletions. "Only changes" and "Ignore numbers" options keep differing timings from counting as changes.
+- Web UI: **history export / import**. Export to JSON (favorites included); import validates and sanitises every field, de-duplicates by id and keeps at most 50 entries.
 - Web UI: a **Live latency** page, matching the SwiftUI app. It pings the target once a second (pick 1.1.1.1, 8.8.8.8, 223.5.5.5, 114.114.114.114 or type your own), shows now / average / min-max / jitter / loss and draws a chart of the last 120 samples with packet loss marked in red. Open it from the 📈 sidebar entry or with `m`; it stops automatically when you leave the page.
 - Web UI: run history. Every run (including stopped and failed ones) is saved with its tool, parameters, status, duration and full output — the latest 50. Open the panel with the 🕘 sidebar button or the `h` key; search, click to view, **Re-run**, delete or clear. Stored only in the browser (localStorage).
 
