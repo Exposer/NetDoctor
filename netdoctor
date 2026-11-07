@@ -487,12 +487,8 @@ EOF2
 
 ping_stats() { # $1 = host, $2 = count -> prints "loss avg" (avg empty if nothing answered)
   local out; out=$(ping -c "${2:-3}" -t 3 "$1" 2>/dev/null)
-  # 被超时杀掉时 ping6 不会打印汇总: 退回到逐包的 time= 自己算平均, 慢但能通的链路不会被误判为不通
-  local loss avg
-  loss=$(echo "$out" | awk -F', ' '/packet loss/{for(i=1;i<=NF;i++) if($i ~ /packet loss/){sub(/%.*/,"",$i); print $i}}')
-  avg=$(echo "$out" | awk -F'/' '/min\/avg\/max/{print $5}')
-  [ -n "$avg" ] || avg=$(echo "$out" | awk '/bytes from/{for(i=1;i<=NF;i++) if($i ~ /^time=/){sub(/time=/,"",$i); n++; t+=$i}} END{if(n) printf "%.3f", t/n}')
-  printf '%s %s\\n' "$loss" "$avg\"
+  printf '%s %s\n' "$(echo "$out" | awk -F', ' '/packet loss/{for(i=1;i<=NF;i++) if($i ~ /packet loss/){sub(/%.*/,"",$i); print $i}}')" \
+                    "$(echo "$out" | awk -F'/' '/min\/avg\/max/{print $5}')"
 }
 resolves() { # $1 = name, $2 = optional DNS server
   if has dig; then dig ${2:+@$2} +short +time=3 +tries=1 "$1" 2>/dev/null | grep -q .
@@ -885,8 +881,12 @@ ping6_stats() {
   ( sleep "${4:-6}"; kill "$pid" 2>/dev/null ) >/dev/null 2>&1 & wd=$!
   wait "$pid" 2>/dev/null; kill "$wd" 2>/dev/null; wait "$wd" 2>/dev/null
   out=$(cat "$f"); rm -f "$f"
-  printf '%s %s\n' "$(echo "$out" | awk -F', ' '/packet loss/{for(i=1;i<=NF;i++) if($i ~ /packet loss/){sub(/%.*/,"",$i); print $i}}')" \
-                    "$(echo "$out" | awk -F'/' '/min\/avg\/max/{print $5}')"
+  # 被超时杀掉时 ping6 不会打印汇总: 退回到逐包的 time= 自己算平均, 慢但能通的链路不会被误判为不通
+  local loss avg
+  loss=$(echo "$out" | awk -F', ' '/packet loss/{for(i=1;i<=NF;i++) if($i ~ /packet loss/){sub(/%.*/,"",$i); print $i}}')
+  avg=$(echo "$out" | awk -F'/' '/min\/avg\/max/{print $5}')
+  [ -n "$avg" ] || avg=$(echo "$out" | awk '/bytes from/{for(i=1;i<=NF;i++) if($i ~ /^time=/){sub(/time=/,"",$i); n++; t+=$i}} END{if(n) printf "%.3f", t/n}')
+  printf '%s %s\n' "$loss" "$avg"
 }
 
 # 结论。参数是 key=value 事实 (没测的留空):
