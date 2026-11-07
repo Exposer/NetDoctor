@@ -4,7 +4,7 @@
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.1.5] - 2026-11-07
 
 ### Added
 - Web UI: a **Wi-Fi signal** page. Every ~1.5 s it reads signal / noise / SNR / channel / rate and draws the signal and noise curves over bands for good (> −60 dBm), fair and poor. Open it from the 📶 sidebar entry or with `w`. Data comes from `system_profiler`, needs no sudo, macOS only.

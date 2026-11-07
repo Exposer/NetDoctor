@@ -4,7 +4,7 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/),版本号遵循语义化版本。
 
-## [未发布]
+## [1.1.5] - 2026-11-07
 
 ### 新增
 - 网页界面:**Wi-Fi signal**(Wi-Fi 信号)页:每约 1.5 秒读取一次信号 / 噪声 / 信噪比 / 信道 / 速率,画出信号与噪声曲线,背景按好(> −60 dBm)/ 一般 / 差分色;左侧栏 📶 或按 `w` 打开。数据来自 `system_profiler`,无需 sudo,仅 macOS。
