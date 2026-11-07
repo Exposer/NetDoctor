@@ -511,8 +511,15 @@ cmd_dns() {
   echo "$(L "Tip: big differences between servers, or a failing system default → ISP hijacking or a DNS config problem; try netdoctor fixdns." "提示: 各家结果差异大/系统默认失败 → 运营商劫持或 DNS 配置问题; 可 netdoctor fixdns。")"
 }
 
+# 主机名能否被系统解析 (用 ping 的解析结果, 与系统解析器一致; IP 直接视为可解析)
+cannot_resolve() {
+  case "$1" in *[!0-9.]*) ;; *) return 1;; esac
+  ping -c 1 -t 1 "$1" 2>&1 | grep -qi 'cannot resolve\|unknown host'
+}
+
 cmd_route() {
   local h=${1:-}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor route <host>" "用法: netdoctor route <主机>")"; return 1; }
+  if cannot_resolve "$h"; then bad "$(L "Cannot resolve $h; check the host name or DNS (try: netdoctor dns $h)" "无法解析 $h, 检查域名或 DNS (可试: netdoctor dns $h)")"; return 1; fi
   hdr "$(L "Route selection (which interface/VPN the traffic uses)" "路由选择 (流量走哪块网卡/VPN)")"; route -n get "$h" 2>&1 | awk '/destination|gateway|interface/'
   hdr "$(L "Path" "路径")"
   if has mtr && priv mtr -rwbzc 20 "$h"; then :
@@ -527,6 +534,8 @@ cmd_ping() { local h=${1:-}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor ping <
 
 cmd_port() {
   [ $# -lt 2 ] && { echo "$(L "Usage: netdoctor port <host> <port>" "用法: netdoctor port <主机> <端口>")"; return 1; }
+  case "$2" in ''|*[!0-9]*) bad "$(L "Port must be a number between 1 and 65535" "端口必须是 1-65535 的数字")"; return 1;; esac
+  if [ "$2" -lt 1 ] || [ "$2" -gt 65535 ]; then bad "$(L "Port must be a number between 1 and 65535" "端口必须是 1-65535 的数字")"; return 1; fi
   if nc -vz -G 5 "$1" "$2" 2>&1; then ok "$(L "$1:$2 open" "$1:$2 开放")"
   else bad "$(L "$1:$2 unreachable (closed / firewall / routing)" "$1:$2 不通 (关闭/防火墙/路由)")"; return 1; fi
 }
@@ -616,6 +625,7 @@ cmd_tls() {
 
 cmd_mtu() {
   local h=${1:-1.1.1.1} s
+  if cannot_resolve "$h"; then bad "$(L "Cannot resolve $h; check the host name or DNS (try: netdoctor dns $h)" "无法解析 $h, 检查域名或 DNS (可试: netdoctor dns $h)")"; return 1; fi
   hdr "$(L "Path MTU probe -> $h (DF bit)" "路径 MTU 探测 -> $h (DF 位)")"
   for s in 1472 1452 1432 1412 1372 1272 1172; do
     if ping -c 1 -t 3 -D -s "$s" "$h" >/dev/null 2>&1; then
