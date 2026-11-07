@@ -122,7 +122,7 @@
 "Switch to the fastest DNS if it is clearly faster (otherwise only measure)" = "Switch to the fastest DNS if it is clearly faster (otherwise only measure)";
 "DNS settings" = "DNS settings";
 "Show, change or restore the DNS servers of the current network (backs up first, rolls back if names stop resolving)" = "Show, change or restore the DNS servers of the current network (backs up first, rolls back if names stop resolving)";
-"Servers (show / restore / auto, or IPs like 1.1.1.1 8.8.8.8)" = "Servers (show / restore / auto, or IPs like 1.1.1.1 8.8.8.8)";
+"Servers (show / restore / auto, or IPs separated by commas)" = "Servers (show / restore / auto, or IPs separated by commas)";
 "Health history" = "Health history";
 "Runs the diagnosis in the background and records the result, so you can see when and at which layer the network had problems." = "Runs the diagnosis in the background and records the result, so you can see when and at which layer the network had problems.";
 "Automatic health check" = "Automatic health check";

@@ -52,15 +52,22 @@ final class Runner: ObservableObject {
     private static let allowed = CharacterSet(charactersIn:
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._:/?&=%@~+,[]-")
 
-    private func buildArgs() throws -> [String] {
+    private func buildArgs() throws -> [String] { try Runner.buildArgs(tool: tool, values: values) }
+
+    /// The command line arguments for the entered values. An empty positional field makes the positional fields
+    /// after it be left out (they would shift), but empty / unticked checkboxes never drop the ones after them.
+    static func buildArgs(tool: Tool, values: [String: String]) throws -> [String] {
         var args: [String] = []
+        var skipPositional = false
         for i in tool.inputs {
             let v = (values[i.name] ?? "").trimmingCharacters(in: .whitespaces)
             if v.isEmpty {
                 if i.required { throw NSError(domain: "netdoctor", code: 1, userInfo: [NSLocalizedDescriptionKey: String(format: loc("Please fill in: %@"), loc(i.label))]) }
-                break
+                if i.flag.isEmpty { skipPositional = true }
+                continue
             }
-            if v.hasPrefix("-") || v.count > 300 || v.unicodeScalars.contains(where: { !Self.allowed.contains($0) }) {
+            if skipPositional && i.flag.isEmpty { continue }
+            if v.hasPrefix("-") || v.count > 300 || v.unicodeScalars.contains(where: { !allowed.contains($0) }) {
                 throw NSError(domain: "netdoctor", code: 2, userInfo: [NSLocalizedDescriptionKey: String(format: loc("Invalid parameter: %@"), loc(i.label))])
             }
             args.append(v)

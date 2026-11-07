@@ -23,7 +23,7 @@ COMMANDS = [
  {"id":"ipv6","label":"IPv6 check","icon":"6️⃣","desc":"Compare IPv4 / IPv6 connectivity and spot a broken IPv6 path","inputs":[]},
  {"id":"captive","label":"Captive portal","icon":"🚧","desc":"Wi-Fi connected but no web access? Detect a login page","inputs":[]},
  {"id":"dnsbench","label":"DNS benchmark","icon":"🏁","desc":"Compare the system and public DNS servers by speed and get a recommendation","inputs":[{"name":"domain","label":"Domain","ph":"extra domain to include (optional)"},{"name":"yes","label":"Switch to the fastest DNS if it is clearly faster (otherwise only measure)","flag":"yes"}],"admin":"optional"},
- {"id":"dnsset","label":"DNS settings","icon":"🧭","desc":"Show, change or restore the DNS servers of the current network (backs up first, rolls back if names stop resolving)","inputs":[{"name":"servers","label":"Servers (show / restore / auto, or IPs like 1.1.1.1 8.8.8.8)","ph":"show","def":"show"}],"admin":"optional"},
+ {"id":"dnsset","label":"DNS settings","icon":"🧭","desc":"Show, change or restore the DNS servers of the current network (backs up first, rolls back if names stop resolving)","inputs":[{"name":"servers","label":"Servers (show / restore / auto, or IPs separated by commas)","ph":"1.1.1.1,8.8.8.8","def":"show"}],"admin":"optional"},
  {"id":"http","label":"HTTP timing","icon":"🌐","desc":"DNS / TCP / TLS / first byte / total breakdown","inputs":[{"name":"url","label":"URL","ph":"https://example.com","req":True}]},
  {"id":"ping","label":"Ping","icon":"📡","desc":"Packet loss and latency statistics","inputs":[{"name":"host","label":"Host","ph":"1.1.1.1","req":True},{"name":"count","label":"Count","ph":"20","def":"20"}]},
  {"id":"route","label":"Route / path","icon":"🧭","desc":"Which interface/VPN is used + hop-by-hop mtr/traceroute","inputs":[{"name":"host","label":"Host","ph":"example.com","req":True}],"admin":"optional"},
@@ -85,7 +85,7 @@ ZH = {
     "Switch to the fastest DNS if it is clearly faster (otherwise only measure)": "明显更快时切换到最快的 DNS (不勾选则只测速)",
     "DNS settings": "DNS 设置",
     "Show, change or restore the DNS servers of the current network (backs up first, rolls back if names stop resolving)": "查看、修改或还原当前网络的 DNS 服务器 (改前备份, 改完解析不了会自动改回)",
-    "Servers (show / restore / auto, or IPs like 1.1.1.1 8.8.8.8)": "服务器 (show / restore / auto, 或 IP 如 1.1.1.1 8.8.8.8)",
+    "Servers (show / restore / auto, or IPs separated by commas)": "服务器 (show / restore / auto, 或用逗号分隔的 IP)",
     "Save as an HTML page (collapsible sections, colours)": "保存为 HTML 页面 (可折叠分区, 带颜色)",
     "Fix problems": "修复问题",
     "Diagnose, then fix what can be fixed on this Mac (renew DHCP, flush DNS, sync the clock, open the login page) and re-check": "先诊断, 再修复这台 Mac 上能修的问题 (重新获取 DHCP、刷新 DNS、校准时钟、打开登录页), 然后复查",
@@ -305,12 +305,17 @@ def wifi_info():
 
 def build_args(spec, values, lang="en"):
     args = []
+    skip_positional = False   # positional args: once one is empty, the ones after it are not passed (they would shift)
     for i in spec["inputs"]:
         v = (values.get(i["name"]) or i.get("def") or "").strip()
         if not v:
             if i.get("req"):
                 raise ValueError(tr(lang, "Missing parameter") + ": " + tr(lang, i["label"]))
-            break  # positional args: stop at the first empty one
+            if not i.get("flag"):
+                skip_positional = True
+            continue   # an empty checkbox / optional field must not drop the checkboxes after it
+        if skip_positional and not i.get("flag"):
+            continue
         if v.startswith("-") or not ARG_RE.match(v):
             raise ValueError(tr(lang, "Invalid parameter") + ": " + tr(lang, i["label"]))
         args.append(v)

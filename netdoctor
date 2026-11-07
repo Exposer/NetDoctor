@@ -213,6 +213,13 @@ cmd_dnsset() {
       if [ -f "$bk" ]; then t=$(cat "$bk"); echo "  $(L "saved original" "已保存的原设置"): ${t:-$(L "automatic (from DHCP)" "自动 (来自 DHCP)")}"; echo "  $(L "undo with" "还原"): netdoctor dnsset restore"; fi
       return 0;;
   esac
+  case "$sub" in   # 先校验输入, 再检查权限: 地址写错时直接指出, 不要先让人去 sudo
+    restore|auto) ;;
+    *) list=$(printf '%s ' "$@" | tr ',' ' ')
+       set -f; for t in $list; do dns_valid_ip "$t" || { set +f; bad "$(L "Not an IP address: $t (usage: netdoctor dnsset <ip> [ip...] | auto | restore | show)" "不是 IP 地址: $t (用法: netdoctor dnsset <ip> [ip...] | auto | restore | show)")"; return 1; }; n=$((n+1)); new="$new $t"; done; set +f
+       [ "$n" -ge 1 ] && [ "$n" -le 4 ] || { bad "$(L "Give 1 to 4 DNS server addresses" "请给 1 到 4 个 DNS 服务器地址")"; return 1; }
+       new=${new# };;
+  esac
   can_priv || { need_admin "dnsset $*"; return 1; }
   case "$sub" in
     restore)
@@ -221,10 +228,6 @@ cmd_dnsset() {
       if dns_apply "$svc" $new; then rm -f "$bk"; ok "$(L "Restored \"$svc\": ${new:-automatic (from DHCP)}" "已还原 \"$svc\": ${new:-自动 (来自 DHCP)}")"; return 0; fi
       bad "$(L "Restoring failed (wrong password or no admin rights)" "还原失败 (密码错误或没有管理员权限)")"; return 1;;
     auto) new="";;
-    *) list=$(printf '%s ' "$@" | tr ',' ' ')
-       set -f; for t in $list; do dns_valid_ip "$t" || { set +f; bad "$(L "Not an IP address: $t (usage: netdoctor dnsset <ip> [ip...] | auto | restore | show)" "不是 IP 地址: $t (用法: netdoctor dnsset <ip> [ip...] | auto | restore | show)")"; return 1; }; n=$((n+1)); new="$new $t"; done; set +f
-       [ "$n" -ge 1 ] && [ "$n" -le 4 ] || { bad "$(L "Give 1 to 4 DNS server addresses" "请给 1 到 4 个 DNS 服务器地址")"; return 1; }
-       new=${new# };;
   esac
   if [ ! -f "$bk" ]; then mkdir -p "$(dirname "$bk")" 2>/dev/null && printf '%s\n' "$cur" >"$bk" && created=1; fi
   if ! dns_apply "$svc" $new; then [ "$created" = 1 ] && rm -f "$bk"; bad "$(L "Setting DNS failed (wrong password or no admin rights)" "设置 DNS 失败 (密码错误或没有管理员权限)")"; return 1; fi
@@ -497,7 +500,7 @@ cmd_doctor() {
     bad "$(L "1/6 Link: no default route (not connected)" "1/6 链路: 没有默认路由 (未联网)")"; FAILS=$((FAILS+1)); verdict=link
   else ok "$(L "1/6 Link: $ifc is the default interface" "1/6 链路: 默认网卡为 $ifc")"; fi
   # Wi-Fi 的详细数据要 system_profiler, 很慢 (十几秒): 放到后台跑, 和后面的检查并行, 最后再收结果
-  if [ -n "$ifc" ] && [ "$ifc" = "$(wifi_if)" ] && has system_profiler && wftmp=$(mktemp); then
+  if [ -z "${NETDOCTOR_NOWIFI:-}" ] && [ -n "$ifc" ] && [ "$ifc" = "$(wifi_if)" ] && has system_profiler && wftmp=$(mktemp); then
     system_profiler SPAirPortDataType >"$wftmp" 2>/dev/null & wfpid=$!
   fi
   # 2. gateway
@@ -567,6 +570,11 @@ cmd_doctor() {
     warn "$(L "6/6 Proxy / VPN: $detail (these can change what you see)" "6/6 代理 / VPN: $detail (可能影响判断)")"; WARNS=$((WARNS+1))
   else ok "$(L "6/6 Proxy / VPN: none active" "6/6 代理 / VPN: 未启用")"; fi
   if [ -n "$wfpid" ]; then
+    # system_profiler 要 10 多秒; 最多等 NETDOCTOR_WIFI_WAIT 秒 (默认 20), 超时就放弃 Wi-Fi 这一行, 不让整个诊断卡住
+    local wn_loops=$(( ${NETDOCTOR_WIFI_WAIT:-20} * 2 )) wk=0
+    kill -0 "$wfpid" 2>/dev/null && echo "  $(L "(reading the Wi-Fi details takes up to ~15 s more; set NETDOCTOR_NOWIFI=1 to skip it)" "(正在读取 Wi-Fi 详情, 还需要十几秒; 设置 NETDOCTOR_NOWIFI=1 可跳过)")"
+    while kill -0 "$wfpid" 2>/dev/null && [ "$wk" -lt "$wn_loops" ]; do sleep 0.5; wk=$((wk+1)); done
+    kill -0 "$wfpid" 2>/dev/null && kill "$wfpid" 2>/dev/null
     wait "$wfpid" 2>/dev/null; IFS='|' read -r wr wn wrate wch <<EOF_WF
 $(wifi_read <"$wftmp")
 EOF_WF

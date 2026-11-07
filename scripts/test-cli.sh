@@ -439,6 +439,12 @@ lib "doctor: a real fault wins over weak Wi-Fi" 1 "DNS resolution is the problem
 lib "doctor: unstable + weak Wi-Fi blames Wi-Fi" 1 "the Wi-Fi link itself is weak" "$(drwifi -80 -92 'ping_stats() { echo "20 30.0"; }; cmd_doctor')"
 lib "doctor: wired default interface skips Wi-Fi" 0 "Everything looks healthy" "$(drwifi -80 -92 'WIFI_IF=en9; export WIFI_IF; cmd_doctor')"
 lib_not "doctor: wired default interface prints no Wi-Fi line" "$(drwifi -80 -92 'WIFI_IF=en9; export WIFI_IF; cmd_doctor')" "Wi-Fi:"
+lib "doctor: slow Wi-Fi read shows a note"     0 "reading the Wi-Fi details" "$DR; system_profiler() { sleep 1; printf '$SPROF' -50 -90; }; cmd_doctor"
+lib "doctor: slow Wi-Fi read still gives the line" 0 "Wi-Fi: signal -50 dBm" "$DR; system_profiler() { sleep 1; printf '$SPROF' -50 -90; }; cmd_doctor"
+lib "doctor: a hung Wi-Fi read is abandoned"   0 "Everything looks healthy" "$DR; NETDOCTOR_WIFI_WAIT=1; export NETDOCTOR_WIFI_WAIT; system_profiler() { sleep 30; }; cmd_doctor"
+lib "doctor: a hung Wi-Fi read ends quickly"   0 "fast" "$DR; NETDOCTOR_WIFI_WAIT=1; export NETDOCTOR_WIFI_WAIT; system_profiler() { sleep 30; }; SECONDS=0; cmd_doctor >/dev/null; [ \$SECONDS -lt 10 ] && echo fast"
+lib_not "doctor: a hung Wi-Fi read leaves no Wi-Fi line" "$DR; NETDOCTOR_WIFI_WAIT=1; export NETDOCTOR_WIFI_WAIT; system_profiler() { sleep 30; }; cmd_doctor" "Wi-Fi: signal"
+lib_not "doctor: NETDOCTOR_NOWIFI skips the read" "$DR; NETDOCTOR_NOWIFI=1; export NETDOCTOR_NOWIFI; system_profiler() { printf '$SPROF' -80 -92; }; cmd_doctor" "Wi-Fi"
 lib "doctor: no Wi-Fi data in the profile is silent" 0 "Everything looks healthy" "$DR; system_profiler() { :; }; cmd_doctor"
 lib "doctor: no verdict line by default"        0 "" "$(drwifi -50 -90 'cmd_doctor | grep -c "^verdict=" | grep -qx 0')"
 lib "doctor: verdict line when asked (healthy)" 0 "verdict=ok"   "$(drwifi -50 -90 'NETDOCTOR_VERDICT_LINE=1 cmd_doctor')"
@@ -504,6 +510,9 @@ fxlib "dnsset: too many servers"     1 "1 to 4"            "$DNSENV; cmd_dnsset 
 if [ "$(id -u)" != 0 ]; then
   lib "dnsset: no admin rights" 1 "Administrator rights" "default_if() { echo en1; }; networksetup() { :; }; cmd_dnsset 1.1.1.1"
 fi
+if [ "$(id -u)" != 0 ]; then   # bad input is reported before the administrator check
+  lib "dnsset: bad IP is reported before the sudo check" 1 "Not an IP address" "default_if() { echo en1; }; networksetup() { :; }; cmd_dnsset '1.1.1.1;ls'"
+fi
 dreset; fxlib "dnsset: show without changes" 0 "automatic (from DHCP)" "$DNSENV; cmd_dnsset show"
 # dnsbench apply: fake dig (system 100 ms, 1.1.1.1 10 ms, 8.8.8.8 20 ms, 9.9.9.9 30 ms, the rest fail)
 dreset; fxlib "dnsbench: plan only without yes" 0 "Nothing was changed" "$DNSENV; cmd_dnsbench apply"
@@ -517,6 +526,32 @@ dreset; fxlib "dnsbench: fast system DNS is left alone" 0 "not noticeably slower
 [ ! -s "$DNSST" ] && pass || fail "dnsbench: nothing to switch must not change anything"
 dreset; fxlib "dnsbench: fastest is the system DNS" 0 "already the fastest" "$DNSENV; ND_DIG_SYS=3; export ND_DIG_SYS; cmd_dnsbench yes"
 fxlib "dnsbench: domain argument still works" 0 "DNS benchmark" "$DNSENV; cmd_dnsbench example.org"
+
+# ---- 15. web UI: command line arguments built from the form -------------------------------------------
+pyt() { # name 'python expression using g (the module), C (commands by id)' expected-output
+  local out; out=$(python3 -c "import importlib.util as u; sp=u.spec_from_file_location('g','netdoctor-gui.py'); g=u.module_from_spec(sp); sp.loader.exec_module(g); C={c['id']:c for c in g.COMMANDS}
+$2" 2>&1)
+  if [ "$out" = "$3" ]; then pass; else fail "$1" "wanted: $3 -- got: $out"; fi
+}
+pyt "web args: both checkboxes"                    "print(g.build_args(C['report'],{'redact':'redact','html':'html'}))" "['redact', 'html']"
+pyt "web args: only the second checkbox is kept"   "print(g.build_args(C['report'],{'redact':'','html':'html'}))" "['html']"
+pyt "web args: only the first checkbox"            "print(g.build_args(C['report'],{'redact':'redact','html':''}))" "['redact']"
+pyt "web args: no checkbox"                        "print(g.build_args(C['report'],{'redact':'','html':''}))" "[]"
+pyt "web args: empty optional field, ticked box"   "print(g.build_args(C['dnsbench'],{'domain':'','yes':'yes'}))" "['yes']"
+pyt "web args: filled field and ticked box"        "print(g.build_args(C['dnsbench'],{'domain':'example.org','yes':'yes'}))" "['example.org', 'yes']"
+pyt "web args: filled field, unticked box"         "print(g.build_args(C['dnsbench'],{'domain':'example.org','yes':''}))" "['example.org']"
+pyt "web args: positional fields after an empty one are not passed" "print(g.build_args({'inputs':[{'name':'a'},{'name':'b'},{'name':'f','flag':'go'}]},{'a':'','b':'2','f':'go'}))" "['go']"
+pyt "web args: default value is used"              "print(g.build_args(C['dnsset'],{}))" "['show']"
+pyt "web args: commas are fine"                    "print(g.build_args(C['dnsset'],{'servers':'1.1.1.1,8.8.8.8'}))" "['1.1.1.1,8.8.8.8']"
+pyt "web args: a space is refused"                 "
+try: g.build_args(C['dnsset'],{'servers':'1.1.1.1 8.8.8.8'})
+except ValueError as e: print('refused')" "refused"
+pyt "web args: a leading dash is refused"          "
+try: g.build_args(C['dnsset'],{'servers':'-x'})
+except ValueError as e: print('refused')" "refused"
+pyt "web args: a required field must be filled"    "
+try: g.build_args(C['mtr'],{'host':''})
+except ValueError as e: print('refused')" "refused"
 
 # ---- result ------------------------------------------------------------------------------------------
 echo

@@ -126,3 +126,29 @@ final class HealthTimelineTests: XCTestCase {
         XCTAssertTrue(HealthHistory(url: url).records.isEmpty)
     }
 }
+
+final class BuildArgsTests: XCTestCase {
+    private func tool(_ id: String) -> Tool { Tool.all.first { $0.id == id }! }
+    private func args(_ id: String, _ v: [String: String]) throws -> [String] { try Runner.buildArgs(tool: tool(id), values: v) }
+
+    func testBothCheckboxes() throws { XCTAssertEqual(try args("report", ["redact": "redact", "html": "html"]), ["redact", "html"]) }
+    func testOnlyTheSecondCheckboxIsKept() throws { XCTAssertEqual(try args("report", ["redact": "", "html": "html"]), ["html"]) }
+    func testOnlyTheFirstCheckbox() throws { XCTAssertEqual(try args("report", ["redact": "redact", "html": ""]), ["redact"]) }
+    func testNoCheckbox() throws { XCTAssertEqual(try args("report", ["redact": "", "html": ""]), []) }
+    func testEmptyOptionalFieldDoesNotDropATickedBox() throws { XCTAssertEqual(try args("dnsbench", ["domain": "", "yes": "yes"]), ["yes"]) }
+    func testFilledFieldAndTickedBox() throws { XCTAssertEqual(try args("dnsbench", ["domain": "example.org", "yes": "yes"]), ["example.org", "yes"]) }
+
+    func testPositionalFieldsAfterAnEmptyOneAreLeftOut() throws {
+        let t = Tool(id: "t", title: "t", icon: "x", summary: "",
+                     inputs: [ToolInput(name: "a", label: "a"), ToolInput(name: "b", label: "b"), ToolInput(name: "f", label: "f", flag: "go")])
+        XCTAssertEqual(try Runner.buildArgs(tool: t, values: ["a": "", "b": "2", "f": "go"]), ["go"])
+        XCTAssertEqual(try Runner.buildArgs(tool: t, values: ["a": "1", "b": "2", "f": ""]), ["1", "2"])
+    }
+
+    func testCommasAreAccepted() throws { XCTAssertEqual(try args("dnsset", ["servers": "1.1.1.1,8.8.8.8"]), ["1.1.1.1,8.8.8.8"]) }
+    func testSpacesLeadingDashesAndMissingRequiredAreRefused() {
+        XCTAssertThrowsError(try args("dnsset", ["servers": "1.1.1.1 8.8.8.8"]))
+        XCTAssertThrowsError(try args("dnsset", ["servers": "-x"]))
+        XCTAssertThrowsError(try args("mtr", ["host": ""]))
+    }
+}

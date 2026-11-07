@@ -62,7 +62,7 @@ struct Tool: Identifiable, Hashable {
                       ToolInput(name: "yes", label: "Switch to the fastest DNS if it is clearly faster (otherwise only measure)", flag: "yes")], admin: .optional),
         Tool(id: "dnsset", title: "DNS settings", icon: "network",
              summary: "Show, change or restore the DNS servers of the current network (backs up first, rolls back if names stop resolving)",
-             inputs: [ToolInput(name: "servers", label: "Servers (show / restore / auto, or IPs like 1.1.1.1 8.8.8.8)", placeholder: "show", defaultValue: "show")], admin: .optional),
+             inputs: [ToolInput(name: "servers", label: "Servers (show / restore / auto, or IPs separated by commas)", placeholder: "1.1.1.1,8.8.8.8", defaultValue: "show")], admin: .optional),
         Tool(id: "http", title: "HTTP timing", icon: "globe",
              summary: "DNS / TCP / TLS / first byte / total breakdown",
              inputs: [ToolInput(name: "url", label: "URL", placeholder: "https://example.com", required: true)]),
