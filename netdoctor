@@ -498,16 +498,31 @@ cmd_wifi() {
 
 cmd_dns() {
   local d=${1:-}; [ -z "$d" ] && { echo "$(L "Usage: netdoctor dns <domain>" "用法: netdoctor dns <域名>")"; return 1; }
+  case "$d" in *[!A-Za-z0-9._-]*|-*) bad "$(L "Invalid domain: $d" "域名无效: $d")"; return 1;; esac
   hdr "$(L "System resolvers (scutil --dns)" "系统解析器 (scutil --dns)")"; scutil --dns | awk '/resolver #|nameserver\[|domain|search domain|if_index/{print "  "$0}' | head -24
   hdr "$(L "System resolution (dscacheutil, the real system path)" "系统解析 (dscacheutil, 走真实系统路径)")"; dscacheutil -q host -a name "$d"
   hdr "$(L "DNS server comparison" "各 DNS 服务器对比")"
+  local n_ans=0 n_nx=0 n_all=0 sys_ans=0 st
   for s in "" 1.1.1.1 8.8.8.8 223.5.5.5 119.29.29.29; do
     label=${s:-$(L "system" "系统默认")}
     out=$(dig ${s:+@$s} +tries=1 +time=3 "$d" A 2>&1)
     ans=$(echo "$out" | awk '/^[^;].*IN[ \t]+A[ \t]/{printf "%s ", $NF}')
     t=$(echo "$out" | awk '/Query time/{print $4" ms"}')
-    printf '  %-12s %-10s %s\n' "$label" "${t:-$(L "timeout" "超时")}" "${ans:-$(L "(no answer)" "(无结果)")}"
+    st=$(echo "$out" | sed -n 's/.*status: \([A-Z]*\).*/\1/p' | head -1)
+    n_all=$((n_all+1))
+    if [ -n "$ans" ]; then n_ans=$((n_ans+1)); [ -z "$s" ] && sys_ans=1; fi
+    [ "$st" = NXDOMAIN ] && n_nx=$((n_nx+1))
+    printf '  %-12s %-10s %s\n' "$label" "${t:-$(L "timeout" "超时")}" "${ans:-$([ "$st" = NXDOMAIN ] && L "(NXDOMAIN: no such domain)" "(NXDOMAIN: 域名不存在)" || L "(no answer)" "(无结果)")}"
   done
+  if [ "$n_nx" -ge 3 ] && [ "$n_ans" -eq 0 ]; then
+    bad "$(L "$d does not exist (NXDOMAIN from most servers); check the spelling" "$d 不存在 (多数服务器返回 NXDOMAIN), 检查拼写")"; return 1
+  elif [ "$n_ans" -eq 0 ]; then
+    bad "$(L "No server returned an A record for $d (no network, DNS blocked, or the name has no IPv4 address)" "没有服务器返回 $d 的 A 记录 (没网、DNS 被拦截, 或该域名没有 IPv4 地址)")"; return 1
+  elif [ "$sys_ans" -eq 0 ]; then
+    warn "$(L "The system default DNS failed, but public servers answered: your DNS setting or ISP resolver is the problem (try: netdoctor fixdns)" "系统默认 DNS 解析失败, 但公共服务器正常: 问题在你的 DNS 设置或运营商解析器 (可试: netdoctor fixdns)")"; return 1
+  else
+    ok "$(L "$d resolves ($n_ans of $n_all servers answered)" "$d 解析正常 ($n_all 个服务器中 $n_ans 个有结果)")"
+  fi
   echo "$(L "Tip: big differences between servers, or a failing system default → ISP hijacking or a DNS config problem; try netdoctor fixdns." "提示: 各家结果差异大/系统默认失败 → 运营商劫持或 DNS 配置问题; 可 netdoctor fixdns。")"
 }
 
