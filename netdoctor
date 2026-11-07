@@ -281,8 +281,10 @@ oui_file() {
 mac_vendor() {   # $1=MAC (aa:bb:cc:...), $2=OUI 文件 (可空)
   local mac=$1 f=$2 first p
   case "$mac" in ""|"?"|"-") return;; esac
+  case "${mac%%:*}" in *[!0-9A-Fa-f]*|"") return;; esac
   first=$((16#${mac%%:*}))
-  if [ $(( first & 2 )) -ne 0 ]; then L "random MAC (private address)" "随机 MAC (私有地址)"; return; fi
+  # 第一个字节的 0x02 位 = 本地管理地址: 手机的"私有 Wi-Fi 地址"是随机生成的, 虚拟机 / 容器网卡也这样, 没有厂商可查
+  if [ $(( first & 2 )) -ne 0 ]; then L "random / virtual MAC (locally administered)" "随机 / 虚拟 MAC (本地管理地址)"; return; fi
   [ -n "$f" ] || return
   p=$(printf '%s' "$mac" | tr 'a-f' 'A-F' | awk -F: '{printf "%s%s%s", (length($1)==1?"0"$1:$1), (length($2)==1?"0"$2:$2), (length($3)==1?"0"$3:$3)}')
   awk -v p="$p" 'toupper(substr($1,1,6))==p { $1=""; sub(/^[ \t]+/,""); print; exit }' "$f" 2>/dev/null
@@ -362,7 +364,7 @@ EOF2
   printf '  %-16s %-18s %-28s %s\n' "$ip" "${selfmac:--}" "-" "$(L "(this Mac)" "(本机)")"
   ok "$(L "$((cnt+1)) devices (including this Mac)" "共 $((cnt+1)) 台设备 (含本机)")"
   [ "$unk" = 1 ] && warn "$(L "Some MAC addresses could not be read. If this runs inside the app or web UI, allow it under System Settings → Privacy & Security → Local Network, or run netdoctor lan in Terminal." "部分设备的 MAC 无法读取。若在 App/网页中运行, 请在 系统设置 → 隐私与安全性 → 本地网络 中允许, 或直接在终端运行 netdoctor lan。")"
-  [ -z "$ouif" ] && echo "$(L "No vendor database found: only random (private) MACs are labelled. Put an OUI list in ~/.netdoctor/oui.txt (or install nmap) to see vendors." "没有找到厂商库: 只能标出随机 (私有) MAC。把 OUI 列表放到 ~/.netdoctor/oui.txt (或安装 nmap) 即可显示厂商。")"
+  [ -z "$ouif" ] && echo "$(L "No vendor database found: only random / virtual MACs are labelled. Put an OUI list in ~/.netdoctor/oui.txt (or install nmap) to see vendors." "没有找到厂商库: 只能标出随机 / 虚拟 MAC。把 OUI 列表放到 ~/.netdoctor/oui.txt (或安装 nmap) 即可显示厂商。")"
   echo "$(L "Devices that block ping may be missing; the ARP table only lists hosts that answered recently." "屏蔽 ping 的设备可能不会出现; ARP 表只包含近期有应答的主机。")"
 }
 
@@ -696,6 +698,8 @@ cmd_dns() {
 cannot_resolve() {
   case "$1" in *:*) return 1;; esac   # IPv6 字面量: macOS 的 ping 只认 IPv4, 不能用它判断
   case "$1" in *[!0-9.]*) ;; *) return 1;; esac
+  # 只有 AAAA (纯 IPv6) 的主机 ping 解析不了, 所以优先问系统解析器 (dscacheutil 同时返回 A / AAAA)
+  if has dscacheutil; then [ -z "$(dscacheutil -q host -a name "$1" 2>/dev/null)" ]; return; fi
   ping -c 1 -t 1 "$1" 2>&1 | grep -qi 'cannot resolve\|unknown host'
 }
 
@@ -830,11 +834,12 @@ cmd_speed() {
     if has speedtest-cli; then speedtest-cli; else return 1; fi
     return
   fi
-  local out; out=$(networkQuality -v 2>&1) || {
-    # 失败时系统会倒出一大段证书信息; 只留第一行 (截断), 并说明多半是临时问题
-    printf '%s\n' "$out" | head -1 | cut -c1-200
+  # 边跑边显示 (网页 / App 里测试要 20-30 秒, 不能到最后才一次性出现), 同时留一份用来解析结论
+  local tmp rc out; tmp=$(mktemp)
+  networkQuality -v 2>&1 | tee "$tmp"; rc=${PIPESTATUS[0]}
+  out=$(cat "$tmp"); rm -f "$tmp"
+  [ "$rc" -eq 0 ] || {
     bad "$(L "networkQuality failed (often a temporary problem reaching Apple's test server; try again, or check the clock / proxy with: netdoctor doctor)" "networkQuality 执行失败 (多半是暂时连不上 Apple 的测速服务器; 请重试, 或用 netdoctor doctor 检查时钟 / 代理)")"; return 1; }
-  printf '%s\n' "$out"
   speed_verdict "$out"
 }
 
@@ -932,10 +937,20 @@ redact_filter() {
   [ -n "$h" ]  && rules+=(-e "s/$(re_escape "$h")/<hostname>/g")
   [ -n "$hs" ] && rules+=(-e "s/$(re_escape "$hs")/<hostname>/g")
   [ -n "$u" ]  && rules+=(-e "s#/Users/$(re_escape "$u")#/Users/<user>#g")
+  # 报告时现取的确切值 (公网 IPv4 / IPv6、Wi-Fi 名称): 不管它们出现在哪一行、什么格式, 都整体替换。
+  # 太短的值 (< 3 个字符) 会误伤普通文字, 不处理。
+  local lit
+  while IFS= read -r lit; do
+    [ "${#lit}" -ge 3 ] && rules+=(-e "s/$(re_escape "$lit")/<redacted>/g")
+  done <<EOF
+${REDACT_LITERALS:-}
+EOF
   rules+=(
     -e 's/([0-9A-Fa-f]{1,2}:){5}[0-9A-Fa-f]{1,2}/xx:xx:xx:xx:xx:xx/g'
     -e 's/[A-Za-z0-9-]+\.ts\.net/<tailnet-host>/g'
+    -e 's/^( *(Public IP|公网 IP): )\{.*/\1<redacted>/'      # 没装 jq 时是原始 JSON (含城市 / 运营商 / 经纬度)
     -e 's/^( *(Public IP|公网 IP): )[^ ]+/\1<redacted>/'
+    -e 's/^ *\{.*"ip".*$/   <redacted>/'
     -e 's/^( *IPv6: ).*/\1<redacted>/'
     -e 's/^( *(Search domains|搜索域): ).*/\1<redacted>/'
     -e 's/^( *(Search domain|搜索域) +)[^ ].*/\1<redacted>/'
@@ -943,6 +958,7 @@ redact_filter() {
     -e 's/(\] IPv[46]  )[^ ]+/\1<redacted>/'
     -e 's/^   ([0-9]{1,3}\.){3}[0-9]{1,3}(  .*)$/   <redacted>\2/'
     -e 's/^   ([0-9A-Fa-f]{1,4}:){2,}[0-9A-Fa-f:]*$/   <redacted>/'
+    -e 's/^   ([0-9A-Fa-f]{1,4}:){2,}[0-9A-Fa-f:]*(  .*)$/   <redacted>\2/'
     -e 's/(inet6 )(f[cd][0-9A-Fa-f:]*|[23][0-9A-Fa-f:]*)/\1<redacted>/'
     -e 's/(inet6 )fe80[0-9A-Fa-f:]*/\1fe80::<redacted>/'   # 老式 EUI-64 的链路本地地址由 MAC 推导, 会间接泄漏 MAC
     -e 's/(Current Wi-Fi Network: ).*/\1<redacted>/'
@@ -959,8 +975,17 @@ cmd_report() {
   local dir="$HOME/Desktop"; [ -d "$dir" ] && [ -w "$dir" ] || dir="$HOME"   # 没有桌面目录 (或不可写) 就存到主目录
   local f="$dir/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt" gen
   gen=$(mktemp) || { bad "$(L "Could not create a temporary file" "无法创建临时文件")"; return 1; }
+  if [ "$redact" = 1 ]; then
+    local ssid v; REDACT_LITERALS=""
+    ssid=$(networksetup -getairportnetwork "$(wifi_if)" 2>/dev/null | sed -n 's/^Current Wi-Fi Network: //p' | head -1)   # 只认这个前缀: 其他输出是错误提示, 不是 SSID
+    [ -n "$ssid" ] && REDACT_LITERALS="$ssid"
+    for v in "$(curl -4 -s -m 5 https://api.ip.sb/ip 2>/dev/null)" "$(curl -6 -s -m 5 https://api.ip.sb/ip 2>/dev/null)"; do
+      case "$v" in ""|*[!0-9A-Fa-f.:]*) ;; *) REDACT_LITERALS="$REDACT_LITERALS
+$v";; esac
+    done
+  fi
   { echo "netdoctor report $(date)"; uname -a; sw_vers
-    cmd_doctor; cmd_overview; cmd_dhcp; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$gen" 2>/dev/null
+    cmd_doctor; cmd_overview; cmd_dhcp; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$gen" 2>&1
   if [ "$redact" = 1 ]; then
     { echo "# $(L "Personal info hidden (public IP, MAC, Wi-Fi name, host name, search domains)" "已隐藏个人信息 (公网 IP、MAC、Wi-Fi 名称、主机名、搜索域)")"; redact_filter <"$gen"; } >"$f"
   else

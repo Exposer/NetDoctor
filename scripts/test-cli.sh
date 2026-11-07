@@ -115,6 +115,28 @@ done
 lib "redact keeps private gateway / public DNS / latency" 0 "gateway 192.168.0.1 and DNS 1.1.1.1 and 12 ms" "redact_filter < $T/sample.txt"
 lib "redact keeps the Wi-Fi signal values"               0 "<redacted>"                                     "redact_filter < $T/sample.txt"
 
+# 4b. shapes the first version missed: the overview's "Wi-Fi: <name>" row, raw JSON without jq, IPv6 + country
+cat > "$T/sample2.txt" <<'X'
+  Wi-Fi: Max Home 5G
+  Public IP: {"ip":"71.83.193.52","city":"Springfield","latitude":39.78}
+{"ip":"71.83.193.52","country":"United States","isp":"Spectrum","latitude":39.78}
+   2603:8000:abcd::1  United States Spectrum
+  note: connected to Max Home 5G via 71.83.193.52 and 2603:8000:abcd::1
+X
+RL=$'Max Home 5G\n71.83.193.52\n2603:8000:abcd::1'
+for needle in "Max Home 5G" 71.83.193.52 Springfield 39.78 2603:8000; do
+  lib_not "redact (exact values) hides: $needle" "REDACT_LITERALS='$RL' redact_filter < $T/sample2.txt" "$needle"
+done
+for needle in Springfield 39.78 2603:8000; do   # even without the exact values, the line shapes must be covered
+  lib_not "redact (shapes only) hides: $needle" "grep -v '^  note' $T/sample2.txt | redact_filter" "$needle"
+done
+# a host with only an AAAA record must not be reported as "cannot resolve" (macOS ping cannot resolve it)
+printf '#!/bin/sh\necho "name: v6only.example"; echo "ipv6_address: 2001:db8::1"\n' > "$T/bin/dscacheutil"; chmod +x "$T/bin/dscacheutil"
+lib "cannot_resolve: AAAA-only host resolves" 1 "" "cannot_resolve v6only.example"
+printf '#!/bin/sh\nexit 0\n' > "$T/bin/dscacheutil"
+lib "cannot_resolve: unknown host"           0 "" "cannot_resolve nosuch.example"
+rm -f "$T/bin/dscacheutil"
+
 # ---- 5. captive portal probe (fake curl) ------------------------------------------------------------
 cat > "$T/bin/curl" <<'E'
 #!/bin/sh
@@ -214,7 +236,7 @@ lib "speed: slow upload warns"    0 "Upload bandwidth is only 3 Mbps"         "s
 printf 'A47733\tGoogle\n00000C Cisco Systems\n' > "$T/oui.txt"
 lib "vendor: found in OUI file"   0 "Google"                      "mac_vendor a4:77:33:1b:2c:3d $T/oui.txt"
 lib "vendor: single-digit octets" 0 "Cisco Systems"               "mac_vendor 0:0:c:1:2:3 $T/oui.txt"
-lib "vendor: random MAC"          0 "random MAC"                  "mac_vendor 5a:11:22:33:44:55 $T/oui.txt"
+lib "vendor: random MAC"          0 "random / virtual"            "mac_vendor 5a:11:22:33:44:55 $T/oui.txt"
 lib "vendor: no database, no guess" 0 "[]"                        "echo \"[\$(mac_vendor a4:77:33:1b:2c:3d '')]\""
 lib "vendor: unknown MAC is blank" 0 "[]"                         "echo \"[\$(mac_vendor ? $T/oui.txt)]\""
 

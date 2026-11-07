@@ -26,7 +26,7 @@ struct NetDoctorApp: App {
             }
             Toggle("Notify when the connection drops", isOn: $monitor.notifyOnLoss)
             Toggle("Open at login", isOn: Binding(get: { loginItem }, set: { on in
-                if let e = LoginItem.set(on) { loginError = e }
+                loginError = LoginItem.set(on) ?? ""
                 loginItem = LoginItem.isEnabled
             }))
             if !loginError.isEmpty { Text(loginError) }

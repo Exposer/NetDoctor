@@ -102,9 +102,8 @@
 "Open at login" = "Open at login";
 "Export CSV…" = "Export CSV…";
 "Could not run the health check" = "Could not run the health check";
-"Network check: OK" = "Network check: OK";
-"Network check: problem found" = "Network check: problem found";
 "Network connection lost" = "Network connection lost";
 "%@ is not answering." = "%@ is not answering.";
 "Network is back" = "Network is back";
 "%@ answers again after about %d s." = "%@ answers again after about %d s.";
+"Could not save the file" = "Could not save the file";

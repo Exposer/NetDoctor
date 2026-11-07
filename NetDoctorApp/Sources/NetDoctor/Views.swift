@@ -168,7 +168,12 @@ struct MonitorView: View {
         let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss"
         panel.nameFieldStringValue = "netdoctor-latency-\(f.string(from: Date())).csv"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        try? m.csv().write(to: url, atomically: true, encoding: .utf8)
+        do { try m.csv().write(to: url, atomically: true, encoding: .utf8) }
+        catch {
+            let a = NSAlert(); a.alertStyle = .warning
+            a.messageText = loc("Could not save the file"); a.informativeText = error.localizedDescription
+            a.runModal()
+        }
     }
 
     private func stat(_ title: LocalizedStringKey, _ value: String, warn: Bool = false) -> some View {

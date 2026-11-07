@@ -36,7 +36,6 @@ final class HealthCheck: ObservableObject {
                 } else {
                     self.healthy = (code == 0)
                     self.summary = "\(t.string(from: Date()))  \(verdict)"
-                    Notifier.post(title: loc(code == 0 ? "Network check: OK" : "Network check: problem found"), body: verdict)
                 }
             }
         }

@@ -11,7 +11,7 @@ struct Sample: Identifiable {
 final class LatencyMonitor: ObservableObject {
     @Published var samples: [Sample] = []
     // Samples of the old target must not be mixed into the chart of the new one.
-    @Published var target = "1.1.1.1" { didSet { if target != oldValue { clear() } } }
+    @Published var target = "1.1.1.1" { didSet { if target != oldValue { clear(); resetOutage() } } }
     @Published var running = false
     /// Notify when the connection drops (3 failed pings in a row) and when it comes back.
     @Published var notifyOnLoss = UserDefaults.standard.bool(forKey: "notifyOnLoss") {
@@ -22,6 +22,7 @@ final class LatencyMonitor: ObservableObject {
     private let maxHistory = 7200
     private var lossStreak = 0
     private var outageStart: Date?
+    private var alerted = false      // the "connection lost" notification was really sent for the current outage
 
     private var timer: Timer?
     private let maxSamples = 180
@@ -54,14 +55,15 @@ final class LatencyMonitor: ObservableObject {
     }
 
     // An outage that straddles a stop / start must not produce a "back after N s" notification much later.
-    func stop() { timer?.invalidate(); timer = nil; running = false; lossStreak = 0; outageStart = nil }
-    func clear() { samples.removeAll(); history.removeAll(); lossStreak = 0; outageStart = nil }
+    func stop() { timer?.invalidate(); timer = nil; running = false; resetOutage() }
+    func clear() { samples.removeAll(); history.removeAll() }   // the outage state survives: pressing Clear mid-outage must not hide the recovery
+    private func resetOutage() { lossStreak = 0; outageStart = nil; alerted = false }
 
     /// CSV of everything recorded since the last Clear / target change: ISO-8601 time, target, latency (empty = lost), lost flag.
     func csv() -> String {
         let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         var out = "time,target,latency_ms,lost\n"
-        let t = target.trimmingCharacters(in: .whitespaces)
+        let t = "\"" + target.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "\"", with: "\"\"") + "\""
         for s in history { out += "\(f.string(from: s.time)),\(t),\(s.ms.map { String(format: "%.3f", $0) } ?? ""),\(s.ms == nil ? 1 : 0)\n" }
         return out
     }
@@ -75,13 +77,14 @@ final class LatencyMonitor: ObservableObject {
             lossStreak += 1
             if lossStreak == 3 {
                 outageStart = s.time
-                if notifyOnLoss { Notifier.post(title: loc("Network connection lost"), body: String(format: loc("%@ is not answering."), target)) }
+                if notifyOnLoss { alerted = true; Notifier.post(title: loc("Network connection lost"), body: String(format: loc("%@ is not answering."), target)) }
             }
         } else {
-            if let t = outageStart, notifyOnLoss {
+            // Only announce a recovery for an outage that was announced, so enabling the toggle mid-outage does not start with "back".
+            if let t = outageStart, alerted {
                 Notifier.post(title: loc("Network is back"), body: String(format: loc("%@ answers again after about %d s."), target, Int(s.time.timeIntervalSince(t)) + 3))
             }
-            lossStreak = 0; outageStart = nil
+            resetOutage()
         }
     }
 
