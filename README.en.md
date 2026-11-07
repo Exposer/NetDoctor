@@ -74,7 +74,8 @@ netdoctor tools                                          # see which tools are i
 | Need to inspect packets | `netdoctor capture 'host x'` → open in Wireshark |
 | Speed test | `netdoctor speed` (networkQuality); on a LAN use `iperf3 -s` / `iperf3 -c` |
 | Odd DNS behavior | `netdoctor fixdns` |
-| Need to send results to someone / keep a record | `netdoctor report` (saves diagnosis, overview, DHCP, quick check, Wi-Fi, DNS, IPv6 and proxy info to a Desktop file; `netdoctor report redact` hides the public IP, MAC address, Wi-Fi name and other personal info) |
+| Want the tool to fix it | `netdoctor fix` (diagnoses, then renews DHCP / flushes DNS / syncs the clock / opens the login page as the verdict calls for; asks before each step and re-checks afterwards) |
+| Need to send results to someone / keep a record | `netdoctor report` (saves diagnosis, overview, DHCP, quick check, Wi-Fi, DNS, IPv6 and proxy info to a Desktop file; `netdoctor report html` makes a collapsible web page; `netdoctor report redact` hides the public IP, MAC address, Wi-Fi name and other personal info) |
 
 ## Handy built-in commands
 - `scutil --dns` / `scutil --proxy`: the DNS and proxy settings actually in effect

@@ -53,7 +53,8 @@ netdoctor $VERSION - macOS 网络诊断
   proxy                 系统代理 / 环境变量代理 / VPN 状态
   capture [过滤器]      tcpdump 抓包到 ~/Desktop (需 sudo)
   fixdns                刷新 DNS 缓存 (需 sudo)
-  report [redact]       把诊断、概览、DHCP、Wi-Fi、DNS、IPv6、代理等保存到文件; redact 自动隐藏 IP / MAC / Wi-Fi 名等个人信息
+  fix [yes]             诊断后自动修复: DHCP 重新获取 / 刷新 DNS / 校准时钟 / 打开登录页; 每步先确认, 修完自动复查 (yes=不再询问)
+  report [html] [redact] 把诊断、概览、DHCP、Wi-Fi、DNS、IPv6、代理等保存到文件; html 存成带颜色、可折叠的网页; redact 自动隐藏 IP / MAC / Wi-Fi 名等个人信息
   tools                 检查第三方工具是否已安装
 USAGE
   else cat <<USAGE
@@ -86,7 +87,8 @@ Usage: netdoctor <command> [args]
   proxy                 system proxy / env-var proxy / VPN status
   capture [filter]      tcpdump capture to ~/Desktop (needs sudo)
   fixdns                flush the DNS cache (needs sudo)
-  report [redact]       save diagnosis, overview, DHCP, Wi-Fi, DNS, IPv6 and proxy info to a file; "redact" hides IP / MAC / Wi-Fi name etc.
+  fix [yes]             diagnose, then fix what can be fixed here: renew DHCP / flush DNS / sync the clock / open the login page; asks first, re-checks after (yes = do not ask)
+  report [html] [redact] save diagnosis, overview, DHCP, Wi-Fi, DNS, IPv6 and proxy info to a file; "html" makes a self-contained web page; "redact" hides IP / MAC / Wi-Fi name etc.
   tools                 check whether third-party tools are installed
 USAGE
   fi
@@ -387,6 +389,7 @@ resolves() { # $1 = name, $2 = optional DNS server
 skipped() { printf '[ -- ] %s\n' "$(L "$1/6 $2: skipped (an earlier step failed)" "$1/6 $3: 已跳过 (前面的步骤失败)")"; }
 
 cmd_doctor() {
+  case "${1:-}" in --fix|fix) shift; cmd_fix "$@"; return;; esac   # netdoctor doctor --fix = netdoctor fix
   local ifc gw verdict="" l avg ip_ok="" ip dns_ok dns_pub http_ok="" code u px vpn steps="" detail
   local FAILS=0 WARNS=0 skew=""
   hdr "$(L "Diagnosis" "智能诊断")"
@@ -508,7 +511,70 @@ netdoctor mtu|$(L "Rule out MTU problems (VPN)" "排除 MTU 问题 (VPN)")";;
       if [ "$cmd" = "-" ]; then echo "  - $why"; else echo "  - $cmd   # $why"; fi
     done
   fi
+  DOCTOR_VERDICT=$verdict; DOCTOR_IFC=$ifc   # 给 cmd_fix 用 (cmd_doctor 不在子 shell 里运行, 全局变量可见)
   [ "$FAILS" -eq 0 ] && [ "$verdict" != unstable ]
+}
+
+# ---- fix: 按 doctor 的结论执行修复动作 ------------------------------------------------------------------
+# 只做几件安全、可逆、有明确对应关系的事; 其他结论 (路由器 / 运营商 / 代理 / 证书) 没法自动修, 只给建议。
+# 动作清单是固定的 (不拼接任意命令): renew_dhcp / flush_dns / sync_clock / open_portal
+fix_actions() { # $1=verdict
+  case "$1" in
+    dhcp) echo renew_dhcp;;
+    dns|dns_all) echo flush_dns;;
+    clock) echo sync_clock;;
+    captive) echo open_portal;;
+  esac
+}
+fix_describe() { # $1=action $2=interface
+  case "$1" in
+    renew_dhcp)  L "Renew the DHCP lease on $2   (sudo ipconfig set $2 DHCP)" "重新获取 $2 的 DHCP 地址   (sudo ipconfig set $2 DHCP)";;
+    flush_dns)   L "Flush the DNS cache   (dscacheutil -flushcache; killall -HUP mDNSResponder)" "刷新 DNS 缓存   (dscacheutil -flushcache; killall -HUP mDNSResponder)";;
+    sync_clock)  L "Set the clock from time.apple.com   (sudo sntp -sS time.apple.com)" "从 time.apple.com 校准时钟   (sudo sntp -sS time.apple.com)";;
+    open_portal) L "Open the Wi-Fi login page in your browser   (open http://captive.apple.com)" "用浏览器打开 Wi-Fi 登录页   (open http://captive.apple.com)";;
+  esac
+}
+fix_needs_priv() { case "$1" in renew_dhcp|flush_dns|sync_clock) return 0;; esac; return 1; }
+fix_apply() { # $1=action $2=interface ; 返回 0=成功
+  case "$1" in
+    renew_dhcp)  case "$2" in ""|*[!a-z0-9]*) return 1;; esac; priv ipconfig set "$2" DHCP;;
+    flush_dns)   priv dscacheutil -flushcache && priv killall -HUP mDNSResponder;;
+    sync_clock)  priv sntp -sS time.apple.com;;
+    open_portal) [ "$(id -u)" != 0 ] && has open && open http://captive.apple.com;;   # root (网页 / App 的管理员模式) 下 open 打不开用户的浏览器
+    *) return 1;;
+  esac
+}
+
+cmd_fix() {
+  local yes=0 verdict ifc a act desc applied=0 failed=0 skipped=0 ans
+  case "${1:-}" in yes|--yes|-y) yes=1;; esac
+  cmd_doctor || true
+  verdict=$DOCTOR_VERDICT; ifc=$DOCTOR_IFC; act=$(fix_actions "$verdict")
+  hdr "$(L "Fix" "修复")"
+  if [ -z "$act" ]; then
+    if [ -z "$verdict" ]; then ok "$(L "Nothing to fix." "没有需要修复的问题。")"; return 0; fi
+    if [ "$verdict" = unstable ]; then warn "$(L "No automatic fix for an unstable connection; see the suggested steps above." "网络不稳定没有自动修复手段, 请按上面的建议排查。")"
+    else warn "$(L "This problem cannot be fixed from the Mac (router, ISP, proxy or certificate); see the suggested steps above." "这类问题无法在这台 Mac 上自动修复 (路由器、运营商、代理或证书), 请按上面的建议处理。")"; fi
+    return 1
+  fi
+  for a in $act; do
+    desc=$(fix_describe "$a" "$ifc")
+    echo "  → $desc"
+    if [ "$yes" != 1 ]; then
+      if [ -t 0 ]; then printf '%s' "$(L "    Apply it? [y/N] " "    要执行吗? [y/N] ")"; read -r ans || ans=""; case "$ans" in y|Y|yes|YES) ;; *) skipped=$((skipped+1)); echo "    $(L "skipped" "已跳过")"; continue;; esac
+      else skipped=$((skipped+1)); continue; fi
+    fi
+    if fix_needs_priv "$a" && ! can_priv; then bad "$(L "Needs administrator rights: run  sudo netdoctor fix yes  in a terminal (or tick Administrator rights)" "需要管理员权限: 请在终端运行  sudo netdoctor fix yes  (或勾选 管理员权限)")"; failed=$((failed+1)); continue; fi
+    if fix_apply "$a" "$ifc"; then ok "$(L "Done" "已执行")"; applied=$((applied+1))
+    else bad "$(L "Failed (wrong password, or no permission)" "执行失败 (密码错误或没有权限)")"; failed=$((failed+1)); fi
+  done
+  if [ "$applied" = 0 ]; then
+    if [ "$skipped" -gt 0 ] && [ ! -t 0 ] && [ "$yes" != 1 ]; then echo "$(L "Nothing was changed. To apply the fix, run  netdoctor fix yes  (in the app: tick \"Apply without asking\")." "没有做任何修改。要执行修复, 请运行  netdoctor fix yes  (App / 网页里勾选“不再询问, 直接执行”)。")"; fi
+    return 1
+  fi
+  sleep 3
+  hdr "$(L "Checking again" "重新检查")"
+  cmd_doctor
 }
 
 cmd_tcpping() {
@@ -1217,12 +1283,54 @@ EOF
   sed -E "${rules[@]}"
 }
 
+# 把纯文本报告 (标准输入) 转成单文件 HTML (标准输出): 每个 "== 标题 ==" 一个可折叠区块, [ OK ]/[WARN]/[FAIL] 着色,
+# 顶部有计数摘要。没有外部依赖, 只用 awk; 已脱敏的文本照样可用 (脱敏在转换之前做)。
+report_to_html() { # $1=标题 $2=生成时间 $3=摘要标签 $4=语言属性
+  awk -v title="$1" -v when="$2" -v sumlabel="$3" -v lang="$4" '
+    function esc(s) { gsub(/&/, "\\&amp;", s); gsub(/</, "\\&lt;", s); gsub(/>/, "\\&gt;", s); return s }
+    function out(s) { body = body s "\n" }
+    BEGIN { open = 0; pre = 0 }
+    {
+      line = esc($0)
+      if (line ~ /^== .* ==$/) {
+        if (pre) { out("</pre>"); pre = 0 }
+        if (open) out("</details>")
+        h = substr(line, 4, length(line) - 6)
+        out("<details open><summary>" h "</summary>"); open = 1; out("<pre>"); pre = 1; next
+      }
+      if (!pre) { out("<pre class=\"head\">"); pre = 1 }
+      if (line ~ /\[FAIL\]/) { nf++; sub(/\[FAIL\]/, "<span class=\"f\">[FAIL]</span>", line) }
+      else if (line ~ /\[WARN\]/) { nw++; sub(/\[WARN\]/, "<span class=\"w\">[WARN]</span>", line) }
+      else if (line ~ /\[ OK \]/) { no++; sub(/\[ OK \]/, "<span class=\"o\">[ OK ]</span>", line) }
+      out(line)
+    }
+    END {
+      if (pre) out("</pre>")
+      if (open) out("</details>")
+      print "<!doctype html><html lang=\"" lang "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+      print "<title>" esc(title) "</title><style>"
+      print ":root{--bg:#fff;--fg:#1d1d1f;--mut:#6e6e73;--card:#f5f5f7;--ok:#1a7f37;--warn:#9a6700;--fail:#cf222e}"
+      print "@media(prefers-color-scheme:dark){:root{--bg:#1c1c1e;--fg:#f5f5f7;--mut:#98989d;--card:#2c2c2e;--ok:#3fb950;--warn:#d29922;--fail:#ff7b72}}"
+      print "body{margin:0 auto;max-width:900px;padding:24px 16px;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,BlinkMacSystemFont,sans-serif}"
+      print "h1{font-size:22px;margin:0 0 4px}.m{color:var(--mut);margin:0 0 16px}.sum span{display:inline-block;margin-right:14px;font-weight:600}"
+      print "details{background:var(--card);border-radius:10px;margin:12px 0;padding:8px 14px}summary{cursor:pointer;font-weight:600;padding:4px 0}"
+      print "pre{margin:6px 0;font:12.5px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;word-break:break-word}pre.head{background:var(--card);border-radius:10px;padding:10px 14px}"
+      print ".o{color:var(--ok);font-weight:600}.w{color:var(--warn);font-weight:600}.f{color:var(--fail);font-weight:600}"
+      print "</style></head><body><h1>" esc(title) "</h1><p class=\"m\">" esc(when) "</p>"
+      print "<p class=\"sum\"><span>" sumlabel "</span><span class=\"o\">OK " no+0 "</span><span class=\"w\">WARN " nw+0 "</span><span class=\"f\">FAIL " nf+0 "</span></p>"
+      printf "%s", body
+      print "</body></html>"
+    }'
+}
+
 cmd_report() {
   local NETDOCTOR_NOSUDO=1   # 输出被重定向到文件, 不要在中途弹出 sudo 密码提示
   local B= G= R= Y= N=       # 报告是纯文本文件: 即使网页 / App 设了 NETDOCTOR_COLOR=1, 也不能把颜色转义码写进去 (动态作用域, 下面调用的函数也生效)
-  local redact=0; case "${1:-}" in redact|--redact) redact=1;; esac
+  local redact=0 html=0 a
+  for a in "$@"; do case "$a" in redact|--redact) redact=1;; html|--html) html=1;; *) bad "$(L "Unknown option: $a (use: report [html] [redact])" "未知选项: $a (用法: report [html] [redact])")"; return 1;; esac; done
   local dir="$HOME/Desktop"; [ -d "$dir" ] && [ -w "$dir" ] || dir="$HOME"   # 没有桌面目录 (或不可写) 就存到主目录
-  local f="$dir/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt" gen
+  local ext=txt; [ "$html" = 1 ] && ext=html
+  local f="$dir/netdoctor-report-$(date +%Y%m%d-%H%M%S).$ext" gen
   gen=$(mktemp) || { bad "$(L "Could not create a temporary file" "无法创建临时文件")"; return 1; }
   if [ "$redact" = 1 ]; then
     local ssid v; REDACT_LITERALS=""
@@ -1235,11 +1343,15 @@ $v";; esac
   fi
   { echo "netdoctor report $(date)"; uname -a; sw_vers
     cmd_doctor; cmd_overview; cmd_dhcp; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$gen" 2>&1
+  local txt; txt=$(mktemp) || { rm -f "$gen"; bad "$(L "Could not create a temporary file" "无法创建临时文件")"; return 1; }
   if [ "$redact" = 1 ]; then
-    { echo "# $(L "Personal info hidden (public IP, MAC, Wi-Fi name, host name, search domains)" "已隐藏个人信息 (公网 IP、MAC、Wi-Fi 名称、主机名、搜索域)")"; redact_filter <"$gen"; } >"$f"
+    { echo "# $(L "Personal info hidden (public IP, MAC, Wi-Fi name, host name, search domains)" "已隐藏个人信息 (公网 IP、MAC、Wi-Fi 名称、主机名、搜索域)")"; redact_filter <"$gen"; } >"$txt"
   else
-    cat "$gen" >"$f"
+    cat "$gen" >"$txt"
   fi
+  if [ "$html" = 1 ]; then report_to_html "NetDoctor $(L "report" "报告")" "$(date)" "$(L "Summary" "概要")" "$(L en zh-CN)" <"$txt" >"$f"
+  else cat "$txt" >"$f"; fi
+  rm -f "$txt"
   rm -f "$gen"
   if [ ! -s "$f" ]; then bad "$(L "Could not write the report to $f" "无法写入报告: $f")"; return 1; fi
   ok "$(L "Saved: $f" "已保存: $f")"
@@ -1255,10 +1367,10 @@ $v";; esac
 
 c=${1:-help}; [ $# -gt 0 ] && shift
 case "$c" in
-  quick|q) cmd_quick;; doctor|diagnose) cmd_doctor;; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; mtr) cmd_mtr "$@";; leak) cmd_leak;; bonjour) cmd_bonjour "$@";; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
+  quick|q) cmd_quick;; doctor|diagnose) cmd_doctor "$@";; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; mtr) cmd_mtr "$@";; leak) cmd_leak;; bonjour) cmd_bonjour "$@";; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
   ping) cmd_ping "$@";; port) cmd_port "$@";; http) cmd_http "$@";; tls) cmd_tls "$@";;
   mtu) cmd_mtu "$@";; speed) cmd_speed;; conns) cmd_conns;; proxy) cmd_proxy;;
-  capture) cmd_capture "$@";; fixdns) cmd_fixdns;; report) cmd_report "$@";; tools) cmd_tools;;
+  capture) cmd_capture "$@";; fixdns) cmd_fixdns;; fix) cmd_fix "$@";; report) cmd_report "$@";; tools) cmd_tools;;
   version|-v|--version) echo "netdoctor $VERSION";;
   help|-h|--help) usage;;
   *) warn "$(L "Unknown command: $c (this is netdoctor $VERSION; if the command is in the README, update with: git pull)" "未知命令: $c (当前是 netdoctor $VERSION; 如果 README 里有这个命令, 请先更新: git pull)")"; usage; exit 2;;

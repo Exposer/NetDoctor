@@ -115,3 +115,7 @@
 "Bonjour services" = "Bonjour services";
 "Discover AirPlay, printers, SSH, file sharing and other services advertised on the LAN" = "Discover AirPlay, printers, SSH, file sharing and other services advertised on the LAN";
 "Seconds" = "Seconds";
+"Fix problems" = "Fix problems";
+"Diagnose, then fix what can be fixed on this Mac (renew DHCP, flush DNS, sync the clock, open the login page) and re-check" = "Diagnose, then fix what can be fixed on this Mac (renew DHCP, flush DNS, sync the clock, open the login page) and re-check";
+"Apply the fixes (otherwise it only shows the plan)" = "Apply the fixes (otherwise it only shows the plan)";
+"Save as an HTML page (collapsible sections, colours)" = "Save as an HTML page (collapsible sections, colours)";

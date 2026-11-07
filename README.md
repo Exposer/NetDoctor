@@ -72,7 +72,8 @@ netdoctor tools                      # 查看装了哪些
 | 需要看包 | `netdoctor capture 'host x'` → Wireshark 打开 |
 | 测速 | `netdoctor speed`(networkQuality);局域网用 `iperf3 -s` / `iperf3 -c` |
 | DNS 异常 | `netdoctor fixdns` |
-| 要把排查结果发给别人 / 留档 | `netdoctor report`(诊断、概览、DHCP、体检、Wi-Fi、DNS、IPv6、代理等保存到桌面文件;`netdoctor report redact` 会自动隐藏公网 IP、MAC、Wi-Fi 名称等个人信息) |
+| 出了问题想让工具直接修 | `netdoctor fix`(先诊断,再按结论重新获取 DHCP / 刷新 DNS / 校准时钟 / 打开登录页,每步确认,修完自动复查) |
+| 要把排查结果发给别人 / 留档 | `netdoctor report`(诊断、概览、DHCP、体检、Wi-Fi、DNS、IPv6、代理等保存到桌面文件;`netdoctor report html` 存成带颜色、可折叠的网页;`netdoctor report redact` 会自动隐藏公网 IP、MAC、Wi-Fi 名称等个人信息) |
 
 ## 常用速查(系统自带)
 - `scutil --dns` / `scutil --proxy`:真实生效的 DNS、代理

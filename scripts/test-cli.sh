@@ -299,6 +299,67 @@ if printf '%s' "$out" | grep -qF "0 of 14 optional tools installed. None of them
 [ "$rc" = 0 ] && pass || fail "tools: exit code" "rc=$rc"
 NETDOCTOR_LANG=zh out=$(PATH="$T/empty" /bin/bash $ND tools </dev/null 2>&1 | strip)
 if printf '%s' "$out" | grep -qF "已安装 0 / 14 个可选工具"; then pass; else fail "tools: Chinese summary"; fi
+export NETDOCTOR_LANG=en   # the assignment above is not scoped to one command: put English back for the tests that follow
+
+# ---- 10. fix (doctor --fix) and the HTML report ---------------------------------------------------------
+for v in "dhcp:renew_dhcp" "dns:flush_dns" "dns_all:flush_dns" "clock:sync_clock" "captive:open_portal"; do
+  lib "fix_actions: ${v%%:*}" 0 "${v#*:}" "fix_actions ${v%%:*}"
+done
+for v in http internet gateway link unstable ""; do
+  lib "fix_actions: '$v' has no automatic fix" 0 "[]" "echo \"[\$(fix_actions '$v')]\""
+done
+# fake privileged commands: they only record what they were asked to run; the fake sudo runs its arguments
+mkdir -p "$T/fx"; : > "$T/fx.log"
+for c in ipconfig dscacheutil killall sntp open; do printf '#!/bin/sh\necho "%s $*" >> "%s"\n' "$c" "$T/fx.log" > "$T/fx/$c"; chmod +x "$T/fx/$c"; done
+printf '#!/bin/sh\n[ "$1" = -n ] && shift\nexec "$@"\n' > "$T/fx/sudo"; chmod +x "$T/fx/sudo"
+fxlib() { # name want-rc substring code   (runs with the recording fakes; never run as root, where priv would not use sudo)
+  [ "$(id -u)" = 0 ] && return 0; : > "$T/fx.log"
+  lib "$1" "$2" "$3" "export PATH=$T/fx:\$PATH; sleep() { :; }; $4"
+}
+fxlog_has() { grep -qF -- "$2" "$T/fx.log" && pass || fail "$1" "log: $(tr '\n' ';' < "$T/fx.log")"; }
+fxlog_empty() { [ ! -s "$T/fx.log" ] && pass || fail "$1" "unexpected commands ran: $(tr '\n' ';' < "$T/fx.log")"; }
+fxlib "fix_apply: renew DHCP"        0 "" "fix_apply renew_dhcp en0";                 fxlog_has "fix_apply: renew DHCP runs ipconfig" "ipconfig set en0 DHCP"
+fxlib "fix_apply: bad interface"     1 "" "fix_apply renew_dhcp 'en0;ls'";            fxlog_empty "fix_apply: bad interface runs nothing"
+fxlib "fix_apply: empty interface"   1 "" "fix_apply renew_dhcp ''";                  fxlog_empty "fix_apply: empty interface runs nothing"
+fxlib "fix_apply: flush DNS"         0 "" "fix_apply flush_dns";                      fxlog_has "fix_apply: flush runs dscacheutil" "dscacheutil -flushcache"
+fxlog_has "fix_apply: flush restarts mDNSResponder" "killall -HUP mDNSResponder"
+fxlib "fix_apply: sync clock"        0 "" "fix_apply sync_clock";                     fxlog_has "fix_apply: sntp" "sntp -sS time.apple.com"
+fxlib "fix_apply: unknown action"    1 "" "fix_apply rm_rf_slash";                    fxlog_empty "fix_apply: unknown action runs nothing"
+fxlib "fix_apply: open portal"       0 "" "fix_apply open_portal";                    fxlog_has "fix_apply: opens the portal URL" "open http://captive.apple.com"
+# cmd_fix with a stubbed cmd_doctor
+STUB='cmd_doctor() { DOCTOR_VERDICT=${V:-}; DOCTOR_IFC=en0; return 1; }'
+fxlib "fix: healthy → nothing to fix"  0 "Nothing to fix" "$STUB; V= cmd_fix";        fxlog_empty "fix: healthy runs nothing"
+fxlib "fix: http cannot be fixed here" 1 "cannot be fixed from the Mac" "$STUB; V=http cmd_fix"; fxlog_empty "fix: http runs nothing"
+fxlib "fix: unstable has no fix"       1 "No automatic fix" "$STUB; V=unstable cmd_fix"
+# not a terminal and no 'yes': show the plan, change nothing
+fxlib "fix: plan only without yes"     1 "Nothing was changed" "$STUB; V=dns cmd_fix";  fxlog_empty "fix: plan only runs nothing"
+fxlib "fix: plan shows the command"    1 "dscacheutil -flushcache" "$STUB; V=dns cmd_fix"
+# with yes: applies, then re-diagnoses (the second doctor run reports healthy)
+fxlib "fix: yes applies and re-checks" 0 "Checking again" "cmd_doctor() { if [ -e $T/second ]; then DOCTOR_VERDICT=; return 0; fi; : > $T/second; DOCTOR_VERDICT=dns; DOCTOR_IFC=en0; return 1; }; rm -f $T/second; cmd_fix yes"
+fxlog_has "fix: yes really flushed the cache" "dscacheutil -flushcache"
+fxlib "fix: dhcp uses the diagnosed interface" 0 "" "cmd_doctor() { DOCTOR_VERDICT=dhcp; DOCTOR_IFC=en7; return 0; }; cmd_fix yes"; fxlog_has "fix: dhcp renews en7" "ipconfig set en7 DHCP"
+fxlib "fix: still broken after the fix → rc 1" 1 "Checking again" "$STUB; V=dns cmd_fix yes"
+# without administrator rights (the earlier fake sudo exits 1) a privileged step is refused, not attempted
+if [ "$(id -u)" != 0 ]; then
+  lib "fix: no admin rights" 1 "Needs administrator rights" "$STUB; V=dns cmd_fix yes"
+fi
+lib "doctor --fix is routed to fix"   0 "ROUTED yes" 'cmd_fix() { echo ROUTED "$@"; }; cmd_doctor --fix yes'
+lib "doctor fix is routed to fix"     0 "ROUTED"     'cmd_fix() { echo ROUTED "$@"; }; cmd_doctor fix'
+# HTML report
+hr() { printf '%s' "$1" | PATH="$T/bin:$PATH" NETDOCTOR_SOURCE_ONLY=1 /bin/bash -c '. ./netdoctor; report_to_html "NetDoctor report" now Summary en' 2>&1; }
+HTML=$(hr $'# note\n\n== Diagnosis ==\n[ OK ] a <script>x</script> & b\n[WARN] w\n[FAIL] f\n[FAIL] g\n\n== Verdict ==\n[ OK ] fine')
+printf '%s' "$HTML" | grep -qF '<span class="f">FAIL 2</span>' && pass || fail "html: FAIL count" "$(printf '%s' "$HTML" | grep -o 'class="sum".*' | head -1)"
+printf '%s' "$HTML" | grep -qF '<span class="w">WARN 1</span>' && pass || fail "html: WARN count"
+printf '%s' "$HTML" | grep -qF '<span class="o">OK 2</span>' && pass || fail "html: OK count"
+printf '%s' "$HTML" | grep -qF '&lt;script&gt;x&lt;/script&gt; &amp; b' && pass || fail "html: text is escaped"
+printf '%s' "$HTML" | grep -qF '<script>' && fail "html: raw <script> leaked" || pass
+[ "$(printf '%s' "$HTML" | grep -c '<details')" = 2 ] && pass || fail "html: one block per section"
+printf '%s' "$HTML" | grep -qF '<summary>Verdict</summary>' && pass || fail "html: section titles"
+printf '%s' "$HTML" | grep -qF '<span class="f">[FAIL]</span> f' && pass || fail "html: marker colouring"
+printf '%s' "$HTML" | grep -qE '(src|href)="https?:' && fail "html: must not reference external files" || pass
+expect "report: unknown option"  1 "Unknown option"  /bin/bash $ND report nonsense
+# redaction still applies to the text before it becomes HTML
+lib "report html: redacted values never reach the page" 0 "" 'REDACT_LITERALS="203.0.113.9"; printf "%s\n" "== X ==" "Public IP: 203.0.113.9 and 203.0.113.9" | redact_filter | report_to_html t n s en | grep -c 203.0.113.9 | grep -qx 0'
 
 # ---- result ------------------------------------------------------------------------------------------
 echo

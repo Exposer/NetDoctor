@@ -36,7 +36,8 @@ COMMANDS = [
  {"id":"conns","label":"Connections","icon":"🔌","desc":"Listening ports and connections by process","inputs":[],"admin":True},
  {"id":"proxy","label":"Proxy / VPN","icon":"🛡️","desc":"System proxy, environment variables, VPN and utun","inputs":[]},
  {"id":"fixdns","label":"Flush DNS","icon":"🧹","desc":"Clear the DNS cache and restart mDNSResponder","inputs":[],"admin":True},
- {"id":"report","label":"Export report","icon":"📄","desc":"Save a combined report to the Desktop","inputs":[{"name":"redact","label":"Hide personal info (public IP, MAC, Wi-Fi name, host name)","flag":"redact"}]},
+ {"id":"fix","label":"Fix problems","icon":"🩹","desc":"Diagnose, then fix what can be fixed on this Mac (renew DHCP, flush DNS, sync the clock, open the login page) and re-check","inputs":[{"name":"yes","label":"Apply the fixes (otherwise it only shows the plan)","flag":"yes"}],"admin":"optional"},
+ {"id":"report","label":"Export report","icon":"📄","desc":"Save a combined report to the Desktop","inputs":[{"name":"redact","label":"Hide personal info (public IP, MAC, Wi-Fi name, host name)","flag":"redact"},{"name":"html","label":"Save as an HTML page (collapsible sections, colours)","flag":"html"}]},
  {"id":"tools","label":"Tool check","icon":"🧰","desc":"Which system and third-party tools are installed","inputs":[]},
 ]
 BY_ID = {c["id"]: c for c in COMMANDS}
@@ -80,6 +81,10 @@ ZH = {
     "Proxy / VPN": "代理/VPN",
     "System proxy, environment variables, VPN and utun": "系统代理、环境变量、VPN 与 utun",
     "Flush DNS": "刷新 DNS",
+    "Save as an HTML page (collapsible sections, colours)": "保存为 HTML 页面 (可折叠分区, 带颜色)",
+    "Fix problems": "修复问题",
+    "Diagnose, then fix what can be fixed on this Mac (renew DHCP, flush DNS, sync the clock, open the login page) and re-check": "先诊断, 再修复这台 Mac 上能修的问题 (重新获取 DHCP、刷新 DNS、校准时钟、打开登录页), 然后复查",
+    "Apply the fixes (otherwise it only shows the plan)": "执行修复 (不勾选则只显示计划)",
     "Clear the DNS cache and restart mDNSResponder": "清除 DNS 缓存并重启 mDNSResponder",
     "Export report": "导出报告",
     "Save a combined report to the Desktop": "保存综合报告到桌面",

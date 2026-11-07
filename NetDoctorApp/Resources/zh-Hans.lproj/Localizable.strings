@@ -115,3 +115,7 @@
 "Bonjour services" = "Bonjour 服务";
 "Discover AirPlay, printers, SSH, file sharing and other services advertised on the LAN" = "发现局域网里广播的 AirPlay、打印机、SSH、文件共享等服务";
 "Seconds" = "秒数";
+"Fix problems" = "修复问题";
+"Diagnose, then fix what can be fixed on this Mac (renew DHCP, flush DNS, sync the clock, open the login page) and re-check" = "先诊断, 再修复这台 Mac 上能修的问题 (重新获取 DHCP、刷新 DNS、校准时钟、打开登录页), 然后复查";
+"Apply the fixes (otherwise it only shows the plan)" = "执行修复 (不勾选则只显示计划)";
+"Save as an HTML page (collapsible sections, colours)" = "保存为 HTML 页面 (可折叠分区, 带颜色)";
