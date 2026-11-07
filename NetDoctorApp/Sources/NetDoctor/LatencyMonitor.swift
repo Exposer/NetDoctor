@@ -53,7 +53,8 @@ final class LatencyMonitor: ObservableObject {
         tick()
     }
 
-    func stop() { timer?.invalidate(); timer = nil; running = false }
+    // An outage that straddles a stop / start must not produce a "back after N s" notification much later.
+    func stop() { timer?.invalidate(); timer = nil; running = false; lossStreak = 0; outageStart = nil }
     func clear() { samples.removeAll(); history.removeAll(); lossStreak = 0; outageStart = nil }
 
     /// CSV of everything recorded since the last Clear / target change: ISO-8601 time, target, latency (empty = lost), lost flag.
