@@ -93,3 +93,5 @@
 "Wi-Fi connected but no web access? Detect a login page" = "Wi-Fi connected but no web access? Detect a login page";
 "22,80,443 or 1-1024" = "22,80,443 or 1-1024";
 "extra domain (optional)" = "extra domain (optional)";
+"DHCP / IP address" = "DHCP / IP address";
+"Check the DHCP lease and spot a self-assigned 169.254 address (DHCP failed)" = "Check the DHCP lease and spot a self-assigned 169.254 address (DHCP failed)";

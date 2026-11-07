@@ -59,6 +59,7 @@ netdoctor tools                      # 查看装了哪些
 | ping 被屏蔽 / 想测端口延迟 | `netdoctor tcpping host 443`(TCP 连接延迟与丢包) |
 | DNS 慢 / 想选最快的 DNS | `netdoctor dnsbench`(对比并推荐,给出切换命令) |
 | 想知道网内有哪些设备 | `netdoctor lan`(IP / MAC / 主机名) |
+| 连上 Wi-Fi / 网线却上不了网, IP 以 169.254 开头 | `netdoctor dhcp`(查看 DHCP 租约;识别“自分配地址 = DHCP 失败”,`doctor` 也会自动判断) |
 | 想一眼看全网络状态 | `netdoctor overview`(网卡 / IP / 网关 / DNS / Wi-Fi / 代理 / 公网 IP) |
 | 端口不通 | `netdoctor port host 443`、`nmap -p 443 host` |
 | 一次查多个端口 | `netdoctor ports host`(常用端口)、`netdoctor ports host 22,80,443`、`netdoctor ports host 1-1024` |

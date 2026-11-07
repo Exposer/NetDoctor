@@ -30,6 +30,7 @@ netdoctor $VERSION - macOS 网络诊断
   quick                 一键体检: 网卡/网关/DNS/外网/HTTP (先跑这个)
   doctor                智能诊断: 逐层检查并给出结论和下一步建议 (遇到问题先跑这个)
   overview              网络概览: 网卡/IP/网关/DNS/Wi-Fi/代理/公网 IP 一屏看全
+  dhcp                  DHCP / IP 地址: 租约详情, 识别 169.254 自分配地址 (DHCP 失败)
   tcpping <主机> <端口> [次数]  TCP 连接延迟 (ping 被屏蔽时用; 默认 10 次)
   ports <主机> [端口]   并行检测多个端口 (默认常用端口; 如 22,80 或 1-1024)
   ipv6                  IPv4 / IPv6 双栈连通性对比 (有 IPv6 地址却不通时给出判读)
@@ -59,6 +60,7 @@ Usage: netdoctor <command> [args]
   quick                 one-shot check: interface/gateway/DNS/internet/HTTP (run this first)
   doctor                smart diagnosis: layer-by-layer checks with a verdict and next steps
   overview              network snapshot: interface/IP/gateway/DNS/Wi-Fi/proxy/public IP
+  dhcp                  DHCP lease details; spots a self-assigned 169.254 address (DHCP failed)
   tcpping <host> <port> [count]  TCP connect latency (for when ping is blocked; 10 by default)
   ports <host> [ports]  check many ports in parallel (common ports by default; e.g. 22,80 or 1-1024)
   ipv6                  compare IPv4 / IPv6 (dual-stack) connectivity and spot a broken IPv6 path
@@ -214,6 +216,60 @@ EOF2
 ip2int() { local IFS=.; set -- $1; echo $(( ($1<<24) + ($2<<16) + ($3<<8) + $4 )); }
 int2ip() { echo "$(( ($1>>24)&255 )).$(( ($1>>16)&255 )).$(( ($1>>8)&255 )).$(( $1&255 ))"; }
 
+# 有 169.254.x.x 自分配地址的网卡 (DHCP 没拿到地址时系统会自己分配一个)
+self_assigned_if() { ifconfig 2>/dev/null | awk '/^[a-z0-9]+:/{n=$1; sub(":","",n)} /inet 169\.254\./{print n; exit}'; }
+
+cmd_dhcp() {
+  local ifc ip pkt srv rtr dns mask lease dom gw ls
+  ifc=$(default_if); [ -z "$ifc" ] && ifc=$(self_assigned_if); [ -z "$ifc" ] && ifc=$(wifi_if); ifc=${ifc:-en0}
+  hdr "$(L "DHCP / IP address ($ifc)" "DHCP / IP 地址 ($ifc)")"
+  ip=$(ifconfig "$ifc" 2>/dev/null | awk '/inet /{print $2; exit}')
+  if [ -z "$ip" ]; then
+    bad "$(L "$ifc has no IPv4 address (not connected, or DHCP has not answered yet)" "$ifc 没有 IPv4 地址 (没连上网络, 或 DHCP 还没应答)")"
+    echo "$(L "Renew the lease: sudo ipconfig set $ifc DHCP   (or toggle Wi-Fi off and on)" "重新获取地址: sudo ipconfig set $ifc DHCP   (或关闭再打开 Wi-Fi)")"; return 1
+  fi
+  case "$ip" in
+    169.254.*)
+      bad "$(L "$ifc has a self-assigned address $ip: the DHCP server did not answer, so the Mac gave itself one" "$ifc 的地址 $ip 是系统自己分配的: DHCP 服务器没有应答")"
+      echo "$(L "Next steps:" "建议下一步:")"
+      echo "  - sudo ipconfig set $ifc DHCP   # $(L "renew the lease" "重新获取地址")"
+      echo "  - $(L "Turn Wi-Fi off and on (or re-plug the cable), then run this again" "关闭再打开 Wi-Fi (或重新插拔网线), 然后再跑一次")"
+      echo "  - $(L "Restart the router; check that its DHCP pool is not full" "重启路由器; 检查路由器的 DHCP 地址池是否已满")"
+      return 1;;
+  esac
+  ok "IPv4  $ip"
+  pkt=$(ipconfig getpacket "$ifc" 2>/dev/null)
+  if ! echo "$pkt" | grep -q BOOTREPLY; then
+    warn "$(L "No DHCP lease on $ifc: the address is set manually, or comes from a VPN / another source" "$ifc 上没有 DHCP 租约: 地址是手动设置的, 或来自 VPN / 其他来源")"; return 0
+  fi
+  srv=$(echo "$pkt" | sed -n 's/^server_identifier (ip): //p' | head -1)
+  mask=$(echo "$pkt" | sed -n 's/^subnet_mask (ip): //p' | head -1)
+  rtr=$(echo "$pkt" | sed -n 's/^router (ip_mult): {\(.*\)}/\1/p' | head -1)
+  dns=$(echo "$pkt" | sed -n 's/^domain_name_server (ip_mult): {\(.*\)}/\1/p' | head -1)
+  dom=$(echo "$pkt" | sed -n 's/^domain_name (string): //p' | head -1)
+  lease=$(echo "$pkt" | sed -n 's/^lease_time (uint32): //p' | head -1)
+  printf '  %-14s %s\n' "$(L "DHCP server" "DHCP 服务器")" "${srv:--}"
+  printf '  %-14s %s\n' "$(L "Subnet mask" "子网掩码")" "${mask:--}"
+  printf '  %-14s %s\n' "$(L "Router" "路由器")" "${rtr:--}"
+  printf '  %-14s %s\n' "DNS" "${dns:--}"
+  [ -n "$dom" ] && printf '  %-14s %s\n' "$(L "Search domain" "搜索域")" "$dom"
+  if [ -n "$lease" ]; then
+    ls=$((lease)) 2>/dev/null || ls=""
+    if [ -n "$ls" ] && [ "$ls" -gt 0 ]; then
+      if [ "$ls" -ge 3600 ]; then printf '  %-14s %s\n' "$(L "Lease time" "租期")" "$((ls/3600)) $(L "h" "小时") $((ls%3600/60)) $(L "min" "分钟")"
+      else printf '  %-14s %s\n' "$(L "Lease time" "租期")" "$((ls/60)) $(L "min" "分钟")"; fi
+      [ "$ls" -lt 600 ] && warn "$(L "Very short lease ($((ls/60)) min): the router renews addresses constantly, which can cause brief drops" "租期很短 ($((ls/60)) 分钟): 路由器频繁更换地址, 可能造成短暂掉线")"
+    fi
+  fi
+  # 默认网关与 DHCP 下发的路由器不一致 → 可能被 VPN 或其他网络服务改了默认路由
+  gw=$(gateway)
+  if [ -n "$gw" ] && [ -n "$rtr" ]; then
+    case ", $rtr, " in *", $gw, "*|*" $gw "*|*"{$gw}"*) ok "$(L "The default gateway matches the router the DHCP server offered" "默认网关与 DHCP 下发的路由器一致")";;
+      *) warn "$(L "The default gateway ($gw) is not the router the DHCP server offered ($rtr): a VPN or another network service changed the default route" "默认网关 ($gw) 不是 DHCP 下发的路由器 ($rtr): 可能被 VPN 或其他网络服务改了默认路由")";; esac
+  fi
+  return 0
+}
+
 cmd_lan() {
   local ifc ip m mask ipi net size i addr n=0 popt gw selfmac found tmp unk=0 t
   ifc=$(default_if); gw=$(gateway)
@@ -292,7 +348,10 @@ cmd_doctor() {
   hdr "$(L "Diagnosis" "智能诊断")"
   # 1. link
   ifc=$(default_if); gw=$(gateway)
-  if [ -z "$ifc" ]; then
+  local sa; sa=$(self_assigned_if)
+  if [ -n "$sa" ] && { [ -z "$ifc" ] || [ "$sa" = "$ifc" ]; }; then
+    bad "$(L "1/6 Link: $sa has a self-assigned 169.254.x.x address (the DHCP server did not answer)" "1/6 链路: $sa 只有自分配的 169.254.x.x 地址 (DHCP 服务器没有应答)")"; FAILS=$((FAILS+1)); verdict=dhcp; ifc=${ifc:-$sa}
+  elif [ -z "$ifc" ]; then
     bad "$(L "1/6 Link: no default route (not connected)" "1/6 链路: 没有默认路由 (未联网)")"; FAILS=$((FAILS+1)); verdict=link
   else ok "$(L "1/6 Link: $ifc is the default interface" "1/6 链路: 默认网卡为 $ifc")"; fi
   # 2. gateway
@@ -311,7 +370,7 @@ cmd_doctor() {
   elif [ -z "$verdict" ]; then warn "$(L "2/6 Gateway: none reported (VPN-only or unusual setup); skipped" "2/6 网关: 未取得 (仅 VPN 或特殊配置); 已跳过")"
   else skipped 2 Gateway 网关; fi
   # 3. internet by IP
-  if [ "$verdict" != link ] && [ "$verdict" != gateway ]; then
+  if [ "$verdict" != link ] && [ "$verdict" != dhcp ] && [ "$verdict" != gateway ]; then
     for ip in 1.1.1.1 223.5.5.5 8.8.8.8; do
       set -- $(ping_stats "$ip" 3); l=${1:-100}; avg=${2:-}
       if [ -n "$avg" ]; then ip_ok=$ip; break; fi
@@ -321,7 +380,7 @@ cmd_doctor() {
     else ok "$(L "3/6 Internet (by IP): $ip_ok reachable (avg $avg ms)" "3/6 外网 (按 IP): $ip_ok 可达 (平均 $avg ms)")"; fi
   else skipped 3 "Internet (by IP)" "外网 (按 IP)"; fi
   # 4. DNS
-  if [ "$verdict" != link ] && [ "$verdict" != gateway ] && [ "$verdict" != internet ]; then
+  if [ "$verdict" != link ] && [ "$verdict" != dhcp ] && [ "$verdict" != gateway ] && [ "$verdict" != internet ]; then
     dns_ok=""; for u in apple.com baidu.com; do resolves "$u" && dns_ok=1; done
     if [ -n "$dns_ok" ]; then ok "$(L "4/6 DNS: the system resolver works" "4/6 DNS: 系统解析正常")"
     else
@@ -353,6 +412,11 @@ cmd_doctor() {
   case "$verdict" in
     link)     bad "$(L "You are not connected to any network." "当前没有连接任何网络。")"
               steps="netdoctor wifi|$(L "Check that Wi-Fi is on and joined, or the cable is plugged in" "检查 Wi-Fi 是否已开启并连接, 或网线是否插好")";;
+    dhcp)     bad "$(L "The Mac did not get an IP address from the router (DHCP failed), so it gave itself a 169.254.x.x address." "这台 Mac 没有从路由器拿到 IP 地址 (DHCP 失败), 只能给自己分配 169.254.x.x 地址。")"
+              steps="netdoctor dhcp|$(L "See the details" "查看详情")
+sudo ipconfig set $ifc DHCP|$(L "Renew the lease" "重新获取地址")
+-|$(L "Turn Wi-Fi off and on, or re-plug the cable" "关闭再打开 Wi-Fi, 或重新插拔网线")
+-|$(L "Restart the router; check that its DHCP address pool is not full" "重启路由器; 检查路由器的 DHCP 地址池是否已满")";;
     gateway)  bad "$(L "The link to your router is broken or very weak." "到路由器的链路不通或很弱。")"
               steps="netdoctor wifi|$(L "Check the signal strength; move closer to the router" "查看信号强度, 靠近路由器")
 netdoctor lan|$(L "See whether other devices are reachable" "看看其他设备是否可达")
@@ -731,7 +795,7 @@ cmd_report() {
   local dir="$HOME/Desktop"; [ -d "$dir" ] && [ -w "$dir" ] || dir="$HOME"   # 没有桌面目录 (或不可写) 就存到主目录
   local f="$dir/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt"
   if ! { echo "netdoctor report $(date)"; uname -a; sw_vers
-    cmd_doctor; cmd_overview; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$f" 2>/dev/null || [ ! -s "$f" ]; then
+    cmd_doctor; cmd_overview; cmd_dhcp; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$f" 2>/dev/null || [ ! -s "$f" ]; then
     bad "$(L "Could not write the report to $f" "无法写入报告: $f")"; return 1
   fi
   ok "$(L "Saved: $f" "已保存: $f")"
@@ -740,7 +804,7 @@ cmd_report() {
 
 c=${1:-help}; [ $# -gt 0 ] && shift
 case "$c" in
-  quick|q) cmd_quick;; doctor|diagnose) cmd_doctor;; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
+  quick|q) cmd_quick;; doctor|diagnose) cmd_doctor;; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
   ping) cmd_ping "$@";; port) cmd_port "$@";; http) cmd_http "$@";; tls) cmd_tls "$@";;
   mtu) cmd_mtu "$@";; speed) cmd_speed;; conns) cmd_conns;; proxy) cmd_proxy;;
   capture) cmd_capture "$@";; fixdns) cmd_fixdns;; report) cmd_report;; tools) cmd_tools;;

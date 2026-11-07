@@ -61,6 +61,7 @@ netdoctor tools                                          # see which tools are i
 | Ping is blocked / measure a port's latency | `netdoctor tcpping host 443` (TCP connect latency and loss) |
 | Slow DNS / pick the fastest DNS | `netdoctor dnsbench` (compares and recommends, prints the switch command) |
 | Who is on my network | `netdoctor lan` (IP / MAC / name) |
+| Connected to Wi-Fi / cable but not online, IP starts with 169.254 | `netdoctor dhcp` (DHCP lease details; spots a "self-assigned address = DHCP failed", and `doctor` detects it too) |
 | A snapshot of the whole network state | `netdoctor overview` (interface / IP / gateway / DNS / Wi-Fi / proxy / public IP) |
 | Port unreachable | `netdoctor port host 443`, `nmap -p 443 host` |
 | Check many ports at once | `netdoctor ports host` (common ports), `netdoctor ports host 22,80,443`, `netdoctor ports host 1-1024` |

@@ -32,6 +32,8 @@ struct Tool: Identifiable, Hashable {
              summary: "Layer-by-layer checks with a verdict and suggested next steps"),
         Tool(id: "overview", title: "Overview", icon: "list.bullet.rectangle",
              summary: "Interface, IP, gateway, DNS, Wi-Fi, proxy and public IP at a glance"),
+        Tool(id: "dhcp", title: "DHCP / IP address", icon: "arrow.triangle.2.circlepath",
+             summary: "Check the DHCP lease and spot a self-assigned 169.254 address (DHCP failed)"),
         Tool(id: "ports", title: "Multi-port check", icon: "square.grid.3x3",
              summary: "Check common or custom ports on a host in parallel",
              inputs: [ToolInput(name: "host", label: "Host", placeholder: "example.com", required: true),
