@@ -718,7 +718,7 @@ cmd_route() {
   else
     has mtr && warn "$(L "mtr needs admin rights; falling back to traceroute" "mtr 需要管理员权限, 已改用 traceroute")"
     traceroute -w 2 -q 1 -m 20 "$h"
-    has mtr || warn "$(L "brew install mtr gives per-hop loss statistics" "brew install mtr 可得到逐跳丢包统计")"
+    has mtr || echo "$(L "For per-hop loss statistics without admin rights, run: netdoctor mtr $h" "要无需管理员权限的逐跳丢包统计, 请运行: netdoctor mtr $h")"
   fi
 }
 
@@ -1146,9 +1146,32 @@ cmd_tools() {
   hdr "$(L "Built-in" "系统自带")"
   for t in ping traceroute netstat lsof nc curl dig scutil networksetup route tcpdump nettop networkQuality wdutil ifconfig arp dscacheutil system_profiler; do
     has "$t" && ok "$t" || warn "$(L "$t missing" "$t 缺失")"; done
-  hdr "$(L "Third-party (brew bundle --file=Brewfile)" "第三方 (brew bundle --file=Brewfile)")"
-  for t in mtr iperf3 fping nmap gping trip doggo http tshark termshark ngrep bandwhich iftop testssl speedtest-cli jq; do
-    has "$t" && ok "$t" || warn "$(L "$t not installed" "$t 未安装")"; done
+  # 可选的第三方工具: NetDoctor 的所有功能都不依赖它们, 没装不是问题。格式: 命令:brew 包名:用途
+  hdr "$(L "Optional third-party tools (NetDoctor works without them)" "可选的第三方工具 (不装也不影响 NetDoctor)")"
+  local spec cmd pkg desc have=0 total=0
+  for spec in \
+    "iperf3:iperf3:$(L "two-ended bandwidth test between two machines" "两台机器之间的带宽测试")" \
+    "fping:fping:$(L "ping many hosts at once" "同时 ping 多个主机")" \
+    "nmap:nmap:$(L "port scan / service probing" "端口扫描 / 服务探测")" \
+    "gping:gping:$(L "ping with a live graph" "带实时图表的 ping")" \
+    "trip:trippy:$(L "modern traceroute TUI" "现代化的 traceroute 终端界面")" \
+    "doggo:doggo:$(L "friendly DNS client" "更友好的 DNS 查询工具")" \
+    "http:httpie:$(L "friendly HTTP client" "更友好的 HTTP 客户端")" \
+    "tshark:wireshark:$(L "packet capture analysis; GUI is the wireshark-app cask" "抓包分析; 图形界面是 wireshark-app cask")" \
+    "termshark:termshark:$(L "Wireshark-style terminal UI" "终端里的 Wireshark 界面")" \
+    "ngrep:ngrep:$(L "grep for network traffic" "按内容过滤网络流量")" \
+    "bandwhich:bandwhich:$(L "per-process bandwidth, needs sudo" "按进程看带宽, 需要 sudo")" \
+    "iftop:iftop:$(L "per-connection bandwidth, needs sudo" "按连接看带宽, 需要 sudo")" \
+    "testssl:testssl:$(L "thorough TLS configuration audit" "全面的 TLS 配置审计")" \
+    "jq:jq:$(L "pretty JSON; makes the public-IP line neater" "解析 JSON; 让公网 IP 一行更整洁")"; do
+    cmd=${spec%%:*}; desc=${spec#*:}; pkg=${desc%%:*}; desc=${desc#*:}; total=$((total+1))
+    if has "$cmd"; then have=$((have+1)); ok "$cmd  ($desc)"
+    else printf '  - %-10s %s  →  brew install %s\n' "$cmd" "($desc)" "$pkg"; fi
+  done
+  echo
+  echo "$(L "$have of $total optional tools installed. None of them is required." "已安装 $have / $total 个可选工具, 都不是必需的。")"
+  if has brew; then echo "$(L "To install them all: brew bundle --file=Brewfile (in the NetDoctor folder)" "全部安装: 在 NetDoctor 目录里运行 brew bundle --file=Brewfile")"
+  else echo "$(L "These need Homebrew first: https://brew.sh" "这些工具需要先安装 Homebrew: https://brew.sh")"; fi
 }
 
 # 转义成 sed -E 里的字面量

@@ -287,6 +287,19 @@ lib "bonjour: unknown type kept"     0 "_weird._tcp" "bonjour_label _weird._tcp"
 expect "bonjour: bad seconds"        1 "from 2 to 30"  /bin/bash $ND bonjour 1
 expect "bonjour: not a number"       1 "from 2 to 30"  /bin/bash $ND bonjour x
 
+# ---- 10. tools list: optional tools are not warnings ---------------------------------------------------
+mkdir -p "$T/empty"
+out=$(PATH="$T/empty" /bin/bash $ND tools </dev/null 2>&1 | strip); rc=$?
+if printf '%s' "$out" | grep -qF "Optional third-party tools (NetDoctor works without them)"; then pass; else fail "tools: optional heading" "$(printf '%s' "$out" | head -3 | tr '\n' ' ')"; fi
+if printf '%s' "$out" | grep -qF "gping" && printf '%s' "$out" | grep -qF "brew install gping"; then pass; else fail "tools: install hint for a missing tool"; fi
+if printf '%s' "$out" | grep -qF "brew install trippy"; then pass; else fail "tools: command trip maps to package trippy"; fi
+if printf '%s' "$out" | grep -qF "brew install httpie"; then pass; else fail "tools: command http maps to package httpie"; fi
+if printf '%s' "$out" | grep -F "gping" | grep -q "WARN"; then fail "tools: a missing optional tool must not be a warning"; else pass; fi
+if printf '%s' "$out" | grep -qF "0 of 14 optional tools installed. None of them is required."; then pass; else fail "tools: summary line" "$(printf '%s' "$out" | tail -3 | tr '\n' ' ')"; fi
+[ "$rc" = 0 ] && pass || fail "tools: exit code" "rc=$rc"
+NETDOCTOR_LANG=zh out=$(PATH="$T/empty" /bin/bash $ND tools </dev/null 2>&1 | strip)
+if printf '%s' "$out" | grep -qF "已安装 0 / 14 个可选工具"; then pass; else fail "tools: Chinese summary"; fi
+
 # ---- result ------------------------------------------------------------------------------------------
 echo
 if [ "$FAIL" -eq 0 ]; then echo "all $PASS tests passed"; exit 0; fi

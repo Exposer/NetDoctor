@@ -11,6 +11,9 @@
 - `netdoctor leak` 与 **VPN 泄漏检查** 工具:判断 VPN 是否真的在用(看去公网的流量走哪块网卡,兼容用 0/1 + 128/1 路由的 VPN),检查每个 DNS 服务器是否经隧道访问、IPv6 是否绕过隧道,并显示外界看到的公网 IPv4 / IPv6 和 DNS 出口;有泄漏时给出修复办法。没开 VPN 时明确说明无需检查。结果是基于路由的判断,不是抓包证明。
 - `netdoctor bonjour [秒数]` 与 **Bonjour 服务** 工具:发现局域网里广播的 AirPlay、打印机、SSH、文件共享、HomeKit、Chromecast 等服务及设备名,常见类型显示中文 / 英文名称。
 
+### 变更
+- `netdoctor tools`(App 里的“工具检查”):第三方工具改为“可选,不装也不影响 NetDoctor”,不再逐个报警告;每个未装的工具给出用途和安装命令(如 `trip` 对应 `brew install trippy`),并汇总已装数量。从列表和 Brewfile 里去掉不再需要的 `mtr`(已内置 `netdoctor mtr`)和 `speedtest-cli`(测速用系统自带的 `networkQuality`)。
+
 ## [1.3.0] - 2026-11-07
 
 ### 新增

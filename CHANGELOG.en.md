@@ -11,6 +11,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `netdoctor leak` and a **VPN leak check** tool: decides whether a VPN is really in use (by which interface carries traffic to the internet, so VPNs that use 0/1 + 128/1 routes work), checks that every DNS server is reached through the tunnel and that IPv6 does not bypass it, and shows the public IPv4 / IPv6 and DNS exit the outside world sees; gives a fix when something leaks. With no VPN it says nothing needs checking. The result is a routing-based judgement, not packet-capture proof.
 - `netdoctor bonjour [seconds]` and a **Bonjour services** tool: discovers AirPlay, printers, SSH, file sharing, HomeKit, Chromecast and other services advertised on the LAN, with device names and friendly service names.
 
+### Changed
+- `netdoctor tools` (the app's tool check): third-party tools are now shown as optional ("NetDoctor works without them") instead of one warning each; every missing tool gets its purpose and install command (for example `trip` is `brew install trippy`) and the installed count is summarised. `mtr` (now built in as `netdoctor mtr`) and `speedtest-cli` (speed tests use the system `networkQuality`) were dropped from the list and the Brewfile.
+
 ## [1.3.0] - 2026-11-07
 
 ### Added

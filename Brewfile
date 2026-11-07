@@ -1,6 +1,5 @@
 # Install: brew bundle --file=Brewfile
 # --- Connectivity / routing ---
-brew "mtr"            # traceroute + ping combined; locates the lossy hop
 brew "iperf3"         # two-ended bandwidth test
 brew "fping"          # ping many hosts at once
 brew "nmap"           # port scan / service probing (includes ncat)
@@ -22,6 +21,5 @@ brew "bandwhich"      # per-process bandwidth (needs sudo)
 brew "iftop"          # per-connection bandwidth (needs sudo)
 # --- Misc ---
 brew "whois"
-brew "speedtest-cli"
 brew "jq"
 cask "wireshark-app"  # GUI + tshark (formerly "wireshark")
