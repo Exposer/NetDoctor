@@ -79,6 +79,19 @@ ZH = {
     "Failed to start": "启动失败",
     "[exit code %d]": "[退出码 %d]",
     "Quit": "退出",
+    "Speed trend": "速度趋势",
+    "Measures download and upload speed with networkQuality and charts the results over time.": "用 networkQuality 测下载和上传速度,并画出随时间的变化。",
+    "Run speed test": "开始测速",
+    "Testing… (about 20 s)": "测速中…(约 20 秒)",
+    "Download": "下载",
+    "Upload": "上传",
+    "Latest": "最近",
+    "Best": "最高",
+    "No speed results yet": "还没有测速结果",
+    "Could not read the speed results (macOS 12+ is required)": "无法读取测速结果(需要 macOS 12+)",
+    "Command palette": "命令面板",
+    "Search tools and pages…": "搜索工具和页面…",
+    "Open speed trend": "打开速度趋势",
     "Auto-check": "自动体检",
     "Runs Diagnose on a schedule, keeps every result in History and alerts when the verdict changes.": "按计划自动运行“智能诊断”,每次结果存入历史记录,结论变化时提醒。",
     "Every": "每隔",
@@ -387,6 +400,15 @@ main.mon>:not(#mon){display:none}main:not(.mon)>#mon{display:none}
 main.wf>:not(#wf){display:none}main:not(.wf)>#wf{display:none}
 main.wl>:not(#wl){display:none}main:not(.wl)>#wl{display:none}
 main.ac>:not(#ac){display:none}main:not(.ac)>#ac{display:none}
+main.sp>:not(#sp){display:none}main:not(.sp)>#sp{display:none}
+#sp{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}#sp .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+#sp .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+#sp .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 12px}#sp .stat small{display:block;color:var(--mut);font-size:11px}#sp .stat b{font:600 17px ui-monospace,Menlo,monospace}
+#spchart{width:100%;flex:1;min-height:220px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+#pal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-start;justify-content:center;z-index:11;padding-top:13vh}#pal.on{display:flex}
+#pal .box{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;width:min(560px,calc(100% - 24px));overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.4)}
+#palq{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--fg);font:inherit;font-size:16px;padding:14px 16px;outline:none;margin:0;min-width:0}
+#pall{max-height:52vh;overflow:auto;padding:6px}.pi{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:9px;cursor:pointer}.pi.sel{background:var(--acc);color:#fff}.pi .d{opacity:.65;font-size:12px;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
 #ac{display:flex;flex-direction:column;gap:12px;flex:1;min-height:0}#ac .row{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 #ac select,#hrep{padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--fg);font:inherit}
 #hrep{padding:4px 8px;font-size:12px}
@@ -455,6 +477,10 @@ kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);b
 <label class="chk"><input type="checkbox" id="wlnote" onchange="wlNotify(this)"><span data-i="Notify">Notify</span></label>
 <span class="fw"><input type="text" id="wladd" placeholder="example.com" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();wlAdd()}"><button class="btn sec" id="wladdbtn" onclick="wlAdd()" data-i="Add">Add</button></span><span id="wlmsg" style="color:var(--mut);font-size:12px"></span></div></div>
 <div class="tbl" id="wltbl"></div></section>
+<section id="sp"><div class="card"><h2>📉 <span data-i="Speed trend">Speed trend</span></h2><p data-i="Measures download and upload speed with networkQuality and charts the results over time.">Measures download and upload speed with networkQuality and charts the results over time.</p>
+<div class="row"><button class="btn" id="spgo" onclick="spRun()" data-i="Run speed test">Run speed test</button><span id="spmsg" style="color:var(--mut);font-size:12px"></span></div></div>
+<div class="stats"><div class="stat"><small data-i="Download">Download</small><b id="sp_dl">—</b></div><div class="stat"><small data-i="Upload">Upload</small><b id="sp_ul">—</b></div><div class="stat"><small><span data-i="Average">Average</span> ↓</small><b id="sp_avg">—</b></div><div class="stat"><small><span data-i="Best">Best</span> ↓</small><b id="sp_best">—</b></div></div>
+<canvas id="spchart"></canvas></section>
 <section id="ac"><div class="card"><h2>🔁 <span data-i="Auto-check">Auto-check</span></h2><p data-i="Runs Diagnose on a schedule, keeps every result in History and alerts when the verdict changes.">Runs Diagnose on a schedule, keeps every result in History and alerts when the verdict changes.</p>
 <div class="row"><button class="btn" id="acgo" onclick="acToggle()" data-i="Start">Start</button><button class="btn sec" id="acnow" onclick="acTick()" data-i="Run now">Run now</button>
 <label><span data-i="Every">Every</span><span class="fw"><select id="acint" onchange="acInterval(this.value)"><option value="1">1</option><option value="5" selected>5</option><option value="15">15</option><option value="30">30</option><option value="60">60</option></select><span data-i="minutes" style="align-self:center">minutes</span></span></label>
@@ -465,6 +491,7 @@ kbd{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--bg);b
 <input type="text" id="hq" oninput="renderHist()"><p class="note" data-i="Stored in this browser only (last 50 runs).">Stored in this browser only (last 50 runs).</p><div id="hlist"></div></aside>
 <div id="cmp" onclick="if(event.target===this)cmpClose()"><div class="box"><h3>⇄ <span data-i="Compare runs">Compare runs</span></h3><div id="cmpmeta"></div>
 <div class="row"><label class="chk"><input type="checkbox" id="cmpchg" checked onchange="cmpRender()"><span data-i="Only changes">Only changes</span></label><label class="chk"><input type="checkbox" id="cmpnum" checked onchange="cmpRender()"><span data-i="Ignore numbers">Ignore numbers</span></label><span id="cmpsum" class="sp"></span><button class="btn sec" onclick="cmpClose()" data-i="Close">Close</button></div><div id="cmpout"></div></div></div>
+<div id="pal" onclick="if(event.target===this)palClose()"><div class="box"><input type="text" id="palq" autocomplete="off" spellcheck="false" oninput="palSel=0;renderPal()"><div id="pall"></div></div></div>
 <div id="help" onclick="if(event.target===this)toggleHelp(false)"><div class="box"><h3 id="helph"></h3><table id="helpt"></table><p style="margin:12px 0 0;text-align:right"><button class="btn sec" onclick="toggleHelp(false)" data-i="Close">Close</button></p></div></div>
 <script>
 const TOKEN="__TOKEN__",CMDS=__CMDS__,ZH=__ZH__;let cur=null,ctl=null,raw="",idle=true,lang="en";
@@ -480,10 +507,11 @@ const INTRO='Pick a tool on the left and click “Run”. Start with “Quick ch
 CMDS.forEach(c=>{const b=document.createElement('button');b.innerHTML=`<span>${c.icon}</span><span class="nl"></span>`;b.onclick=()=>pick(c.id);b.id='b_'+c.id;$('#list').append(b)});
 {const b=document.createElement('button');b.id='b_mon';b.innerHTML='<span>📈</span><span class="nl"></span>';b.onclick=showMon;$('#list').append(b)}
 {const b=document.createElement('button');b.id='b_wf';b.innerHTML='<span>📶</span><span class="nl"></span>';b.onclick=showWf;$('#list').append(b)}
+{const b=document.createElement('button');b.id='b_sp';b.innerHTML='<span>📉</span><span class="nl"></span>';b.onclick=showSp;$('#list').append(b)}
 {const b=document.createElement('button');b.id='b_ac';b.innerHTML='<span>🔁</span><span class="nl"></span>';b.onclick=showAc;$('#list').append(b)}
 {const b=document.createElement('button');b.id='b_wl';b.innerHTML='<span>📋</span><span class="nl"></span>';b.onclick=showWl;$('#list').append(b)}
 const MAXS=120;let msamples=[],mtimer=null,mbusy=false;
-function leaveViews(){monStop();wfStop();wlStop();const m=document.querySelector('main');m.classList.remove('mon');m.classList.remove('wf');m.classList.remove('wl');m.classList.remove('ac')}
+function leaveViews(){monStop();wfStop();wlStop();const m=document.querySelector('main');m.classList.remove('sp');m.classList.remove('mon');m.classList.remove('wf');m.classList.remove('wl');m.classList.remove('ac')}
 function showMon(){leaveViews();const m=document.querySelector('main');m.classList.add('mon');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_mon'));cur=null;drawMon();renderFavs()}
 function monToggle(){if(mtimer){monStop()}else{monStart()}}
 function monStart(){if(mtimer)return;$('#mgo').textContent=t('Stop');mtimer=setInterval(monTick,1000);monTick()}
@@ -580,7 +608,48 @@ else{const css='body{font:14px -apple-system,"Segoe UI",sans-serif;max-width:920
 body='<!doctype html><html lang="'+(lang=='zh'?'zh-CN':'en')+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(t('NetDoctor report'))+'</title><style>'+css+'</style></head><body><h1>'+esc(t('NetDoctor report'))+'</h1><p class="m">'+esc(t('Generated'))+': '+esc(fmt(now))+'</p>'+
 rows.map((h,i)=>{const x=head(h);return '<h2>'+(i+1)+'. '+esc(x.title)+(x.args?' — <code>'+esc(x.args)+'</code>':'')+'</h2><p class="m">'+esc(fmt(h.ts))+' · '+esc(t(sl[h.state]||'Done'))+' · '+esc(h.sec)+' s</p><pre>'+ansi(h.out)+'</pre>'}).join('')+'</body></html>';mime='text/html';ext='html'}
 const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type:mime+';charset=utf-8'}));a.download='netdoctor-report-'+now.toISOString().slice(0,10)+'.'+ext;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
-window.addEventListener('resize',()=>{const m=document.querySelector('main');if(m.classList.contains('mon'))drawMon();if(m.classList.contains('wf'))drawWf()});
+/* ---- speed trend ---- */
+let spbusy=false;
+function parseSpeed(out){const o=stripAnsi(out),conv=(v,u)=>{v=parseFloat(v);u=(u||'M').toUpperCase()[0];return u=='G'?v*1000:u=='K'?v/1000:v};
+const d=o.match(/Downlink capacity:\s*([\d.]+)\s*([KMG])bps/i),u=o.match(/Uplink capacity:\s*([\d.]+)\s*([KMG])bps/i);
+return{dl:d?conv(d[1],d[2]):null,ul:u?conv(u[1],u[2]):null}}
+function spData(){return hist.filter(h=>h.cmd=='speed').map(h=>Object.assign({ts:h.ts},parseSpeed(h.out))).filter(x=>x.dl!==null||x.ul!==null).sort((a,b)=>a.ts-b.ts).slice(-60)}
+function showSp(){leaveViews();document.querySelector('main').classList.add('sp');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_sp'));cur=null;drawSp()}
+async function spRun(){if(spbusy)return;spbusy=true;$('#spgo').disabled=true;$('#spmsg').textContent=t('Testing… (about 20 s)');const t0=Date.now();let out='',st='ok';
+try{const r=await fetch('/run',{method:'POST',headers:{'X-Token':TOKEN},body:JSON.stringify({cmd:'speed',values:{},admin:false,lang})});if(!r.ok)st='failed';out=await r.text()}catch(e){st='failed';out=String(e)}
+const v=parseSpeed(out);if(v.dl===null&&v.ul===null)st='failed';
+addHist({cmd:'speed',values:{},admin:false,state:st,sec:+((Date.now()-t0)/1000).toFixed(1),out});
+spbusy=false;$('#spgo').disabled=false;$('#spmsg').textContent=st=='failed'?t('Could not read the speed results (macOS 12+ is required)'):'';drawSp()}
+function drawSp(){const d=spData(),f=x=>x===null||x===undefined?'—':(x>=100?x.toFixed(0):x.toFixed(1))+' Mbps',last=d[d.length-1],dls=d.map(x=>x.dl).filter(x=>x!==null);
+$('#sp_dl').textContent=last?f(last.dl):'—';$('#sp_ul').textContent=last?f(last.ul):'—';$('#sp_avg').textContent=dls.length?f(dls.reduce((a,b)=>a+b,0)/dls.length):'—';$('#sp_best').textContent=dls.length?f(Math.max(...dls)):'—';
+const cv=$('#spchart');if(!cv.clientWidth)return;const dpr=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;cv.width=w*dpr;cv.height=h*dpr;const g=cv.getContext('2d');g.scale(dpr,dpr);
+const cs=getComputedStyle(document.documentElement),mut=cs.getPropertyValue('--mut').trim(),line=cs.getPropertyValue('--line').trim(),acc=cs.getPropertyValue('--acc').trim();
+g.font='12px -apple-system,sans-serif';
+if(!d.length){g.fillStyle=mut;g.textAlign='center';g.fillText(t('No speed results yet'),w/2,h/2);return}
+const L=52,T=14,B=26,R=14,pw=w-L-R,ph=h-T-B,top=Math.max(10,...d.map(x=>Math.max(x.dl||0,x.ul||0)))*1.15,X=i=>d.length==1?L+pw/2:L+pw*i/(d.length-1),Y=v=>T+ph-ph*v/top;
+g.lineWidth=1;g.textAlign='left';for(let i=0;i<=4;i++){const y=T+ph-ph*i/4;g.strokeStyle=line;g.beginPath();g.moveTo(L,y);g.lineTo(w-R,y);g.stroke();g.fillStyle=mut;g.fillText((top*i/4).toFixed(0),6,y+4)}
+const series=(key,color)=>{g.strokeStyle=color;g.fillStyle=color;g.lineWidth=2;g.lineJoin='round';g.beginPath();let pen=false;d.forEach((x,i)=>{if(x[key]===null){pen=false;return}if(pen)g.lineTo(X(i),Y(x[key]));else{g.moveTo(X(i),Y(x[key]));pen=true}});g.stroke();d.forEach((x,i)=>{if(x[key]!==null){g.beginPath();g.arc(X(i),Y(x[key]),3.5,0,7);g.fill()}})};
+series('ul','#e6a700');series('dl',acc);
+g.fillStyle=mut;g.textAlign='left';g.fillText(new Date(d[0].ts).toLocaleString(lang=='zh'?'zh-CN':'en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}),L,h-8);
+g.textAlign='right';g.fillText(new Date(d[d.length-1].ts).toLocaleString(lang=='zh'?'zh-CN':'en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}),w-R,h-8);
+g.textAlign='left';g.fillStyle=acc;g.fillText('● '+t('Download'),L+8,T+14);g.fillStyle='#e6a700';g.fillText('● '+t('Upload'),L+110,T+14)}
+/* ---- command palette (Ctrl/Cmd+K) ---- */
+let palSel=0,palItems=[];
+function palAll(){const pg=(k,icon,fn,alt)=>({icon,label:t(k),alt:k+' '+alt,d:'',run:fn});
+return CMDS.map(c=>({icon:c.icon,label:t(c.label),alt:c.label+' '+c.id+' '+c.desc+' '+t(c.desc),d:t(c.desc),run:()=>pick(c.id)})).concat([
+pg('Live latency','📈',showMon,'monitor ping latency 延迟 监控'),pg('Wi-Fi signal','📶',showWf,'wifi signal rssi 信号'),pg('Watchlist','📋',showWl,'favorites hosts 收藏 监控列表'),
+pg('Auto-check','🔁',showAc,'schedule diagnose 自动 体检 定时'),pg('Speed trend','📉',showSp,'speed bandwidth history chart 测速 带宽 趋势'),
+pg('History','🕘',()=>toggleHist(true),'runs past 历史 记录'),pg('Keyboard shortcuts','⌨',()=>toggleHelp(true),'help keys 快捷键 帮助'),
+pg('Switch language','🌐',toggleLang,'english chinese 中文 语言'),pg('Switch theme','🌓',toggleTheme,'dark light 深色 浅色 主题')])}
+function palFilter(){const q=$('#palq').value.trim().toLowerCase(),all=palAll();if(!q)return all.slice(0,14);const tk=q.split(/\s+/);
+return all.map(i=>{const hay=(i.label+' '+i.alt).toLowerCase();if(!tk.every(x=>hay.includes(x)))return null;const l=i.label.toLowerCase();return{i,sc:l.startsWith(q)?0:l.includes(q)?1:2}}).filter(Boolean).sort((a,b)=>a.sc-b.sc).map(x=>x.i).slice(0,14)}
+function renderPal(){palItems=palFilter();palSel=Math.max(0,Math.min(palSel,palItems.length-1));$('#palq').placeholder=t('Search tools and pages…');
+$('#pall').innerHTML=palItems.length?palItems.map((i,n)=>`<div class="pi${n==palSel?' sel':''}" onmousemove="if(palSel!=${n}){palSel=${n};renderPal()}" onclick="palRun(${n})"><span>${i.icon}</span><span>${esc(i.label)}</span><span class="d">${esc(i.d||'')}</span></div>`).join(''):`<div style="padding:14px;color:var(--mut)">${esc(t('No matches'))}</div>`;
+const el=$('#pall .sel');if(el)el.scrollIntoView({block:'nearest'})}
+function palOpen(){$('#pal').classList.add('on');$('#palq').value='';palSel=0;renderPal();$('#palq').focus()}
+function palClose(){$('#pal').classList.remove('on');$('#palq').blur()}
+function palRun(n){const i=palItems[n];palClose();if(i)setTimeout(i.run,0)}
+window.addEventListener('resize',()=>{const m=document.querySelector('main');if(m.classList.contains('sp'))drawSp();if(m.classList.contains('mon'))drawMon();if(m.classList.contains('wf'))drawWf()});
 /* ---- Wi-Fi signal ---- */
 let wsamples=[],wrun=false,wto=null,wmeta={};
 function showWf(){leaveViews();const m=document.querySelector('main');m.classList.add('wf');document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.id=='b_wf'));cur=null;drawWf();renderFavs()}
@@ -650,7 +719,7 @@ hist.sort((a,b)=>b.ts-a.ts);hist=hist.slice(0,HMAX);saveHist();
 (Array.isArray(d.favorites)?d.favorites:[]).forEach(v=>{if(typeof v=='string'&&v.trim()&&v.length<=300&&!favs.includes(v)&&favs.length<FMAX){favs.push(v);nf++}});saveFavs();
 renderHist();renderFavs();$('#st').textContent=t('Imported %s run(s), %s favorite(s)').replace('%s',nh).replace('%s',nf)}
 catch(e){$('#st').textContent=t('Import failed: invalid file')}}
-function applyLang(){$('#b_mon .nl').textContent=t('Live latency');$('#b_wf .nl').textContent=t('Wi-Fi signal');$('#b_wl .nl').textContent=t('Watchlist');acBadge();renderAc();$('#wlgo').textContent=wlrun?t('Stop'):t('Start');if(!wlrun)document.title=t('NetDoctor Network Diagnostics');if(wrun)$('#wgo').textContent=t('Stop');else $('#wgo').textContent=t('Start');if($('#cmp').classList.contains('on'))cmpRender();if(!mtimer)$('#mgo').textContent=t('Start');else $('#mgo').textContent=t('Stop');document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
+function applyLang(){$('#b_mon .nl').textContent=t('Live latency');$('#b_wf .nl').textContent=t('Wi-Fi signal');$('#b_wl .nl').textContent=t('Watchlist');$('#b_sp .nl').textContent=t('Speed trend');if($('#pal').classList.contains('on'))renderPal();acBadge();renderAc();$('#wlgo').textContent=wlrun?t('Stop'):t('Start');if(!wlrun)document.title=t('NetDoctor Network Diagnostics');if(wrun)$('#wgo').textContent=t('Stop');else $('#wgo').textContent=t('Start');if($('#cmp').classList.contains('on'))cmpRender();if(!mtimer)$('#mgo').textContent=t('Start');else $('#mgo').textContent=t('Stop');document.documentElement.lang=lang=='zh'?'zh-CN':'en';document.title=t('NetDoctor Network Diagnostics');
 document.querySelectorAll('[data-i]').forEach(e=>e.textContent=t(e.dataset.i));
 CMDS.forEach(c=>{$('#b_'+c.id+' .nl').textContent=t(c.label)});
 $('#lang').textContent='🌐 '+(lang=='zh'?'English':'中文');if(idle)$('#out').textContent=t(INTRO);
@@ -702,7 +771,7 @@ function clearHist(){if(hist.length&&confirm(t('Clear all history?'))){hist=[];h
 const MOD=/Mac|iPhone|iPad/.test(navigator.platform)?'⌘':'Ctrl';
 const SC=[[[MOD+' + Enter'],'Run the current tool'],[['Esc'],'Stop a running command; otherwise leave the input box'],
 [['j','↓'],'Previous / next tool'],[['1'],'Jump to tool 1–9'],[['/'],'Focus the first input'],[['Enter'],'Run (when not typing)'],
-[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['m'],'Open live latency'],[['w'],'Open Wi-Fi signal'],[['f'],'Open Watchlist'],[['a'],'Open Auto-check'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
+[['c'],'Copy output'],[['s'],'Save output'],[['l'],'Switch language'],[['t'],'Switch theme'],[['m'],'Open live latency'],[['w'],'Open Wi-Fi signal'],[['f'],'Open Watchlist'],[['a'],'Open Auto-check'],[['p'],'Open speed trend'],[[MOD+' + K'],'Command palette'],[['h'],'Show / hide history'],[['?'],'Show / hide this help']];
 SC[2][0]=['j / ↓  ·  k / ↑'];SC[3][0]=['1 … 9'];
 function toggleHelp(on){const h=$('#help');const open=on===undefined?!h.classList.contains('on'):on;
 if(open){$('#helph').textContent='⌨ '+t('Keyboard shortcuts');$('#helpt').innerHTML=SC.map(([k,d])=>`<tr><td>${k.map(x=>'<kbd>'+x.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</kbd>').join('')}</td><td>${t(d)}</td></tr>`).join('')}
@@ -710,6 +779,9 @@ h.classList.toggle('on',open)}
 function go(delta,abs){const i=CMDS.findIndex(c=>c.id==(cur&&cur.id));const n=abs!==undefined?abs:Math.max(0,Math.min(CMDS.length-1,i+delta));if(CMDS[n]){pick(CMDS[n].id,false,true);$('#b_'+CMDS[n].id).scrollIntoView({block:'nearest'})}}
 document.addEventListener('keydown',e=>{
 const typing=/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)&&e.target.type!='checkbox';
+const palIsOpen=$('#pal').classList.contains('on');
+if((e.metaKey||e.ctrlKey)&&(e.key=='k'||e.key=='K')){e.preventDefault();palIsOpen?palClose():palOpen();return}
+if(palIsOpen){if(e.key=='Escape')palClose();else if(e.key=='ArrowDown'){palSel=Math.min(palItems.length-1,palSel+1);renderPal()}else if(e.key=='ArrowUp'){palSel=Math.max(0,palSel-1);renderPal()}else if(e.key=='Enter')palRun(palSel);else return;e.preventDefault();return}
 const helpOpen=$('#help').classList.contains('on'),histOpen=$('#hist').classList.contains('on'),cmpIsOpen=$('#cmp').classList.contains('on');
 if(e.key=='Escape'){if(cmpIsOpen){cmpClose()}else if(helpOpen){toggleHelp(false)}else if(histOpen&&$('#stop').disabled){toggleHist(false)}else if(!$('#stop').disabled){stop()}else if(typing){e.target.blur()}else return;e.preventDefault();return}
 if((e.metaKey||e.ctrlKey)&&e.key=='Enter'){if(!$('#run').disabled){e.preventDefault();run()}return}
@@ -730,6 +802,7 @@ else if(k=='m')showMon();
 else if(k=='w')showWf();
 else if(k=='f')showWl();
 else if(k=='a')showAc();
+else if(k=='p')showSp();
 else if(k=='h')toggleHist();
 else if(k=='l')toggleLang();
 else if(k=='t')toggleTheme();

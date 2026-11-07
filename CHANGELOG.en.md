@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 ## [Unreleased]
 
 ### Added
+- Web UI: a **command palette**. Press `⌘/Ctrl+K` and type a name, a description or an English / Chinese keyword to search and jump to any tool or page (including live latency, Wi-Fi signal, watchlist, auto-check, history and the shortcut help); it can also switch language and theme. `↑` / `↓` select, `Enter` opens, `Esc` closes.
+- Web UI: a **Speed trend** page, opened from the 📉 sidebar entry or with `p`. Run speed test measures with `networkQuality` and stores the result in History; download / upload speeds are parsed from the history and charted over time, with the latest, average and best download speed (Gbps / Kbps are converted to Mbps). A run whose output cannot be read is reported instead of being plotted as a data point.
 - Web UI: an **Auto-check** page, opened from the 🔁 sidebar entry or with `a`. It runs Diagnose in the background every 1 / 5 / 15 / 30 / 60 minutes and keeps going while you use other pages (the sidebar shows ●). Each result is stored in History, and a timeline shows Healthy / Unstable / Problem with the verdict; View opens the full output. With **Notify** ticked it sends a desktop notification when the verdict changes (for example from healthy to a DNS problem, or back) and the tab title shows ⚠ while there is a problem. Handy for intermittent network trouble.
 - Web UI: a **Report…** menu in the history panel exports entries as **Markdown** or as a self-contained **HTML** report (colours kept, all content escaped, light / dark aware). If entries are ticked only those are exported, otherwise the current search result.
 

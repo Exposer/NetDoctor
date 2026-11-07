@@ -23,6 +23,8 @@ A `Brewfile` is included to install common third-party tools (mtr, nmap, iperf3,
 ```
 Pick a tool on the left, fill in the parameters, click "Run". The UI follows your browser language; the 🌐 button at the bottom left switches between English and 中文. The theme follows the system appearance by default; the 🖥/☀️/🌙 button next to it lets you pick Auto / Light / Dark. Output streams live and can be stopped, copied, saved or copied as Markdown (handy for tickets and chat).
 Features that need administrator rights (connections/listeners, flush DNS, and the full Wi-Fi/route details) show the system password prompt.
+Command palette: press `⌘/Ctrl+K` and type a keyword (English or Chinese) to search and jump to any tool or page.
+Speed trend: open the 📉 **Speed trend** entry (or press `p`) and click Run speed test; results are charted as download / upload speed over time.
 Auto-check: open the 🔁 **Auto-check** entry (or press `a`) to run Diagnose on a schedule in the background and get notified when the verdict changes — handy for intermittent problems.
 Reports: the **Report…** menu in the history panel exports Markdown or a self-contained HTML report you can send to a colleague or attach to a ticket.
 Watchlist: open the 📋 **Watchlist** entry (or press `f`) to ping every favorite and see its status and trend; tick **Notify** for desktop notifications when a host goes down or recovers (the tab title shows `⚠ N`).
@@ -31,7 +33,7 @@ Favorites: the ☆ next to a host / domain / URL input saves it; click a chip to
 Compare: tick two runs in the history panel and press **Compare** for a line diff. History can be **Export**ed / **Import**ed as JSON (favorites included).
 Live latency: open the 📈 **Live latency** entry (or press `m`) to ping a target once a second and watch a chart of latency, jitter and loss.
 History: every run is saved automatically (latest 50, full output included). Open it with the 🕘 sidebar button or `h`; search, view, **Re-run** or delete entries. It is stored only in your browser. The web UI listens on port 8765 by default (a free port is used if it is busy); change it with `--port`.
-Keyboard shortcuts (press `?` for the full list): `⌘/Ctrl+Enter` run, `Esc` stop, `j`/`k` change tool, `1`–`9` jump, `/` focus input, `c` copy, `s` save, `m` live latency, `w` Wi-Fi signal, `f` watchlist, `a` auto-check, `h` history, `l` language, `t` theme.
+Keyboard shortcuts (press `?` for the full list): `⌘/Ctrl+Enter` run, `Esc` stop, `j`/`k` change tool, `1`–`9` jump, `/` focus input, `c` copy, `s` save, `m` live latency, `w` Wi-Fi signal, `f` watchlist, `a` auto-check, `p` speed trend, `⌘/Ctrl+K` command palette, `h` history, `l` language, `t` theme.
 Without a terminal, steps that need `sudo` never block on a password prompt: use the "Administrator rights" option to get the system password dialog, otherwise they are skipped or degrade (e.g. mtr falls back to traceroute).
 Security: listens on 127.0.0.1 only, uses a random token, checks the Host header, whitelists arguments, and never passes them through a shell.
 
