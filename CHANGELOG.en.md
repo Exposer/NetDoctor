@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Fixed
+- `NetDoctorApp/build-app.sh`: when built inside an iCloud-synced folder (`~/Documents`, `~/Desktop`) the system adds `com.apple.FinderInfo` to the app, `codesign` fails, and the script swallowed that with `|| true`, leaving an app with an invalid signature; it now clears the extended attributes, verifies the signature after signing, and warns with a fix when it is invalid (build outside the synced folder, or re-sign a copy).
+
 ## [1.2.0] - 2026-11-07
 
 ### Added

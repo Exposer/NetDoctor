@@ -38,6 +38,14 @@ X
 # Keep the bundle version in sync with the CLI (netdoctor VERSION=...)
 VER=$(sed -n 's/^VERSION=//p' ../netdoctor | head -1)
 sed -i '' "s/__VER__/${VER:-1.0}/g" "$APP/Contents/Info.plist"
-codesign --force --deep -s - "$APP" >/dev/null 2>&1 || true
+# Ad-hoc sign, then verify. A failure used to be swallowed silently. The usual cause is a folder synced by
+# iCloud / File Provider (~/Documents, ~/Desktop): it keeps adding com.apple.FinderInfo, which codesign rejects.
+xattr -cr "$APP" 2>/dev/null || true
+if ! codesign --force --deep -s - "$APP" >/dev/null 2>&1 || ! codesign --verify --deep --strict "$APP" >/dev/null 2>&1; then
+  echo "warning: $APP has no valid code signature. This is usually caused by a synced folder (iCloud Drive," >&2
+  echo "         ~/Documents, ~/Desktop). It still runs locally, but do not distribute it. To fix, build in a" >&2
+  echo "         folder outside iCloud, or re-sign a copy:" >&2
+  echo "           ditto --norsrc --noextattr $APP /tmp/$APP && xattr -cr /tmp/$APP && codesign --force --deep -s - /tmp/$APP" >&2
+fi
 echo "Built $(pwd)/$APP"
 echo "Run: open $APP    Install: cp -R $APP /Applications/"

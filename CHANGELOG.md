@@ -6,6 +6,9 @@
 
 ## [未发布]
 
+### 修复
+- `NetDoctorApp/build-app.sh`:在 iCloud 同步的目录(`~/Documents`、`~/Desktop`)里构建时,系统会给 App 加上 `com.apple.FinderInfo`,`codesign` 因此失败,而脚本用 `|| true` 把失败悄悄吞掉,得到的是签名无效的 App;现在会先清除扩展属性,签名后再校验,失败时给出警告和修复办法(在同步目录之外构建,或复制出去重新签名)。
+
 ## [1.2.0] - 2026-11-07
 
 ### 新增
