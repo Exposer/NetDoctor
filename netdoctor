@@ -628,9 +628,15 @@ cmd_tls() {
   local h=${1:-}; local p=${2:-443}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor tls <host> [port]" "用法: netdoctor tls <主机> [端口]")"; return 1; }
   # s_client 默认不校验主机名 (证书是别的域名的也会显示 Verification: OK)。OpenSSL 支持 -verify_hostname;
   # 系统自带的 LibreSSL 不支持, 那种情况下下面自己比对 SAN。
-  local vh="" native=0
-  case "$h" in *[!0-9.]*) if openssl s_client -help 2>&1 | grep -q -- -verify_hostname; then vh="-verify_hostname $h"; native=1; fi;; esac
-  local out; out=$(echo | openssl s_client -connect "$h:$p" -servername "$h" $vh 2>&1)
+  local vh="" native=0 isip=0 target="$h:$p" sni="-servername $h"
+  case "$h" in
+    # IPv6 字面量: 不该发 SNI; OpenSSL 的 -connect 要方括号, 系统自带的 LibreSSL 不认方括号 (直接写 ::1:443)
+    *:*) isip=1; sni=""; openssl s_client -help 2>&1 | grep -q -- -verify_hostname && target="[$h]:$p";;
+    *[!0-9.]*) ;;
+    *) isip=1;;
+  esac
+  if [ "$isip" = 0 ] && openssl s_client -help 2>&1 | grep -q -- -verify_hostname; then vh="-verify_hostname $h"; native=1; fi
+  local out; out=$(echo | openssl s_client -connect "$target" $sni $vh 2>&1)
   echo "$out" | grep -E 'Protocol|Cipher|Verif|verify|depth=|errno|error' | head -12
   local cert; cert=$(echo "$out" | openssl x509 2>/dev/null)
   if [ -z "$cert" ]; then bad "$(L "No certificate received ($h:$p unreachable or not a TLS service)" "未取得证书 ($h:$p 不可达或非 TLS 服务)")"; return 1; fi
@@ -639,8 +645,8 @@ cmd_tls() {
   echo "$cert" | openssl x509 -noout -subject -issuer -dates
   local san; san=$(echo "$cert" | openssl x509 -noout -text | grep -A1 'Subject Alternative Name' | sed 's/^ */SAN: /;/Subject Alternative/d')
   echo "$san"
-  if [ "$native" = 0 ]; then
-    case "$h" in *[!0-9.]*)
+  if [ "$native" = 0 ] && [ "$isip" = 0 ]; then
+    case "$h" in *)
       local names; names=$(echo "$san" | tr ',' '\n' | sed -n 's/^[ ]*\(SAN: \)\{0,1\}DNS://p')
       [ -z "$names" ] && names=$(echo "$cert" | openssl x509 -noout -subject | sed -n 's/.*CN *= *\([^,/]*\).*/\1/p')
       # shellcheck disable=SC2086
