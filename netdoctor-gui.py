@@ -172,6 +172,7 @@ ZH = {
     "SNR": "信噪比",
     "Channel": "信道",
     "Rate": "速率",
+    "Reading Wi-Fi… (this can take 10+ seconds on some Macs)": "正在读取 Wi-Fi…(部分 Mac 需要十几秒)",
     "Wi-Fi info unavailable": "无法获取 Wi-Fi 信息",
     "Reads the link every few seconds (macOS only). Rule of thumb: > −60 dBm good, −70 fair, < −75 poor.": "每隔几秒读取一次(仅 macOS)。经验值:> −60 dBm 好,−70 一般,< −75 差。",
     "Open Wi-Fi signal": "打开 Wi-Fi 信号",
@@ -674,7 +675,7 @@ function wfToggle(){wrun?wfStop():wfStart()}
 function wfStart(){if(wrun)return;wrun=true;$('#wgo').textContent=t('Stop');wfLoop()}
 function wfStop(){wrun=false;clearTimeout(wto);$('#wgo').textContent=t('Start')}
 function wfClear(){wsamples=[];wmeta={};$('#wmsg').textContent='';drawWf()}
-async function wfLoop(){if(!wrun)return;let d=null;try{const r=await fetch('/wifi',{method:'POST',headers:{'X-Token':TOKEN},body:'{}'});d=await r.json()}catch(e){d={error:'unavailable'}}
+async function wfLoop(){if(!wrun)return;if(!wsamples.length)$('#wmsg').textContent=t('Reading Wi-Fi… (this can take 10+ seconds on some Macs)');let d=null;try{const r=await fetch('/wifi',{method:'POST',headers:{'X-Token':TOKEN},body:'{}'});d=await r.json()}catch(e){d={error:'unavailable'}}
 if(!wrun)return;if(d.error){$('#wmsg').textContent=t('Wi-Fi info unavailable')+' ('+d.error+')';wsamples.push(null)}else{$('#wmsg').textContent=d.ssid||'';wmeta=d;wsamples.push({r:d.rssi,n:d.noise})}
 if(wsamples.length>MAXS)wsamples.shift();drawWf();wto=setTimeout(wfLoop,1500)}
 function drawWf(){const last=[...wsamples].reverse().find(x=>x);const q=v=>v>-60?'#2fa84f':v>-70?'#c98a00':'#d1342a';
