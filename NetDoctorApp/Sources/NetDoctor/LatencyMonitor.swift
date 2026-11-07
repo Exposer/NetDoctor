@@ -10,7 +10,8 @@ struct Sample: Identifiable {
 /// Pings the target once a second and keeps the latest N samples.
 final class LatencyMonitor: ObservableObject {
     @Published var samples: [Sample] = []
-    @Published var target = "1.1.1.1"
+    // Samples of the old target must not be mixed into the chart of the new one.
+    @Published var target = "1.1.1.1" { didSet { if target != oldValue { samples.removeAll() } } }
     @Published var running = false
 
     private var timer: Timer?
@@ -70,6 +71,8 @@ final class LatencyMonitor: ObservableObject {
                 guard let self = self else { return }
                 self.inFlight = false
                 guard self.running else { return }
+                // The target was edited while this ping was in flight: the result belongs to the old target.
+                guard self.target.trimmingCharacters(in: .whitespaces) == host else { return }
                 self.samples.append(Sample(time: Date(), ms: ms))
                 if self.samples.count > self.maxSamples { self.samples.removeFirst(self.samples.count - self.maxSamples) }
             }
