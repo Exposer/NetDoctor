@@ -344,7 +344,7 @@ skipped() { printf '[ -- ] %s\n' "$(L "$1/6 $2: skipped (an earlier step failed)
 
 cmd_doctor() {
   local ifc gw verdict="" l avg ip_ok="" ip dns_ok dns_pub http_ok="" code u px vpn steps="" detail
-  local FAILS=0 WARNS=0
+  local FAILS=0 WARNS=0 skew=""
   hdr "$(L "Diagnosis" "智能诊断")"
   # 1. link
   ifc=$(default_if); gw=$(gateway)
@@ -397,7 +397,20 @@ cmd_doctor() {
       case "$code" in 2*|3*) http_ok=$u; break;; esac
     done
     if [ -n "$http_ok" ]; then ok "$(L "5/6 HTTPS: $http_ok answers" "5/6 HTTPS: $http_ok 可访问")"
-    else bad "$(L "5/6 HTTPS: no test site answers although DNS and IP work" "5/6 HTTPS: DNS 与 IP 均正常, 但测试站点都打不开")"; FAILS=$((FAILS+1)); verdict=http; fi
+    else
+      # HTTPS 打不开: 先分辨是不是强制门户 (登录页), 再看是不是本机时钟错得离谱 (证书会校验失败), 都不是才是泛泛的 http
+      FAILS=$((FAILS+1)); captive_probe; skew=""
+      if [ "$CAP_STATE" = portal ]; then
+        bad "$(L "5/6 HTTPS: no test site answers, and plain HTTP returns a login / redirect page (captive portal)" "5/6 HTTPS: 测试站点都打不开, 而且普通 HTTP 返回的是登录 / 跳转页 (强制门户)")"; verdict=captive
+      else
+        skew=$(clock_skew)
+        if [ -n "$skew" ] && [ "${skew#-}" -gt 300 ]; then
+          bad "$(L "5/6 HTTPS: no test site answers, and this Mac's clock is off by about $(human_secs "$skew")" "5/6 HTTPS: 测试站点都打不开, 而且这台 Mac 的时钟偏差约 $(human_secs "$skew")")"; verdict=clock
+        else
+          bad "$(L "5/6 HTTPS: no test site answers although DNS and IP work" "5/6 HTTPS: DNS 与 IP 均正常, 但测试站点都打不开")"; verdict=http
+        fi
+      fi
+    fi
   else skipped 5 HTTPS HTTPS; fi
   # 6. proxy / VPN (informational)
   px=$(scutil --proxy 2>/dev/null | awk '/HTTPEnable : 1|HTTPSEnable : 1|SOCKSEnable : 1/{n++} END{print n+0}')
@@ -428,6 +441,13 @@ netdoctor lan|$(L "See whether other devices are reachable" "看看其他设备�
               steps="netdoctor dnsbench|$(L "Find a faster, working DNS server" "找出更快且可用的 DNS 服务器")
 netdoctor fixdns|$(L "Flush the DNS cache" "刷新 DNS 缓存")
 netdoctor dns apple.com|$(L "Compare what each server answers" "对比各 DNS 服务器的应答")";;
+    captive)  bad "$(L "A captive portal (a Wi-Fi login page) is blocking web access." "被强制门户 (Wi-Fi 登录页) 拦住了, 网页打不开。")"
+              steps="netdoctor captive|$(L "Show the login page address" "查看登录页地址")
+-|$(L "Open http://captive.apple.com in a browser and sign in to the Wi-Fi" "用浏览器打开 http://captive.apple.com, 登录这个 Wi-Fi")";;
+    clock)    bad "$(L "This Mac's clock is wrong by about $(human_secs "$skew"), so HTTPS certificates fail to validate." "这台 Mac 的时钟偏差约 $(human_secs "$skew"), 导致 HTTPS 证书校验失败。")"
+              steps="-|$(L "System Settings → General → Date & Time: turn on Set time and date automatically" "系统设置 → 通用 → 日期与时间: 打开“自动设置时间和日期”")
+sudo sntp -sS time.apple.com|$(L "Or sync the clock right now from a terminal" "或在终端里立刻同步时间")
+netdoctor http https://www.apple.com|$(L "Then check HTTPS again" "然后再确认 HTTPS")";;
     http)     bad "$(L "IP and DNS work, but web access fails (proxy, firewall, captive portal or TLS interception)." "IP 与 DNS 正常, 但网页访问失败 (代理、防火墙、认证网关或 TLS 拦截)。")"
               steps="netdoctor proxy|$(L "Check proxy and VPN settings" "检查代理和 VPN 设置")
 netdoctor http https://www.apple.com|$(L "See which phase fails" "看是哪个阶段失败")
@@ -509,19 +529,50 @@ cmd_ipv6() {
   return 0
 }
 
+# 强制门户探测。结果放在全局变量 CAP_STATE (ok | portal | offline) 和 CAP_REDIR (登录页地址),
+# 不用 $(...) 返回, 因为子 shell 会丢掉变量。cmd_captive 和 doctor 共用。
+captive_probe() {
+  local u=http://captive.apple.com/hotspot-detect.html body
+  CAP_STATE=offline; CAP_REDIR=""
+  body=$(curl -s -m 8 "$u" 2>/dev/null); CAP_REDIR=$(curl -s -m 8 -o /dev/null -w '%{redirect_url}' "$u" 2>/dev/null)
+  [ -z "$body" ] && [ -z "$CAP_REDIR" ] && return 0
+  # Apple 的应答是 <HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>; 只认它, 不能是页面里随便出现 "Success" 字样
+  if echo "$body" | grep -qi '<title>Success</title>' && [ -z "$CAP_REDIR" ]; then CAP_STATE=ok; else CAP_STATE=portal; fi
+}
+
+# 本机时钟与服务器时间的差 (秒, 本机减服务器; 取不到时输出为空)。用 HTTP 响应的 Date 头, 不依赖 NTP 端口。
+# 必须用动态站点: captive.apple.com 是缓存一年的静态页, 它的 Date 是缓存生成时间 (可能落后好几个小时);
+# 有 Age 头时把它加上。用明文 HTTP (时钟错时 HTTPS 会因证书失败, 而这里只需要读时间)
+clock_skew() {
+  local u h d age srv now
+  for u in http://www.apple.com http://www.baidu.com http://www.cloudflare.com; do
+    h=$(curl -sI -m 6 "$u" 2>/dev/null | tr -d '\r')
+    d=$(echo "$h" | awk -F': ' 'tolower($1)=="date"{print $2; exit}')
+    [ -z "$d" ] && continue
+    age=$(echo "$h" | awk -F': ' 'tolower($1)=="age"{print $2; exit}'); age=${age//[^0-9]/}
+    srv=$(LC_ALL=C date -u -j -f '%a, %d %b %Y %H:%M:%S GMT' "$d" +%s 2>/dev/null) || continue
+    now=$(date +%s); echo $((now - srv - ${age:-0})); return 0
+  done
+}
+
+human_secs() { # 把秒数 (取绝对值) 写成 “N 分钟 / N 小时 / N 天”
+  local n=${1#-}
+  if [ "$n" -ge 172800 ]; then echo "$((n/86400)) $(L "days" "天")"
+  elif [ "$n" -ge 7200 ]; then echo "$((n/3600)) $(L "hours" "小时")"
+  else echo "$((n/60)) $(L "minutes" "分钟")"; fi
+}
+
 cmd_captive() {
   hdr "$(L "Captive portal check" "强制门户检测")"
-  local u=http://captive.apple.com/hotspot-detect.html body redir
-  body=$(curl -s -m 8 "$u" 2>/dev/null); redir=$(curl -s -m 8 -o /dev/null -w '%{redirect_url}' "$u" 2>/dev/null)
-  if [ -z "$body" ] && [ -z "$redir" ]; then bad "$(L "Could not reach captive.apple.com (no connectivity?)" "无法访问 captive.apple.com (没有网络?)")"; return 1; fi
-  # Apple 的应答是 <HTML><HEAD><TITLE>Success</TITLE></HEAD><BODY>Success</BODY></HTML>; 只认它, 不能是页面里随便出现 "Success" 字样
-  if echo "$body" | grep -qi '<title>Success</title>' && [ -z "$redir" ]; then ok "$(L "No captive portal: direct internet access" "没有强制门户, 可直接上网")"
-  else
-    warn "$(L "Captive portal suspected: got a login/redirect page instead of the expected reply" "疑似强制门户: 收到的是登录/跳转页, 而不是预期应答")"
-    [ -n "$redir" ] && echo "   → $redir"
-    echo "$(L "Open any http:// page (e.g. http://captive.apple.com) in a browser to reach the login page." "用浏览器打开任意 http:// 网址 (如 http://captive.apple.com) 即可进入登录页。")"
-    return 1
-  fi
+  captive_probe
+  case "$CAP_STATE" in
+    offline) bad "$(L "Could not reach captive.apple.com (no connectivity?)" "无法访问 captive.apple.com (没有网络?)")"; return 1;;
+    ok) ok "$(L "No captive portal: direct internet access" "没有强制门户, 可直接上网")";;
+    *)  warn "$(L "Captive portal suspected: got a login/redirect page instead of the expected reply" "疑似强制门户: 收到的是登录/跳转页, 而不是预期应答")"
+        [ -n "$CAP_REDIR" ] && echo "   → $CAP_REDIR"
+        echo "$(L "Open any http:// page (e.g. http://captive.apple.com) in a browser to reach the login page." "用浏览器打开任意 http:// 网址 (如 http://captive.apple.com) 即可进入登录页。")"
+        return 1;;
+  esac
 }
 
 cmd_quick() {
