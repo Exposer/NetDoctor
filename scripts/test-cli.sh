@@ -279,6 +279,40 @@ lcheck "leak: IPsec VPN counts"    ipsec0 ipsec0 0 $'10.8.0.1 ipsec0\n'         
 lcheck "leak: local resolver is not a leak" utun4 utun4 1 $'127.0.0.1 lo0\n'             "resolver on this Mac" 0
 lcheck "leak: local resolver ::1"           utun4 utun4 1 $'::1 lo0\n'                   "resolver on this Mac" 0
 lcheck "leak: a real leak is still found next to a local resolver" utun4 utun4 1 $'127.0.0.1 lo0\n192.168.0.1 en0\n' "DNS leak: 192.168.0.1" 1
+# ---- Wi-Fi channels: parse + assess + verdict ----
+SP="$T/sp.txt"; cat > "$SP" <<'SPEOF'
+          Supported Channels: 1 (2GHz), 6 (2GHz), 11 (2GHz), 36 (5GHz), 40 (5GHz), 44 (5GHz), 48 (5GHz), 52 (5GHz), 149 (5GHz)
+          Current Network Information:
+            <redacted>:
+              Channel: 6 (2GHz, 20MHz)
+              Signal / Noise: -50 dBm / -88 dBm
+          Other Local Wi-Fi Networks:
+            <redacted>:
+              Channel: 6 (2GHz, 20MHz)
+              Signal / Noise: -55 dBm / -88 dBm
+            <redacted>:
+              Channel: 5 (2GHz, 20MHz)
+            <redacted>:
+              Channel: 7 (2GHz, 20MHz)
+            <redacted>:
+              Channel: 36 (5GHz, 80MHz)
+SPEOF
+lib "channels: parse current network"     0 "cur 6 2 20 -50"  "wifi_scan_parse < $SP"
+lib "channels: parse neighbour + width"   0 "oth 36 5 80 -"   "wifi_scan_parse < $SP"
+lib "channels: parse supported channels"  0 "sup 149 5 20 -"  "wifi_scan_parse < $SP"
+lib "channels: overlap score (2.4 GHz adjacent channels count)" 0 "CUR 2 6 20 4 3" "wifi_scan_parse < $SP | channels_assess"
+SP4="$T/sp4.txt"; { printf '%s\n' '          Supported Channels: 1 (2GHz), 6 (2GHz), 11 (2GHz)' '          Current Network Information:' '            x:' '              Channel: 6 (2GHz, 20MHz)' '          Other Local Wi-Fi Networks:'; for c in 1 1 5 6 6 7 11 11; do printf '%s\n' '            n:' "              Channel: $c (2GHz, 20MHz)"; done; } > "$SP4"
+SP5="$T/sp5.txt"; printf '%s\n' '          Supported Channels: 36 (5GHz), 52 (5GHz), 149 (5GHz)' '          Current Network Information:' '            x:' '              Channel: 36 (5GHz, 20MHz)' '          Other Local Wi-Fi Networks:' '            a:' '              Channel: 36 (5GHz, 20MHz)' '            b:' '              Channel: 36 (5GHz, 20MHz)' '            c:' '              Channel: 36 (5GHz, 20MHz)' > "$SP5"
+lib "channels: ch 1 is a candidate, scored lower" 0 "CAND 1 1 0" "wifi_scan_parse < $SP | channels_assess"
+lib "channels: 2.4 GHz candidates are only 1/6/11" 0 "" "wifi_scan_parse < $SP | channels_assess | awk '\$1==\"CAND\" && \$2!=1 && \$2!=6 && \$2!=11{exit 1}'"
+lib "channels: recommends the quiet channel" 0 "set the 5 GHz channel" "wifi_scan_parse < $SP5 | channels_assess | channels_verdict"
+lib "channels: busy but nothing clearly better" 0 "no other channel in this band is clearly better" "wifi_scan_parse < $SP4 | channels_assess | channels_verdict"
+lib "channels: 5 GHz hint on a crowded 2.4 GHz channel" 0 "connect to the 5 GHz network" "wifi_scan_parse < $SP | channels_assess | channels_verdict"
+SP2="$T/sp2.txt"; printf '%s\n' '          Current Network Information:' '            x:' '              Channel: 36 (5GHz, 80MHz)' '          Other Local Wi-Fi Networks:' '            a:' '              Channel: 40 (5GHz, 20MHz)' '            b:' '              Channel: 44 (5GHz, 80MHz)' '            c:' '              Channel: 36 (5GHz, 80MHz)' > "$SP2"
+lib "channels: 5 GHz overlap follows the 80 MHz block" 0 "CUR 5 36 80 3 3" "wifi_scan_parse < $SP2 | channels_assess"
+SP3="$T/sp3.txt"; printf '%s\n' '          Current Network Information:' '            x:' '              Channel: 36 (5GHz, 80MHz)' > "$SP3"
+lib "channels: quiet channel" 0 "Your channel is quiet" "wifi_scan_parse < $SP3 | channels_assess | channels_verdict"
+lib "channels: not connected" 1 "not connected to a Wi-Fi" "printf '' | channels_assess | channels_verdict"
 SD=$'0:36:43.593  Add        3   7 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3  15 .                    _tcp.local.          _ssh\n0:36:43.593  Add        3   7 .                    _udp.local.          _sleep-proxy\n0:36:43.593  Rmv        3   7 .                    _tcp.local.          _gone'
 printf '%s\n' "$SD" > "$T/meta.txt"
 lib "bonjour: service types (dedupe, Rmv ignored)" 0 "_ssh._tcp" "bonjour_types $T/meta.txt"

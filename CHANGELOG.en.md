@@ -6,6 +6,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 
 ## [Unreleased]
 
+### Added
+- `netdoctor channels` and a **Wi-Fi channels** tool (CLI, web UI, app): scans nearby Wi-Fi and counts the neighbouring networks that overlap your current channel by spectrum rather than by channel number (adjacent channels count on 2.4 GHz; 5 / 6 GHz use width-aligned blocks; a network at -65 dBm or stronger counts double). When a clearly quieter channel exists it recommends one, with a DFS warning, a hint to move to 5 GHz, and to drop 40 MHz to 20 MHz on a crowded 2.4 GHz band. Uses `system_profiler` (about 15 s, no sudo); without Location permission neighbour names are hidden, so it counts but does not list them.
+
 ## [1.4.0] - 2026-11-07
 
 ### Added

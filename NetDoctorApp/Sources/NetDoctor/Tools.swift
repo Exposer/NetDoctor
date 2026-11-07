@@ -80,6 +80,8 @@ struct Tool: Identifiable, Hashable {
                       ToolInput(name: "count", label: "Pings per hop", placeholder: "20", defaultValue: "20")]),
         Tool(id: "leak", title: "VPN leak check", icon: "lock.trianglebadge.exclamationmark",
              summary: "Check that DNS and IPv6 do not bypass the VPN tunnel", inputs: []),
+        Tool(id: "channels", title: "Wi-Fi channels", icon: "wifi.circle",
+             summary: "Scan nearby networks, show how crowded your channel is and recommend a quieter one (about 15 s)", inputs: []),
         Tool(id: "bonjour", title: "Bonjour services", icon: "dot.radiowaves.left.and.right",
              summary: "Discover AirPlay, printers, SSH, file sharing and other services advertised on the LAN",
              inputs: [ToolInput(name: "seconds", label: "Seconds", placeholder: "5", defaultValue: "5")]),

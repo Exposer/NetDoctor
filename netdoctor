@@ -45,6 +45,7 @@ netdoctor $VERSION - macOS 网络诊断
   route <主机>          路由选择 + traceroute/mtr 路径
   mtr <主机> [次数]     逐跳丢包 / 延迟 (无需 root), 并判断问题出在哪一跳
   leak                  VPN 下的 DNS / IPv6 泄漏检查
+  channels              Wi-Fi 信道拥挤分析, 推荐更空的信道 (约 15 秒)
   bonjour [秒数]        发现局域网里的 Bonjour 服务 (AirPlay、打印机、SSH、文件共享…)
   ping <主机>           持续 ping 并统计丢包/抖动 (默认 20 个包)
   port <主机> <端口>    TCP 端口连通性
@@ -82,6 +83,7 @@ Usage: netdoctor <command> [args]
   route <host>          route selection + traceroute/mtr path
   mtr <host> [count]    per-hop loss / latency (no root) and which hop the problem is at
   leak                  DNS / IPv6 leak check while a VPN is on
+  channels              Wi-Fi channel crowding analysis and a quieter channel (about 15 s)
   bonjour [seconds]     discover Bonjour services on the LAN (AirPlay, printers, SSH, file sharing…)
   ping <host>           ping with loss/jitter stats (20 packets by default)
   port <host> <port>    TCP port reachability
@@ -1201,6 +1203,102 @@ cmd_leak() {
   return $rc
 }
 
+# ---------- channels: Wi-Fi 信道拥挤分析 ----------
+# system_profiler SPAirPortDataType 的输出 (stdin) -> 每行 "类别 信道 频段(GHz) 带宽(MHz) 信号dBm|-"
+# 类别: cur=当前网络, oth=附近其他网络, sup=本机支持的信道。SSID 在没有定位权限时会被隐藏, 所以这里不取名字。
+wifi_scan_parse() {
+  awk '
+    function flush() { if (have) { printf "%s %s %s %s %s\n", kind, ch, band, wd, (sig==""?"-":sig); have=0 } }
+    /Supported Channels:/ { line=$0; sub(/.*Supported Channels:[ \t]*/,"",line); n=split(line,a,/, */)
+      for (i=1;i<=n;i++) { t=a[i]; gsub(/[()]/," ",t); m=split(t,b," "); if (m>=2 && b[1] ~ /^[0-9]+$/ && b[2] ~ /^[0-9]GHz$/) { g=b[2]; sub(/GHz/,"",g); printf "sup %s %s 20 -\n", b[1], g } }
+      next }
+    /Current Network Information:/ { flush(); kind="cur"; next }
+    /Other Local Wi-Fi Networks:/  { flush(); kind="oth"; next }
+    kind=="" { next }
+    /^[ \t]*Channel:/ { flush(); t=$0; sub(/.*Channel:[ \t]*/,"",t); gsub(/[(),]/," ",t); m=split(t,f," ")
+      if (f[1] ~ /^[0-9]+$/ && f[2] ~ /^[0-9]GHz$/) { ch=f[1]; band=f[2]; sub(/GHz/,"",band); wd=20; if (f[3] ~ /^[0-9]+MHz$/) { wd=f[3]; sub(/MHz/,"",wd) } sig=""; have=1 }
+      next }
+    /Signal \/ Noise:/ { if (have) { t=$0; sub(/.*Signal \/ Noise:[ \t]*/,"",t); m=split(t,f," "); if (f[1] ~ /^-?[0-9]+$/) sig=f[1] } next }
+    END { flush() }'
+}
+
+# 拥挤度评估。stdin 是 wifi_scan_parse 的输出。输出机器可读行:
+#   NOCUR                          没有当前 Wi-Fi 网络
+#   CUR 频段 信道 带宽 分数 个数    与当前网络频谱重叠的邻居 (信号 >= -65 dBm 的算 2 分, 其余 1 分)
+#   CAND 信道 分数 DFS             同频段里的候选信道 (DFS=1 表示雷达避让信道)
+#   NEI 频段 邻居数                各频段看到的邻居数
+#   SUP 频段 数量                  本机支持的信道数
+channels_assess() {
+  awk '
+    function span(c,b,w,   e,base,k) {
+      if (b==2) { h=(w<=20?11:w/2); LO=2407+5*c-h; HI=2407+5*c+h; return }   # 2.4 GHz 的 20 MHz 信道实际占约 22 MHz, 所以相邻 4 个信道以内会重叠 (1/6/11 才互不干扰)
+      if (b==5) { e=5000+5*c-10; base=(c<=64?5170:(c<=144?5490:5735)) } else { e=5950+5*c-10; base=5945 }
+      if (w<=20) { LO=e; HI=e+20 } else { k=int((e-base)/w); LO=base+k*w; HI=LO+w }
+    }
+    function score(lo,hi,   i,s) { s=0; cn=0
+      for (i=1;i<=n;i++) { if (ob[i]!=cb) continue; span(oc[i],ob[i],ow[i]); if (LO<hi && HI>lo) { s+=((os[i]!="-" && os[i]+0>=-65)?2:1); cn++ } }
+      return s }
+    $1=="sup" { ns++; sc[ns]=$2; sb[ns]=$3; supn[$3]++; next }
+    $1=="cur" { have=1; cb=$3; cc=$2; cw=$4; next }
+    $1=="oth" { n++; oc[n]=$2; ob[n]=$3; ow[n]=$4; os[n]=$5; nei[$3]++; next }
+    END {
+      if (!have) { print "NOCUR"; exit }
+      span(cc,cb,cw); clo=LO; chi=HI; cs=score(clo,chi); ccn=cn; print "CUR", cb, cc, cw, cs, ccn
+      for (b in nei) print "NEI", b, nei[b]
+      for (b in supn) print "SUP", b, supn[b]
+      for (i=1;i<=ns;i++) { if (sb[i]!=cb) continue; c=sc[i]
+        if (cb==2 && c!=1 && c!=6 && c!=11) continue
+        if (cb==5 && c==165 && cw>20) continue
+        span(c,cb,cw); if (LO==clo) continue
+        if (cb==5 && cw>20 && LO!=5000+5*c-10) continue
+        if (cb==6 && cw>20 && LO!=5950+5*c-10) continue
+        s=score(LO,HI); printf "CAND %s %s %s\n", c, s, (cb==5 && c>=52 && c<=144 ? 1 : 0) }
+    }'
+}
+
+# 把 channels_assess 的输出翻成结论。stdin 是 channels_assess 的输出。
+channels_verdict() {
+  local cb="" cc="" cw="" cs=0 cn=0 best="" bs="" bd="" s5=0 s6=0 tmp curline bestline
+  tmp=$(cat)
+  if printf '%s\n' "$tmp" | grep -q '^NOCUR'; then warn "$(L "This Mac is not connected to a Wi-Fi network, so there is no channel to judge." "这台 Mac 没有连接 Wi-Fi, 无法判断信道。")"; return 1; fi
+  curline=$(printf '%s\n' "$tmp" | grep '^CUR')
+  set -- $curline; cb=$2; cc=$3; cw=$4; cs=$5; cn=$6
+  s5=$(printf '%s\n' "$tmp" | awk '$1=="SUP" && $2==5{print $3}'); s5=${s5:-0}
+  s6=$(printf '%s\n' "$tmp" | awk '$1=="SUP" && $2==6{print $3}'); s6=${s6:-0}
+  bestline=$(printf '%s\n' "$tmp" | grep '^CAND' | sort -k3,3n -k4,4n -k2,2n | head -1)
+  if [ -n "$bestline" ]; then set -- $bestline; best=$2; bs=$3; bd=$4; fi
+  hdr "$(L "Neighbouring networks by band" "各频段看到的邻居网络")"
+  if printf '%s\n' "$tmp" | grep -q '^NEI'; then printf '%s\n' "$tmp" | awk '$1=="NEI"{printf "  %s GHz: %s\n",$2,$3}' | sort
+  else echo "  $(L "none seen (the scan may have been limited)" "没有看到 (扫描可能受限)")"; fi
+  hdr "$(L "Your channel" "你所在的信道")"
+  echo "  ${cb} GHz, $(L "channel" "信道") ${cc}, ${cw} MHz — $(L "$cn neighbouring network(s) overlap it (weighted score $cs)" "有 $cn 个邻居网络与它的频谱重叠 (加权分 $cs)")"
+  hdr "$(L "Verdict" "结论")"
+  if [ "$cs" -le 2 ]; then
+    ok "$(L "Your channel is quiet; interference from neighbours is not the likely cause of slowness." "你的信道很空闲; 邻居干扰不太可能是网速慢的原因。")"
+  elif [ -n "$best" ] && [ "$((bs + 2))" -le "$cs" ]; then
+    warn "$(L "Your channel is crowded ($cn overlapping networks, score $cs). Channel $best in the ${cb} GHz band is much quieter (score $bs)." "你的信道比较拥挤 ($cn 个网络重叠, 分数 $cs)。${cb} GHz 频段的信道 $best 空得多 (分数 $bs)。")"
+    echo "  $(L "Fix: in the router's Wi-Fi settings set the ${cb} GHz channel to $best." "办法: 在路由器的 Wi-Fi 设置里把 ${cb} GHz 的信道改成 ${best}。")"
+    [ "$bd" = 1 ] && echo "  $(L "Note: channel $best is a DFS channel; the router must leave it when it detects radar, which can briefly drop the connection. Pick a non-DFS channel (36–48 or 149–165) if that happens." "注意: 信道 $best 是 DFS 信道, 路由器检测到雷达时必须让出, 会造成短暂断线; 如果出现这种情况请改用非 DFS 信道 (36–48 或 149–165)。")"
+  else
+    warn "$(L "Your channel is crowded ($cn overlapping networks, score $cs) and no other channel in this band is clearly better." "你的信道比较拥挤 ($cn 个网络重叠, 分数 $cs), 同频段里也没有明显更好的信道。")"
+  fi
+  if [ "$cb" = 2 ] && [ "$cs" -gt 2 ] && { [ "$s5" -gt 0 ] || [ "$s6" -gt 0 ]; }; then
+    echo "  $(L "This Mac supports 5 GHz; if your router offers it, connect to the 5 GHz network: more channels and far less crowded (shorter range through walls)." "这台 Mac 支持 5 GHz; 如果路由器有 5 GHz 网络, 建议连它: 信道多、干扰少 (穿墙距离更短)。")"
+  fi
+  if [ "$cb" = 2 ] && [ "$cw" -ge 40 ] && [ "$cn" -ge 3 ]; then
+    echo "  $(L "You are using a 40 MHz channel on the crowded 2.4 GHz band; setting the router to 20 MHz is usually more stable." "你在拥挤的 2.4 GHz 上用了 40 MHz 带宽; 在路由器里改成 20 MHz 通常更稳。")"
+  fi
+  echo "  $(L "Only networks this Mac can hear are counted, and few report signal strength, so the score is a rough guide." "只统计这台 Mac 能听到的网络, 且多数没有信号强度, 所以分数只是粗略参考。")"
+  return 0
+}
+
+cmd_channels() {
+  has system_profiler || { bad "$(L "system_profiler not found" "未找到 system_profiler")"; return 1; }
+  hdr "$(L "Wi-Fi channel analysis" "Wi-Fi 信道分析")"
+  echo "$(L "Scanning nearby networks (about 15 s) …" "正在扫描附近的网络 (约 15 秒) …")"
+  system_profiler SPAirPortDataType 2>/dev/null | wifi_scan_parse | channels_assess | channels_verdict
+}
+
 # ---------- bonjour: 局域网服务发现 ----------
 bonjour_label() {
   case "$1" in
@@ -1622,7 +1720,7 @@ $v";; esac
 
 c=${1:-help}; [ $# -gt 0 ] && shift
 case "$c" in
-  quick|q) cmd_quick;; doctor|diagnose) cmd_doctor "$@";; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; mtr) cmd_mtr "$@";; watch) cmd_watch "$@";; dnsset) cmd_dnsset "$@";; compare) cmd_compare "$@";; leak) cmd_leak;; bonjour) cmd_bonjour "$@";; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
+  quick|q) cmd_quick;; doctor|diagnose) cmd_doctor "$@";; tcpping) cmd_tcpping "$@";; overview) cmd_overview;; dhcp) cmd_dhcp;; mtr) cmd_mtr "$@";; watch) cmd_watch "$@";; dnsset) cmd_dnsset "$@";; compare) cmd_compare "$@";; leak) cmd_leak;; channels) cmd_channels;; bonjour) cmd_bonjour "$@";; ports) cmd_ports "$@";; dnsbench) cmd_dnsbench "$@";; lan) cmd_lan;; ipv6) cmd_ipv6;; captive) cmd_captive;; wifi) cmd_wifi;; dns) cmd_dns "$@";; route) cmd_route "$@";;
   ping) cmd_ping "$@";; port) cmd_port "$@";; http) cmd_http "$@";; tls) cmd_tls "$@";;
   mtu) cmd_mtu "$@";; speed) cmd_speed;; conns) cmd_conns;; proxy) cmd_proxy;;
   capture) cmd_capture "$@";; fixdns) cmd_fixdns;; fix) cmd_fix "$@";; report) cmd_report "$@";; tools) cmd_tools;;

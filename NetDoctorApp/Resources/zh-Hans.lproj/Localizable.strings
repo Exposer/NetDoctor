@@ -112,6 +112,8 @@
 "Pings per hop" = "每跳 ping 次数";
 "VPN leak check" = "VPN 泄漏检查";
 "Check that DNS and IPv6 do not bypass the VPN tunnel" = "检查 DNS 和 IPv6 是否绕过了 VPN 隧道";
+"Wi-Fi channels" = "Wi-Fi 信道";
+"Scan nearby networks, show how crowded your channel is and recommend a quieter one (about 15 s)" = "扫描附近的网络, 显示你的信道有多拥挤, 并推荐更空的信道 (约 15 秒)";
 "Bonjour services" = "Bonjour 服务";
 "Discover AirPlay, printers, SSH, file sharing and other services advertised on the LAN" = "发现局域网里广播的 AirPlay、打印机、SSH、文件共享等服务";
 "Seconds" = "秒数";
