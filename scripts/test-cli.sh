@@ -326,6 +326,16 @@ v6 "ipv6: HTTPS blocked over v6"     "HTTPS over IPv6 to a real site fails" 0 gl
 v6 "ipv6: DNS gives no AAAA"         "gives no IPv6 (AAAA)"        0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=0 aaaa=0
 v6 "ipv6: slow compared with IPv4"   "much slower to connect"      0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 t4=20 t6=450
 v6 "ipv6: a small gap is not slow"   "IPv6 is healthy"             0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 t4=20 t6=200
+v6 "ipv6: VPN default route is not diagnosed"  "Not diagnosed"  0 tun=1 glob=1 gw=1
+v6 "ipv6: VPN is never reported healthy"  "not tested"      0 tun=1 glob=1 gw=1
+mkdir -p "$T/p6"
+printf '#!/bin/sh\necho "16 bytes from fe80::1: icmp_seq=0 hlim=64 time=10.000 ms"\necho "16 bytes from fe80::1: icmp_seq=1 hlim=64 time=20.000 ms"\n' > "$T/p6/ping6"; chmod +x "$T/p6/ping6"
+lib "ping6_stats: killed ping6 (no summary) still reports the average in \$2" 0 "avg=15.000" "PATH=$T/p6:\$PATH; set -- \$(ping6_stats ::1 2 '' 4); echo avg=\${2:-}"
+lib "ping6_stats: the empty loss field is a placeholder"                     0 "loss=-"     "PATH=$T/p6:\$PATH; set -- \$(ping6_stats ::1 2 '' 4); echo loss=\$1"
+printf '#!/bin/sh\nexit 1\n' > "$T/p6/ping6"
+lib "ping6_stats: nothing answered means no average"                         0 "avg=[]"     "PATH=$T/p6:\$PATH; set -- \$(ping6_stats ::1 2 '' 4); echo \"avg=[\${2:-}]\""
+printf '#!/bin/sh\necho "2 packets transmitted, 2 packets received, 0.0%% packet loss"\necho "round-trip min/avg/max/std-dev = 1.000/2.500/4.000/0.1 ms"\n' > "$T/p6/ping6"; chmod +x "$T/p6/ping6"
+lib "ping6_stats: normal summary is unchanged"                               0 "0.0 2.500"  "PATH=$T/p6:\$PATH; ping6_stats ::1 2 '' 4"
 v6 "ipv6: healthy"                   "IPv6 is healthy"             0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 v4ok=1
 v6 "ipv6: IPv6-only network"          "IPv6-only connectivity"     0 glob=1 gw=1 gwok=1 ipok=1 bigok=1 nameok=1 aaaa=1 v4ok=0
 # ---- exposure: netstat parsing and assessment ----

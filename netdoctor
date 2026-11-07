@@ -886,7 +886,8 @@ ping6_stats() {
   loss=$(echo "$out" | awk -F', ' '/packet loss/{for(i=1;i<=NF;i++) if($i ~ /packet loss/){sub(/%.*/,"",$i); print $i}}')
   avg=$(echo "$out" | awk -F'/' '/min\/avg\/max/{print $5}')
   [ -n "$avg" ] || avg=$(echo "$out" | awk '/bytes from/{for(i=1;i<=NF;i++) if($i ~ /^time=/){sub(/time=/,"",$i); n++; t+=$i}} END{if(n) printf "%.3f", t/n}')
-  printf '%s %s\n' "$loss" "$avg"
+  # 丢包为空 (被杀掉时没有汇总行) 时用 - 占位: 调用方用 set -- $(...) 按空白拆词, 开头的空字段会被吞掉, 平均值就会挪到 $1
+  printf '%s %s\n' "${loss:--}" "$avg"
 }
 
 # 结论。参数是 key=value 事实 (没测的留空):
@@ -895,11 +896,15 @@ ping6_stats() {
 #   v4ok=1/0 IPv4 是否通   t4 t6 到同一站点的 TCP 建连毫秒数
 # 有故障返回 1 (和 doctor / leak 一致: 只有 bad 算失败, warn 不算)。
 ipv6_assess() {
-  local glob=0 ula=0 gw=0 gwok="" ipok="" bigok="" nameok="" aaaa="" v4ok="" t4="" t6="" kv
+  local glob=0 ula=0 gw=0 gwok="" ipok="" bigok="" nameok="" aaaa="" v4ok="" t4="" t6="" tun=0 kv
   for kv in "$@"; do
-    case "$kv" in glob=*) glob=${kv#*=};; ula=*) ula=${kv#*=};; gw=*) gw=${kv#*=};; gwok=*) gwok=${kv#*=};; ipok=*) ipok=${kv#*=};; bigok=*) bigok=${kv#*=};;
+    case "$kv" in tun=*) tun=${kv#*=};; glob=*) glob=${kv#*=};; ula=*) ula=${kv#*=};; gw=*) gw=${kv#*=};; gwok=*) gwok=${kv#*=};; ipok=*) ipok=${kv#*=};; bigok=*) bigok=${kv#*=};;
       nameok=*) nameok=${kv#*=};; aaaa=*) aaaa=${kv#*=};; v4ok=*) v4ok=${kv#*=};; t4=*) t4=${kv#*=};; t6=*) t6=${kv#*=};; esac
   done
+  if [ "$tun" = 1 ]; then
+    warn "$(L "Not diagnosed: the IPv6 default route goes through a VPN / tunnel, so the router and the IPv6 internet path were not tested. Disconnect the VPN and run this again." "未诊断: IPv6 默认路由走的是 VPN / 隧道, 没有测试路由器和 IPv6 外网链路。断开 VPN 后再试。")"
+    return 0
+  fi
   if [ "$glob" != 1 ]; then
     if [ "$gw" = 1 ] || [ "$ula" = 1 ]; then
       warn "$(L "This network hands out only local IPv6 (no globally routable address): the router has IPv6 on, but your ISP gives it no IPv6 prefix. Everything runs over IPv4; this is harmless." "这个网络只有本地 IPv6 (没有可路由的公网地址): 路由器开了 IPv6, 但运营商没有分配 IPv6 前缀。一切都走 IPv4, 无碍。")"
@@ -945,7 +950,13 @@ cmd_ipv6() {
   # 排除链路本地 (fe80) 与唯一本地/私有 (fc00::/7), 它们不能访问公网
   # 只看默认路由所在的物理网卡; VPN / 叠加网络 (utun*) 的地址 (如 Tailscale 的 fd7a:) 不代表这个网络有没有 IPv6
   gwline=$(route -n get -inet6 default 2>/dev/null); gw=$(echo "$gwline" | awk '/gateway:/{print $2; exit}'); gwif=$(echo "$gwline" | awk '/interface:/{print $2; exit}')
-  case "$gwif" in utun*|ipsec*|ppp*|gif*|stf*) tun=1; gwif2="";; *) tun=0; gwif2=$gwif;; esac
+  # 没有 IPv6 默认路由时 gwif 为空: 只看 IPv4 默认路由所在的网卡 (它才是"这个网络"); 别的网卡 (USB 网卡、虚拟网卡) 上的地址不算。
+  # "-" 不会匹配任何网卡名, 即在拿不到主网卡时不把任何地址当作这个网络的
+  case "$gwif" in
+    utun*|ipsec*|ppp*|gif*|stf*) tun=1; gwif2="";;
+    "") gwif2=$(default_if); case "$gwif2" in ""|utun*|ipsec*|ppp*|gif*|stf*) gwif2="-";; esac;;
+    *) gwif2=$gwif;;
+  esac
   g=$(ifconfig | awk -v want="$gwif2" '/^[^ \t]/{i=$1; sub(/:$/,"",i)} i ~ /^(utun|ipsec|ppp|gif|stf|awdl|llw|lo)/{next} want!="" && i!=want{next} /inet6 / && $2 !~ /^fe80|^::1|^f[cd]/{print $2}' | head -3)
   ula=$(ifconfig | awk -v want="$gwif2" '/^[^ \t]/{i=$1; sub(/:$/,"",i)} i ~ /^(utun|ipsec|ppp|gif|stf|awdl|llw|lo)/{next} want!="" && i!=want{next} /inet6 / && $2 ~ /^f[cd]/{print $2}' | head -3)
   if [ -n "$g" ]; then ok "$(L "Global IPv6 address present" "存在全局 IPv6 地址")"; echo "$g" | sed 's/^/   /'
@@ -1000,7 +1011,7 @@ cmd_ipv6() {
   fi
   hdr "$(L "Verdict" "结论")"
   local rc; ipv6_assess glob=$([ -n "$g" ] && echo 1 || echo 0) ula=$([ -n "$ula" ] && echo 1 || echo 0) gw=$([ -n "$gw" ] && echo 1 || echo 0) gwok=$gwok \
-    ipok=$ipok bigok=$bigok nameok=$nameok aaaa=$aaaa v4ok=$([ -n "$v4" ] && echo 1 || echo 0) t4=$t4 t6=$t6
+    ipok=$ipok bigok=$bigok nameok=$nameok aaaa=$aaaa v4ok=$([ -n "$v4" ] && echo 1 || echo 0) t4=$t4 t6=$t6 tun=$tun
   rc=$?
   return $rc
 }
