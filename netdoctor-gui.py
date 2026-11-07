@@ -256,7 +256,7 @@ def wifi_info():
     """Current Wi-Fi link info via system_profiler (macOS, no sudo). Returns a dict or {"error": ...}."""
     try:
         out = subprocess.run([os.environ.get("NETDOCTOR_SYSTEM_PROFILER", "system_profiler"), "SPAirPortDataType"],
-                             stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=12).stdout
+                             stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30).stdout
     except Exception:
         return {"error": "unavailable"}
     m = re.search(r"Current Network Information:\s*\n(.*?)(?:\n\s*Other Local Wi-Fi Networks:|\Z)", out, re.S)
@@ -271,7 +271,8 @@ def wifi_info():
         return mm.group(1).strip()[:60] if mm else ""
     first = blk.strip().splitlines()[0].strip().rstrip(":") if blk.strip() else ""
     return {"rssi": int(sn.group(1)), "noise": int(sn.group(2)), "channel": field("Channel"),
-            "rate": field("Transmit Rate"), "phy": field("PHY Mode"), "ssid": first[:60]}
+            "rate": field("Transmit Rate"), "phy": field("PHY Mode"),
+            "ssid": "" if "redacted" in first.lower() else first[:60]}  # macOS hides the SSID without Location permission
 
 def build_args(spec, values, lang="en"):
     args = []
@@ -557,7 +558,7 @@ function wlToggle(){wlrun?wlStop():wlStart()}
 function wlStart(){if(wlrun||!favs.length)return;wlrun=true;wlst={};$('#wlgo').textContent=t('Stop');wlTick(++wlLoop)}
 function wlStop(){wlrun=false;wlLoop++;clearTimeout(wlto);const b=$('#wlgo');if(b)b.textContent=t('Start');document.title=BASE_TITLE()}
 function wlStatus(h){const x=wlst[h];if(!x||!x.s.length)return 'wait';const s=x.s,n=s.length;if(n>=3&&s[n-1]===null&&s[n-2]===null&&s[n-3]===null)return 'down';
-const last=s[n-1];if(last===null)return x.prev=='down'?'down':'up';return last>(+$('#wlslow').value||150)?'slow':'up'}
+const last=s[n-1];if(last===null){if(!s.some(a=>a!==null))return 'wait';return x.prev=='down'?'down':'up'}return last>(+$('#wlslow').value||150)?'slow':'up'}
 function wlNote(msg){if($('#wlnote').checked&&'Notification' in window&&Notification.permission=='granted'){try{new Notification('NetDoctor',{body:msg})}catch(e){}}}
 async function wlOne(h){let v=null;try{const r=await fetch('/ping',{method:'POST',headers:{'X-Token':TOKEN},body:JSON.stringify({host:h})});if(r.ok)v=(await r.json()).ms}catch(e){}return v}
 async function wlTick(id){if(!wlrun||id!=wlLoop)return;const hosts=[...favs];
@@ -611,6 +612,7 @@ if(acbusy)$('#acmsg').textContent=t('Running…');else if(acrun)$('#acmsg').text
 const lab={ok:['up','Healthy'],warn:['slow','Unstable'],bad:['down','Problem']};
 $('#aclog').innerHTML=aclog.length?aclog.map(r=>`<div class="al"><span class="st ${lab[r.cls][0]}">${esc(t(lab[r.cls][1]))}</span><span class="tm">${esc(new Date(r.ts).toLocaleTimeString(lang=='zh'?'zh-CN':'en-US'))}</span><span class="tx" title="${esc(r.text)}">${esc(r.text)}</span>${r.hid?`<button onclick="acView('${r.hid}')">${esc(t('View'))}</button>`:''}</div>`).join(''):`<div class="empty" style="padding:18px;color:var(--mut)">${esc(t('No runs yet'))}</div>`}
 /* ---- history report (Markdown / HTML) ---- */
+const ymd=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 function reportRows(){const q=$('#hq').value.trim().toLowerCase();let rows=hist.filter(h=>{if(!q)return true;const c=CMDS.find(c=>c.id==h.cmd),lab=c?c.label:h.cmd;return (t(lab)+' '+lab+' '+Object.values(h.values||{}).join(' ')).toLowerCase().includes(q)});
 if(hcmp.length)rows=hist.filter(h=>hcmp.includes(h.id));return rows.slice().sort((a,b)=>a.ts-b.ts)}
 function makeReport(kind){if(!kind)return;const rows=reportRows();if(!rows.length){$('#st').textContent=t(hist.length?'No matches':'No history yet');return}const loc=lang=='zh'?'zh-CN':'en-US',now=new Date();
@@ -622,7 +624,7 @@ return '## '+(i+1)+'. '+x.title+(x.args?' — `'+x.args.replace(/`/g,"'")+'`':''
 else{const css='body{font:14px -apple-system,"Segoe UI",sans-serif;max-width:920px;margin:32px auto;padding:0 16px;color:#1d1d1f;background:#f5f5f7}@media(prefers-color-scheme:dark){body{color:#f5f5f7;background:#1c1c1e}}h1{font-size:22px}h2{font-size:16px;margin:26px 0 2px}.m{color:#6e6e73;font-size:12px;margin:0 0 8px}pre{background:#14161a;color:#d8dde6;border-radius:10px;padding:12px;overflow:auto;white-space:pre-wrap;word-break:break-all;font:12px/1.5 ui-monospace,Menlo,monospace}.b{font-weight:700}.g{color:#32d74b}.r{color:#ff453a}.y{color:#ffd60a}.d{opacity:.55}code{background:rgba(127,127,127,.18);border-radius:4px;padding:1px 5px}';
 body='<!doctype html><html lang="'+(lang=='zh'?'zh-CN':'en')+'"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+esc(t('NetDoctor report'))+'</title><style>'+css+'</style></head><body><h1>'+esc(t('NetDoctor report'))+'</h1><p class="m">'+esc(t('Generated'))+': '+esc(fmt(now))+'</p>'+
 rows.map((h,i)=>{const x=head(h);return '<h2>'+(i+1)+'. '+esc(x.title)+(x.args?' — <code>'+esc(x.args)+'</code>':'')+'</h2><p class="m">'+esc(fmt(h.ts))+' · '+esc(t(sl[h.state]||'Done'))+' · '+esc(h.sec)+' s</p><pre>'+ansi(h.out)+'</pre>'}).join('')+'</body></html>';mime='text/html';ext='html'}
-const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type:mime+';charset=utf-8'}));a.download='netdoctor-report-'+now.toISOString().slice(0,10)+'.'+ext;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([body],{type:mime+';charset=utf-8'}));a.download='netdoctor-report-'+ymd(now)+'.'+ext;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 /* ---- speed trend ---- */
 let spbusy=false;
 function parseSpeed(out){const o=stripAnsi(out),conv=(v,u)=>{v=parseFloat(v);u=(u||'M').toUpperCase()[0];return u=='G'?v*1000:u=='K'?v/1000:v};
@@ -723,7 +725,7 @@ let html='',hidden=0;const flush=()=>{if(hidden){html+='<div class="dl gap">'+es
 ops.forEach((o,i)=>{if(!show[i]){hidden++;return}flush();html+='<div class="dl '+({'+':'add','-':'del','=':''}[o[0]])+'">'+esc((o[0]=='='?'  ':o[0]+' ')+o[1])+'</div>'});flush();$('#cmpout').innerHTML=html}
 /* ---- history export / import ---- */
 function exportHist(){const data={app:'netdoctor',version:1,exported:new Date().toISOString(),history:hist,favorites:favs};
-const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));a.download='netdoctor-history-'+new Date().toISOString().slice(0,10)+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,1)],{type:'application/json'}));a.download='netdoctor-history-'+ymd(new Date())+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 async function importHist(inp){const f=inp.files[0];inp.value='';if(!f)return;
 try{if(f.size>8e6)throw 0;const d=JSON.parse(await f.text());if(!d||d.app!='netdoctor'||!Array.isArray(d.history||[]))throw 0;
 const ids=new Set(hist.map(h=>h.id)),okS=['ok','stopped','failed'];let nh=0,nf=0;

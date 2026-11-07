@@ -19,6 +19,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); version
 - `netdoctor`: an unknown command now prints "Unknown command: xxx" with the running version (and a hint to `git pull`) before the usage text, and exits with status 2. Added `netdoctor --version` (also `version` and `-v`) as well as `help`, `-h` and `--help`. Previously an unrecognised command silently printed the usage text, which made it impossible to tell a typo from an outdated local copy.
 
 ### Fixed
+- Web UI Wi-Fi signal page: `system_profiler SPAirPortDataType` takes over ten seconds on some Macs while the server timed out after 12, so the page always said "unavailable"; the timeout is now 30 s. An SSID hidden by macOS (`<redacted>`) is no longer shown.
+- Web UI watchlist: a host whose first probe was lost showed Up; it now shows Waiting… and is only marked Down after 3 consecutive losses.
+- Web UI: report / history export file names used the UTC date, which could differ from the local date shown on the page; they now use the local date.
 - Web UI command palette: searching for a tool by its Chinese name (e.g. 诊断, 强制门户, 局域网) found nothing while the UI was in English; both the English and Chinese names of every tool are now searched.
 - `netdoctor quick`: a failed public-IP lookup is now reported (the old `|| warn` could never fire, so nothing was shown); the exit code is 1 when there is no default route or any check fails (it was always 0).
 - `netdoctor port` / `http` / `mtu` / `speed`: exited with 0 on failure (`bad` itself returns 0), so the web UI and app showed "exit code 0"; they now return 1.
