@@ -722,10 +722,14 @@ cmd_tools() {
 
 cmd_report() {
   local NETDOCTOR_NOSUDO=1   # 输出被重定向到文件, 不要在中途弹出 sudo 密码提示
-  local f="$HOME/Desktop/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt"
-  { echo "netdoctor report $(date)"; uname -a; sw_vers
-    cmd_doctor; cmd_overview; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$f" 2>&1
+  local dir="$HOME/Desktop"; [ -d "$dir" ] && [ -w "$dir" ] || dir="$HOME"   # 没有桌面目录 (或不可写) 就存到主目录
+  local f="$dir/netdoctor-report-$(date +%Y%m%d-%H%M%S).txt"
+  if ! { echo "netdoctor report $(date)"; uname -a; sw_vers
+    cmd_doctor; cmd_overview; cmd_quick; cmd_wifi; cmd_dns apple.com; cmd_ipv6; cmd_proxy; } >"$f" 2>/dev/null || [ ! -s "$f" ]; then
+    bad "$(L "Could not write the report to $f" "无法写入报告: $f")"; return 1
+  fi
   ok "$(L "Saved: $f" "已保存: $f")"
+  warn "$(L "The report contains your IP addresses, MAC address and Wi-Fi name; check it before you share it." "报告包含你的 IP 地址、MAC 地址和 Wi-Fi 名称, 分享给别人前请先检查。")"
 }
 
 c=${1:-help}; [ $# -gt 0 ] && shift
