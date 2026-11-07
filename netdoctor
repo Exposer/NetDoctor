@@ -522,7 +522,8 @@ cmd_ping() { local h=${1:-}; [ -z "$h" ] && { echo "$(L "Usage: netdoctor ping <
 
 cmd_port() {
   [ $# -lt 2 ] && { echo "$(L "Usage: netdoctor port <host> <port>" "用法: netdoctor port <主机> <端口>")"; return 1; }
-  nc -vz -G 5 "$1" "$2" 2>&1 && ok "$(L "$1:$2 open" "$1:$2 开放")" || bad "$(L "$1:$2 unreachable (closed / firewall / routing)" "$1:$2 不通 (关闭/防火墙/路由)")"
+  if nc -vz -G 5 "$1" "$2" 2>&1; then ok "$(L "$1:$2 open" "$1:$2 开放")"
+  else bad "$(L "$1:$2 unreachable (closed / firewall / routing)" "$1:$2 不通 (关闭/防火墙/路由)")"; return 1; fi
 }
 
 cmd_http() {
@@ -549,7 +550,9 @@ cmd_http() {
   Download speed  %{speed_download} B/s
 '
   fi
-  curl -sS -o /dev/null -L -m 30 -w "$fmt" "$u" || bad "$(L "Request failed; investigate with: curl -v $u" "请求失败, 加 -v 排查: curl -v $u")"
+  if ! curl -sS -o /dev/null -L -m 30 -w "$fmt" "$u"; then
+    bad "$(L "Request failed; investigate with: curl -v $u" "请求失败, 加 -v 排查: curl -v $u")"; return 1
+  fi
 }
 
 cmd_tls() {
@@ -571,12 +574,15 @@ cmd_mtu() {
       ok "$(L "Payload $s passed → MTU ≈ $((s+28))" "载荷 $s 通过 → MTU ≈ $((s+28))")"; return; fi
     printf "  $(L "Payload %s lost" "载荷 %s 丢失")\n" "$s"
   done
-  bad "$(L "All failed; the target may block ICMP" "均失败; 目标可能禁 ICMP")"
+  bad "$(L "All failed; the target may block ICMP" "均失败; 目标可能禁 ICMP")"; return 1
 }
 
 cmd_speed() {
-  if has networkQuality; then networkQuality -v || bad "$(L "networkQuality failed" "networkQuality 执行失败")"
-  else bad "$(L "Requires macOS 12+ (networkQuality)" "需要 macOS 12+ (networkQuality)")"; has speedtest-cli && speedtest-cli; fi
+  if has networkQuality; then networkQuality -v || { bad "$(L "networkQuality failed" "networkQuality 执行失败")"; return 1; }
+  else
+    bad "$(L "Requires macOS 12+ (networkQuality)" "需要 macOS 12+ (networkQuality)")"
+    if has speedtest-cli; then speedtest-cli; else return 1; fi
+  fi
 }
 
 cmd_conns() {

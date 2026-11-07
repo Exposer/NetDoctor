@@ -28,12 +28,16 @@ cat > "$APP/Contents/Info.plist" <<'X'
 <key>CFBundleExecutable</key><string>NetDoctor</string>
 <key>CFBundleIdentifier</key><string>local.netdoctor.app</string>
 <key>CFBundlePackageType</key><string>APPL</string>
-<key>CFBundleShortVersionString</key><string>1.1.7</string>
-<key>CFBundleVersion</key><string>7</string>
+<key>CFBundleShortVersionString</key><string>__VER__</string>
+<key>CFBundleVersion</key><string>__VER__</string>
 <key>LSMinimumSystemVersion</key><string>13.0</string>
 <key>NSHighResolutionCapable</key><true/>
+<key>NSLocalNetworkUsageDescription</key><string>NetDoctor scans and tests your local network to diagnose problems.</string>
 </dict></plist>
 X
+# Keep the bundle version in sync with the CLI (netdoctor VERSION=...)
+VER=$(sed -n 's/^VERSION=//p' ../netdoctor | head -1)
+sed -i '' "s/__VER__/${VER:-1.0}/g" "$APP/Contents/Info.plist"
 codesign --force --deep -s - "$APP" >/dev/null 2>&1 || true
 echo "Built $(pwd)/$APP"
 echo "Run: open $APP    Install: cp -R $APP /Applications/"

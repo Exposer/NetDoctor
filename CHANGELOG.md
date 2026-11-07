@@ -19,6 +19,9 @@
 - `netdoctor`:输入未知命令时先提示“未知命令: xxx”并显示当前版本号(提醒用 `git pull` 更新),再打印用法,退出码为 2;新增 `netdoctor --version`(也可用 `version`、`-v`)以及 `help`、`-h`、`--help`。此前遇到不认识的命令会悄悄打印用法,分不清是命令输错还是本地版本太旧。
 
 ### 修复
+- `netdoctor port` / `http` / `mtu` / `speed`:失败时退出码误为 0(`bad` 本身返回 0),网页版和 App 会据此显示“退出码 0”;现在失败返回 1。
+- SwiftUI App:点“停止”现在会终止整棵进程树(原先只杀直接子进程,`ports`、`dnsbench`、`lan` 等用后台子 shell 启动的 `nc` / `ping` 会残留)。
+- 构建脚本:`Info.plist` 的版本号改为从 `netdoctor` 的 `VERSION` 读取(原先写死);两个 App 都加上 `NSLocalNetworkUsageDescription`,让 macOS 能弹出“本地网络”授权,`lan` 才能读到局域网设备的 MAC。
 - `netdoctor tcpping`:macOS 自带 perl 的 `IO::Socket::INET` 在带超时(非阻塞 connect)时会把“连接被拒绝”误判为成功,导致关闭的端口也显示已连接;改为阻塞连接加 `alarm` 超时,并改用 `getaddrinfo`(支持 IPv6)。perl 本身出错时不再返回退出码 0。
 - `netdoctor ports`:全部端口都开放时退出码误为 1;新增主机名校验,不再接受以 `-` 开头的值(避免被当成 `nc` 选项)。
 - 网页界面:点“停止”或关闭页面时,现在会终止整个进程组(包括脚本启动的 perl / nc / networkQuality 等子进程),而不只是 bash;请求体大小设了 64 KB 上限。

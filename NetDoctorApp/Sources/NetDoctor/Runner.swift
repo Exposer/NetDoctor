@@ -138,11 +138,31 @@ final class Runner: ObservableObject {
     func stop() {
         guard let p = process, p.isRunning else { return }
         stopped = true
-        let pk = Process()
-        pk.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
-        pk.arguments = ["-TERM", "-P", String(p.processIdentifier)]
-        try? pk.run(); pk.waitUntilExit()
+        // The script starts helpers (ping, nc, perl, …) and background subshells, so end the whole
+        // process tree, children first, not just the direct children.
+        for pid in Runner.descendants(of: p.processIdentifier).reversed() { kill(pid, SIGTERM) }
         p.terminate()
+    }
+
+    /// All descendant pids of `root` (breadth-first), read from `ps`.
+    private static func descendants(of root: Int32) -> [Int32] {
+        let ps = Process()
+        ps.executableURL = URL(fileURLWithPath: "/bin/ps")
+        ps.arguments = ["-axo", "pid=,ppid="]
+        let pipe = Pipe(); ps.standardOutput = pipe; ps.standardError = FileHandle.nullDevice
+        guard (try? ps.run()) != nil else { return [] }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile(); ps.waitUntilExit()
+        var kids: [Int32: [Int32]] = [:]
+        for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+            let f = line.split(separator: " ").compactMap { Int32($0) }
+            if f.count == 2 { kids[f[1], default: []].append(f[0]) }
+        }
+        var out: [Int32] = [], queue: [Int32] = [root]
+        while !queue.isEmpty {
+            let cur = queue.removeFirst()
+            for c in kids[cur] ?? [] { out.append(c); queue.append(c) }
+        }
+        return out
     }
 
     // MARK: Output handling (flush by line so multi-byte characters and escape sequences are not cut)
