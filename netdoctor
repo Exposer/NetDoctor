@@ -191,6 +191,22 @@ net_service() { # $1=网卡 → networksetup 的服务名 (如 Wi-Fi / Ethernet)
     /^\([0-9*]+\) /{ name=$0; sub(/^\([0-9*]+\) /, "", name) }
     /Device: /{ dev=$0; sub(/.*Device: /, "", dev); sub(/\).*/, "", dev); if (dev == d) { print name; exit } }'
 }
+dns_service() { # 要改 DNS 的网络服务名. 默认路由走 VPN 隧道 (utun / ppp) 时 default_if 找不到服务, 改选第一个已启用且有 IP 的物理服务; 都没有就返回空, 绝不瞎猜
+  local ifc svc line d
+  ifc=$(default_if); [ -n "$ifc" ] && svc=$(net_service "$ifc")
+  if [ -z "${svc:-}" ]; then
+    while IFS='|' read -r line d; do
+      case "$d" in ""|utun*|ppp*|ipsec*|lo*|gif*|stf*|bridge*) continue;; esac
+      [ -n "$(ipconfig getifaddr "$d" 2>/dev/null)" ] && { svc=$line; break; }
+    done <<EOF_SV
+$(networksetup -listnetworkserviceorder 2>/dev/null | awk '
+  /^\([0-9]+\) /{ name=$0; sub(/^\([0-9]+\) /, "", name); next }
+  /^\(\*\) /{ name=""; next }
+  /Device: /{ dev=$0; sub(/.*Device: /, "", dev); sub(/\).*/, "", dev); if (name != "") print name "|" dev }')
+EOF_SV
+  fi
+  printf '%s' "${svc:-}"
+}
 dns_current() { networksetup -getdnsservers "$1" 2>/dev/null | grep -E '^[0-9A-Fa-f:.]+$' | tr '\n' ' ' | sed 's/ $//'; }   # 没手动设置时为空 (= 自动 / DHCP)
 dns_backup_file() { printf '%s/dns-backup/%s' "${NETDOCTOR_HOME:-$HOME/.netdoctor}" "$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')"; }
 dns_valid_ip() { case "$1" in
@@ -204,11 +220,12 @@ dns_apply() { # $1=服务名, 其余=服务器 (空 = 恢复自动)
   priv dscacheutil -flushcache 2>/dev/null; priv killall -HUP mDNSResponder 2>/dev/null; return 0
 }
 cmd_dnsset() {
-  local sub=${1:-show} ifc svc cur bk new list t n=0 created=0
-  ifc=$(default_if); [ -z "$ifc" ] && ifc=$(wifi_if); svc=$(net_service "$ifc"); svc=${svc:-Wi-Fi}
-  cur=$(dns_current "$svc"); bk=$(dns_backup_file "$svc")
+  local sub=${1:-show} svc cur bk new list t n=0 created=0
   case "$sub" in
     show)
+      svc=$(dns_service)
+      if [ -z "$svc" ]; then bad "$(L "Could not tell which network service to change (no active Wi-Fi / Ethernet service found; is only a VPN connected?)" "无法确定要修改哪个网络服务 (没找到已连接的 Wi-Fi / 以太网服务, 是不是只连了 VPN?)")"; return 1; fi
+      cur=$(dns_current "$svc"); bk=$(dns_backup_file "$svc")
       hdr "$(L "DNS servers of \"$svc\"" "\"$svc\" 的 DNS 服务器")"
       echo "  $(L "now" "当前"): ${cur:-$(L "automatic (from DHCP)" "自动 (来自 DHCP)")}"
       if [ -f "$bk" ]; then t=$(cat "$bk"); echo "  $(L "saved original" "已保存的原设置"): ${t:-$(L "automatic (from DHCP)" "自动 (来自 DHCP)")}"; echo "  $(L "undo with" "还原"): netdoctor dnsset restore"; fi
@@ -222,6 +239,9 @@ cmd_dnsset() {
        new=${new# };;
   esac
   can_priv || { need_admin "dnsset $*"; return 1; }
+  svc=$(dns_service)
+  if [ -z "$svc" ]; then bad "$(L "Could not tell which network service to change (no active Wi-Fi / Ethernet service found; is only a VPN connected?)" "无法确定要修改哪个网络服务 (没找到已连接的 Wi-Fi / 以太网服务, 是不是只连了 VPN?)")"; return 1; fi
+  cur=$(dns_current "$svc"); bk=$(dns_backup_file "$svc")
   case "$sub" in
     restore)
       [ -f "$bk" ] || { bad "$(L "No saved original DNS setting for \"$svc\" (nothing to restore). To go back to automatic DNS: netdoctor dnsset auto" "没有 \"$svc\" 的原 DNS 设置备份, 无法还原。想回到自动 DNS: netdoctor dnsset auto")"; return 1; }
@@ -285,8 +305,9 @@ EOF2
   fi
   echo "$(L "Note: popular domains are usually cached, so this measures the resolver's nearest cache." "注: 热门域名通常有缓存, 测得的是解析器最近缓存的响应速度。")"
   if [ "$apply" = 1 ]; then
-    local svc ans cur; svc=$(net_service "$(default_if)"); svc=${svc:-Wi-Fi}; cur=$(dns_current "$svc")
+    local svc ans cur; svc=$(dns_service); cur=$(dns_current "$svc")
     hdr "$(L "Switch DNS" "切换 DNS")"
+    if [ -z "$svc" ]; then warn "$(L "Could not tell which network service to change (is only a VPN connected?); nothing was changed." "无法确定要修改哪个网络服务 (是不是只连了 VPN?), 没有做任何修改。")"; return 1; fi
     if [ -z "$top1" ]; then warn "$(L "No public DNS server answered; nothing to switch to." "没有公共 DNS 服务器应答, 没有可切换的目标。")"; return 1
     elif [ "$2" = system ]; then ok "$(L "The system DNS is already the fastest; nothing to change." "系统 DNS 已经是最快的, 不需要改。")"; return 0
     elif [ -n "$sysavg" ] && [ "$sysavg" -lt 999999 ] && [ "$sysavg" -le $(( $1 * 13 / 10 )) ]; then ok "$(L "The system DNS (avg $sysavg ms) is not noticeably slower than $2 (avg $1 ms); nothing to change." "系统 DNS (平均 $sysavg ms) 和 $2 (平均 $1 ms) 差不多, 不需要改。")"; return 0; fi
