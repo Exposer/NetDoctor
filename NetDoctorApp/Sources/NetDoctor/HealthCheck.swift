@@ -48,6 +48,16 @@ final class HealthCheck: ObservableObject {
         timer = t
     }
 
+    /// The re-check after a failed scheduled run. If another check is running at that moment (the user pressed
+    /// "Run health check", or the timer fired), try again a few seconds later instead of dropping it silently.
+    private func retry(left: Int = 6) {
+        if running {
+            if left > 0 { DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.retry(left: left - 1) } }
+            return
+        }
+        run(scheduled: true, retried: true)
+    }
+
     /// `scheduled`: a failing result is checked once more after 20 s before it is recorded, because right
     /// after the Mac wakes up the network is often not back yet, and that would be a false alarm in the history.
     func run(scheduled: Bool = false, retried: Bool = false) {
@@ -76,7 +86,7 @@ final class HealthCheck: ObservableObject {
             DispatchQueue.main.async {
                 self.running = false
                 if scheduled, !retried, let c = verdictCode, c != "ok" {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 20) { self.run(scheduled: true, retried: true) }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 20) { self.retry() }
                     self.summary = loc("Checking again…")
                     return
                 }

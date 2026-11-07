@@ -1057,6 +1057,8 @@ mtr_explain() {   # 把 mtr_verdict 的代码翻成结论; 有真正的问题时
   return $rc
 }
 
+mtr_dest() { # 标准输入: traceroute 输出 → 目的 IP. 多地址主机会先打一行警告, 所以不能只看第 1 行
+  sed -n 's/^traceroute to [^ ]* (\([0-9.]*\)).*/\1/p' | head -1; }
 cmd_mtr() {
   local h=${1:-} n=${2:-20}
   [ -z "$h" ] && { echo "$(L "Usage: netdoctor mtr <host> [count]" "用法: netdoctor mtr <主机> [次数]")"; return 1; }
@@ -1070,7 +1072,7 @@ cmd_mtr() {
   echo "$(L "Finding the path …" "正在探测路径 …")"
   local out dest dir rows hop ip
   out=$(traceroute -n -w 1 -q 1 -m 30 "$h" 2>&1)
-  dest=$(printf '%s\n' "$out" | sed -n '1s/^traceroute to [^ ]* (\([0-9.]*\)).*/\1/p')
+  dest=$(printf '%s\n' "$out" | mtr_dest)
   dir=$(mktemp -d -t netdoctor-mtr) || return 1
   # 每行 "跳数 地址"; 去掉结尾连续的无应答跳 (目的地不通时 traceroute 会一直打 * 到 30 跳)
   printf '%s\n' "$out" | awk '/^ *[0-9]+ /{ip="-"; for(i=2;i<=NF;i++) if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {ip=$i; break}; h[++k]=$1; a[k]=ip}

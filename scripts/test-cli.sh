@@ -259,6 +259,9 @@ mcheck "mtr: destination ignores ping" 9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 9.9.9.
 mcheck "mtr: latency jump"             9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 0 9 8 12\n3 9.9.9.9 0 180 170 200' "Latency jumps by about 171 ms at hop 3" 0
 mcheck "mtr: temporary spike is not a jump" 9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 0 200 8 300\n3 9.9.9.9 0 12 10 15' "Path looks healthy" 0
 out=$(mv 9.9.9.9 $'1 192.168.0.1 0 1 1 2\n2 10.0.0.1 0 200 8 300\n3 9.9.9.9 0 12 10 15'); if printf '%s' "$out" | grep -q "Latency jumps"; then fail "mtr: a spike that does not persist must not be reported" "$(printf '%s' "$out" | tr '\n' ' ' | cut -c1-160)"; else pass; fi
+lib "mtr: destination from the normal first line" 0 "9.9.9.9" "printf '%s\n' 'traceroute to dns9.quad9.net (9.9.9.9), 30 hops max' ' 1  192.168.0.1  1 ms' | mtr_dest"
+lib "mtr: destination after a multi-address warning" 0 "93.184.216.34" "printf '%s\n' 'traceroute: Warning: example.com has multiple addresses; using 93.184.216.34' 'traceroute to example.com (93.184.216.34), 30 hops max' ' 1  10.0.0.1  1 ms' | mtr_dest"
+out=$(PATH="$T/bin:$PATH" NETDOCTOR_SOURCE_ONLY=1 /bin/bash -c ". $ND; printf '%s\n' 'traceroute: Warning: example.com has multiple addresses; using 93.184.216.34' 'traceroute to example.com (93.184.216.34), 30 hops max' | mtr_dest | wc -l" | tr -d ' '); [ "$out" = 1 ] && pass || fail "mtr: only one destination line" "$out"
 expect "mtr: bad count"           1 "from 3 to 100"        /bin/bash $ND mtr 1.1.1.1 2
 expect "mtr: count not a number"  1 "from 3 to 100"        /bin/bash $ND mtr 1.1.1.1 abc
 expect "mtr: IPv6 unsupported"    1 "IPv4 only"            /bin/bash $ND mtr ::1
