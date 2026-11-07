@@ -8,6 +8,11 @@ let package = Package(
         .executableTarget(
             name: "NetDoctor",
             path: "Sources/NetDoctor"
-        )
+        ),
+        .testTarget(
+            name: "NetDoctorTests",
+            dependencies: ["NetDoctor"],
+            path: "Tests/NetDoctorTests"
+        ),
     ]
 )

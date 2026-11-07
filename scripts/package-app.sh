@@ -18,8 +18,8 @@ KIND=universal; [ "$UNIVERSAL" = 1 ] || KIND=$(uname -m)
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$WORK/NetDoctorApp"
 cp -R "$ROOT/assets" "$ROOT/netdoctor" "$WORK/"
-cp -R "$ROOT/NetDoctorApp/Package.swift" "$ROOT/NetDoctorApp/Sources" "$ROOT/NetDoctorApp/Resources" \
-      "$ROOT/NetDoctorApp/build-app.sh" "$WORK/NetDoctorApp/"
+cp -R "$ROOT/NetDoctorApp/Package.swift" "$ROOT/NetDoctorApp/Sources" "$ROOT/NetDoctorApp/Tests" "$ROOT/NetDoctorApp/Resources" \
+      "$ROOT/NetDoctorApp/build-app.sh" "$WORK/NetDoctorApp/"   # Tests: Package.swift declares the test target, so its folder must exist
 
 echo "== building NetDoctor $VER ($KIND)"
 ( cd "$WORK/NetDoctorApp" && UNIVERSAL=$UNIVERSAL ./build-app.sh )

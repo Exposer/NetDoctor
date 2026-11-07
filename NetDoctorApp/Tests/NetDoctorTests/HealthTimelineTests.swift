@@ -1,0 +1,128 @@
+import XCTest
+@testable import NetDoctor
+
+final class HealthTimelineTests: XCTestCase {
+    private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
+    private func r(_ minutes: Double, _ v: String) -> HealthRecord { HealthRecord(time: t0.addingTimeInterval(minutes * 60), verdict: v) }
+    private let gap: TimeInterval = 30 * 60
+
+    func testSameVerdictMergesIntoOneEpisode() {
+        let e = HealthTimeline.episodes([r(0, "ok"), r(5, "ok"), r(10, "ok")], gapLimit: gap, now: t0.addingTimeInterval(15 * 60))
+        XCTAssertEqual(e.count, 1)
+        XCTAssertEqual(e[0].start, t0)
+        XCTAssertEqual(e[0].duration, 15 * 60)
+    }
+
+    func testVerdictChangeStartsANewEpisode() {
+        let e = HealthTimeline.episodes([r(0, "ok"), r(5, "dns"), r(10, "ok")], gapLimit: gap, now: t0.addingTimeInterval(15 * 60))
+        XCTAssertEqual(e.map { $0.verdict }, ["ok", "dns", "ok"])
+        XCTAssertEqual(e[1].duration, 5 * 60)
+    }
+
+    func testDifferentProblemsAreSeparateEpisodes() {
+        let e = HealthTimeline.episodes([r(0, "dns"), r(5, "http")], gapLimit: gap, now: t0.addingTimeInterval(10 * 60))
+        XCTAssertEqual(e.map { $0.verdict }, ["dns", "http"])
+    }
+
+    func testAGapLeavesTheTimeEmpty() {
+        // checks at 0 and 120 min with a 30 min limit: 0–30 is covered, 30–120 is unknown
+        let e = HealthTimeline.episodes([r(0, "ok"), r(120, "ok")], gapLimit: gap, now: t0.addingTimeInterval(125 * 60))
+        XCTAssertEqual(e.count, 2, "records across a gap must not merge")
+        XCTAssertEqual(e[0].duration, 30 * 60)
+        XCTAssertEqual(e[1].duration, 5 * 60)
+    }
+
+    func testTheLastRecordStopsAtTheGapLimitWhenItIsOld() {
+        let e = HealthTimeline.episodes([r(0, "ok")], gapLimit: gap, now: t0.addingTimeInterval(10 * 3600))
+        XCTAssertEqual(e[0].duration, 30 * 60)
+    }
+
+    func testTheLastRecordReachesNowWhenRecent() {
+        let e = HealthTimeline.episodes([r(0, "dns")], gapLimit: gap, now: t0.addingTimeInterval(7 * 60))
+        XCTAssertEqual(e[0].duration, 7 * 60)
+    }
+
+    func testRecordsInAnyOrder() {
+        let e = HealthTimeline.episodes([r(10, "ok"), r(0, "dns"), r(5, "dns")], gapLimit: gap, now: t0.addingTimeInterval(15 * 60))
+        XCTAssertEqual(e.map { $0.verdict }, ["dns", "ok"])
+        XCTAssertEqual(e[0].duration, 10 * 60)
+    }
+
+    func testNoRecordsNoEpisodes() {
+        XCTAssertTrue(HealthTimeline.episodes([], gapLimit: gap, now: t0).isEmpty)
+        XCTAssertNil(HealthTimeline.healthyShare([]))
+    }
+
+    func testHealthyShare() {
+        let e = HealthTimeline.episodes([r(0, "ok"), r(30, "dns"), r(40, "ok")], gapLimit: 3600, now: t0.addingTimeInterval(50 * 60))
+        // ok 0–30, dns 30–40, ok 40–50: 40 of 50 minutes healthy
+        XCTAssertEqual(HealthTimeline.healthyShare(e)!, 0.8, accuracy: 0.0001)
+    }
+
+    func testUnstableIsNotHealthy() {
+        let e = HealthTimeline.episodes([r(0, "ok"), r(10, "wifi")], gapLimit: 3600, now: t0.addingTimeInterval(20 * 60))
+        XCTAssertEqual(HealthTimeline.healthyShare(e)!, 0.5, accuracy: 0.0001)
+    }
+
+    func testSeverity() {
+        XCTAssertEqual(HealthRecord.severity(of: "ok"), .good)
+        XCTAssertEqual(HealthRecord.severity(of: "wifi"), .warning)
+        XCTAssertEqual(HealthRecord.severity(of: "unstable"), .warning)
+        for v in ["dns", "dns_all", "gateway", "internet", "link", "dhcp", "captive", "clock", "http", "never-heard-of-it"] {
+            XCTAssertEqual(HealthRecord.severity(of: v), .problem, v)
+        }
+    }
+
+    func testClippingCutsEpisodesAtTheEdges() {
+        let e = HealthTimeline.episodes([r(0, "ok"), r(60, "dns")], gapLimit: 7200, now: t0.addingTimeInterval(120 * 60))
+        let c = HealthTimeline.clipped(e, from: t0.addingTimeInterval(30 * 60), to: t0.addingTimeInterval(90 * 60))
+        XCTAssertEqual(c.map { $0.verdict }, ["ok", "dns"])
+        XCTAssertEqual(c[0].start, t0.addingTimeInterval(30 * 60))
+        XCTAssertEqual(c[0].end, t0.addingTimeInterval(60 * 60))
+        XCTAssertEqual(c[1].end, t0.addingTimeInterval(90 * 60))
+    }
+
+    func testClippingDropsEpisodesOutsideTheRange() {
+        let e = HealthTimeline.episodes([r(0, "dns"), r(10, "ok")], gapLimit: 3600, now: t0.addingTimeInterval(20 * 60))
+        let c = HealthTimeline.clipped(e, from: t0.addingTimeInterval(15 * 60), to: t0.addingTimeInterval(20 * 60))
+        XCTAssertEqual(c.map { $0.verdict }, ["ok"])
+    }
+
+    func testPruningByAgeAndCount() {
+        let now = t0.addingTimeInterval(20 * 86400)
+        let old = HealthRecord(time: t0, verdict: "ok")
+        let recent = (0..<10).map { HealthRecord(time: now.addingTimeInterval(Double(-$0) * 60), verdict: "ok") }
+        let p = HealthTimeline.pruned([old] + recent, now: now, maxAge: 14 * 86400, maxCount: 4)
+        XCTAssertEqual(p.count, 4)
+        XCTAssertFalse(p.contains(old))
+        XCTAssertEqual(p.last!.time, now, "the newest records are the ones kept")
+    }
+
+    func testVerdictCodeParsing() {
+        XCTAssertEqual(HealthCheck.code(from: "== Verdict ==\n[ OK ] fine\nverdict=ok\n"), "ok")
+        XCTAssertEqual(HealthCheck.code(from: "x\nverdict=dns_all\n"), "dns_all")
+        XCTAssertNil(HealthCheck.code(from: "no code here"))
+        XCTAssertNil(HealthCheck.code(from: "verdict=\n"))
+        XCTAssertNil(HealthCheck.code(from: "verdict=DROP TABLE\n"), "only lowercase letters and underscores are accepted")
+    }
+
+    func testHistoryIsSavedAndReloaded() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("nd-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("sub/history.json")
+        let h = HealthHistory(url: url)
+        h.add(verdict: "ok", at: Date().addingTimeInterval(-120))
+        h.add(verdict: "dns", at: Date().addingTimeInterval(-60))
+        let again = HealthHistory(url: url)
+        XCTAssertEqual(again.records.map { $0.verdict }, ["ok", "dns"])
+        again.clear()
+        XCTAssertTrue(HealthHistory(url: url).records.isEmpty)
+    }
+
+    func testCorruptHistoryFileIsIgnored() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("nd-bad-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try "not json".write(to: url, atomically: true, encoding: .utf8)
+        XCTAssertTrue(HealthHistory(url: url).records.isEmpty)
+    }
+}

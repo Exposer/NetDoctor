@@ -630,6 +630,7 @@ netdoctor mtu|$(L "Rule out MTU problems (VPN)" "排除 MTU 问题 (VPN)")";;
     done
   fi
   DOCTOR_VERDICT=$verdict; DOCTOR_IFC=$ifc   # 给 cmd_fix 用 (cmd_doctor 不在子 shell 里运行, 全局变量可见)
+  [ -n "${NETDOCTOR_VERDICT_LINE:-}" ] && echo "verdict=${verdict:-ok}"   # 给 App 的健康历史用: 结论代码 (ok / dns / wifi / ...), 不会出现在人看的输出里
   [ "$FAILS" -eq 0 ] && [ "$verdict" != unstable ] && [ "$verdict" != wifi ]
 }
 

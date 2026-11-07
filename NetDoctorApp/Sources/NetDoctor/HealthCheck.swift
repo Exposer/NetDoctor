@@ -1,15 +1,59 @@
 import Foundation
 
-/// Runs `netdoctor doctor` in the background (no window) and keeps a one-line result for the menu bar.
+/// Runs `netdoctor doctor` in the background (no window), keeps a one-line result for the menu bar and records
+/// every result in `HealthHistory`. It can also run by itself every few minutes.
 final class HealthCheck: ObservableObject {
+    static let shared = HealthCheck()
+    static let intervals = [0, 5, 15, 30, 60]       // minutes; 0 = off
+
     @Published var running = false
     @Published var summary = ""     // e.g. "12:03  Everything looks healthy."
     @Published var healthy: Bool? = nil
+    /// Automatic check every N minutes (0 = off). Kept across launches.
+    @Published var intervalMinutes: Int = {
+        let v = UserDefaults.standard.integer(forKey: "healthIntervalMinutes")
+        return HealthCheck.intervals.contains(v) ? v : 0
+    }() {
+        didSet {
+            guard intervalMinutes != oldValue else { return }
+            UserDefaults.standard.set(intervalMinutes, forKey: "healthIntervalMinutes")
+            reschedule()
+            if intervalMinutes > 0 { run(scheduled: true) }     // switching it on checks right away
+        }
+    }
 
-    func run() {
+    private var timer: Timer?
+    private let history = HealthHistory.shared
+
+    static func intervalLabel(_ m: Int) -> String {
+        switch m {
+        case 0: return loc("Off")
+        case 60: return loc("Every hour")
+        default: return String(format: loc("Every %d minutes"), m)
+        }
+    }
+
+    /// Call once at launch: starts the timer when automatic checks were switched on earlier.
+    func start() {
+        reschedule()
+        if intervalMinutes > 0 { run(scheduled: true) }     // and once now, so the history has a point from the moment the app starts
+    }
+
+    private func reschedule() {
+        timer?.invalidate(); timer = nil
+        guard intervalMinutes > 0 else { return }
+        let t = Timer(timeInterval: TimeInterval(intervalMinutes * 60), repeats: true) { [weak self] _ in self?.run(scheduled: true) }
+        t.tolerance = 15
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    /// `scheduled`: a failing result is checked once more after 20 s before it is recorded, because right
+    /// after the Mac wakes up the network is often not back yet, and that would be a false alarm in the history.
+    func run(scheduled: Bool = false, retried: Bool = false) {
         guard !running else { return }
         guard let script = Runner.scriptPath else { summary = loc("netdoctor script not found"); return }
-        running = true; summary = loc("Running…")
+        running = true; summary = loc(retried ? "Checking again…" : "Running…")
         DispatchQueue.global().async {
             let p = Process()
             p.executableURL = URL(fileURLWithPath: "/bin/bash")
@@ -17,6 +61,7 @@ final class HealthCheck: ObservableObject {
             var env = Runner.env
             env["NETDOCTOR_COLOR"] = nil          // plain text: we only read the verdict line
             env["NETDOCTOR_NOSUDO"] = "1"
+            env["NETDOCTOR_VERDICT_LINE"] = "1"   // adds a last line "verdict=<code>" for the history
             p.environment = env
             let pipe = Pipe(); p.standardOutput = pipe; p.standardError = pipe
             p.standardInput = FileHandle.nullDevice
@@ -27,8 +72,14 @@ final class HealthCheck: ObservableObject {
                 text = String(decoding: data, as: UTF8.self)
             }
             let verdict = HealthCheck.verdict(from: text)
+            let verdictCode = HealthCheck.code(from: text)
             DispatchQueue.main.async {
                 self.running = false
+                if scheduled, !retried, let c = verdictCode, c != "ok" {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 20) { self.run(scheduled: true, retried: true) }
+                    self.summary = loc("Checking again…")
+                    return
+                }
                 let t = DateFormatter(); t.timeStyle = .short; t.dateStyle = .none
                 if code < 0 || verdict.isEmpty {
                     self.healthy = nil
@@ -36,6 +87,7 @@ final class HealthCheck: ObservableObject {
                 } else {
                     self.healthy = (code == 0)
                     self.summary = "\(t.string(from: Date()))  \(verdict)"
+                    if let c = verdictCode { self.history.add(verdict: c) }
                 }
             }
         }
@@ -52,5 +104,14 @@ final class HealthCheck: ObservableObject {
             return s
         }
         return ""
+    }
+
+    /// The machine-readable "verdict=<code>" line (only lowercase letters and underscores are accepted).
+    static func code(from text: String) -> String? {
+        for l in text.components(separatedBy: "\n").reversed() where l.hasPrefix("verdict=") {
+            let c = String(l.dropFirst("verdict=".count)).trimmingCharacters(in: .whitespaces)
+            if !c.isEmpty, c.range(of: "^[a-z_]+$", options: .regularExpression) != nil { return c }
+        }
+        return nil
     }
 }

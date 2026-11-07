@@ -440,6 +440,11 @@ lib "doctor: unstable + weak Wi-Fi blames Wi-Fi" 1 "the Wi-Fi link itself is wea
 lib "doctor: wired default interface skips Wi-Fi" 0 "Everything looks healthy" "$(drwifi -80 -92 'WIFI_IF=en9; export WIFI_IF; cmd_doctor')"
 lib_not "doctor: wired default interface prints no Wi-Fi line" "$(drwifi -80 -92 'WIFI_IF=en9; export WIFI_IF; cmd_doctor')" "Wi-Fi:"
 lib "doctor: no Wi-Fi data in the profile is silent" 0 "Everything looks healthy" "$DR; system_profiler() { :; }; cmd_doctor"
+lib "doctor: no verdict line by default"        0 "" "$(drwifi -50 -90 'cmd_doctor | grep -c "^verdict=" | grep -qx 0')"
+lib "doctor: verdict line when asked (healthy)" 0 "verdict=ok"   "$(drwifi -50 -90 'NETDOCTOR_VERDICT_LINE=1 cmd_doctor')"
+lib "doctor: verdict line (weak Wi-Fi)"         1 "verdict=wifi" "$(drwifi -80 -92 'NETDOCTOR_VERDICT_LINE=1 cmd_doctor')"
+lib "doctor: verdict line (DNS)"                1 "verdict=dns"  "$(drwifi -50 -90 'resolves() { return 1; }; NETDOCTOR_VERDICT_LINE=1 cmd_doctor')"
+lib "doctor: verdict line is the last line of the output" 0 "verdict=ok" "$(drwifi -50 -90 'NETDOCTOR_VERDICT_LINE=1 cmd_doctor | tail -1')"
 lib "fix: weak Wi-Fi has no automatic fix"    1 "weak Wi-Fi signal" "$(drwifi -80 -92 cmd_fix)"
 
 # ---- 14. dnsset and dnsbench apply -----------------------------------------------------------------------

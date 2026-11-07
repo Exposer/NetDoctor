@@ -3,10 +3,12 @@ import SwiftUI
 @main
 struct NetDoctorApp: App {
     @StateObject private var monitor = LatencyMonitor()
-    @StateObject private var health = HealthCheck()
+    @StateObject private var health = HealthCheck.shared
     @State private var loginItem = LoginItem.isEnabled
     @State private var loginError = ""
     @Environment(\.openWindow) private var openWindow
+
+    init() { HealthCheck.shared.start() }   // the menu bar content is built lazily; the timer must not wait for it
 
     var body: some Scene {
         WindowGroup("NetDoctor Network Diagnostics", id: "main") {
@@ -20,6 +22,16 @@ struct NetDoctorApp: App {
             Divider()
             Button(LocalizedStringKey(health.running ? "Checking…" : "Run health check")) { health.run() }.disabled(health.running)
             if !health.summary.isEmpty { Text(health.summary) }
+            Menu("Automatic health check") {
+                Picker("Automatic health check", selection: $health.intervalMinutes) {
+                    ForEach(HealthCheck.intervals, id: \.self) { Text(HealthCheck.intervalLabel($0)).tag($0) }
+                }.pickerStyle(.inline)
+            }
+            Button("Show health history") {
+                Navigation.shared.selection = "health"
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: "main")
+            }
             Divider()
             Button(LocalizedStringKey(monitor.running ? "Stop monitoring" : "Start monitoring")) {
                 monitor.running ? monitor.stop() : monitor.start()

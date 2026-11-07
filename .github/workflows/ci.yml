@@ -2,7 +2,7 @@ name: CI
 
 # Runs on every push to main and on every pull request.
 # Everything here is also runnable locally, with the same commands:
-#   python3 scripts/check.py && /bin/bash scripts/test-cli.sh && scripts/package-app.sh
+#   python3 scripts/check.py && /bin/bash scripts/test-cli.sh && (cd NetDoctorApp && swift test) && scripts/package-app.sh
 on:
   push:
     branches: [main]
@@ -38,6 +38,9 @@ jobs:
 
       - name: CLI tests (hermetic, no network)
         run: /bin/bash scripts/test-cli.sh
+
+      - name: App unit tests (health history logic)
+        run: cd NetDoctorApp && swift test
 
       - name: Build, sign and zip the universal app
         run: scripts/package-app.sh

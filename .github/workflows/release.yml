@@ -33,6 +33,9 @@ jobs:
           python3 scripts/check.py
           /bin/bash scripts/test-cli.sh
 
+      - name: App unit tests (health history logic)
+        run: cd NetDoctorApp && swift test
+
       - name: Build, sign and zip the universal app
         run: scripts/package-app.sh
 

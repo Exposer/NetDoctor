@@ -96,6 +96,6 @@ xcode-select --install                 # skip if already installed
 cd NetDoctorApp && ./build-app.sh      # UNIVERSAL=1 ./build-app.sh builds for Intel + Apple silicon
 open NetDoctor.app
 ```
-Features: all diagnostic tools, live output, stop/copy/save, a live latency chart, and latency shown in the menu bar. The UI follows the system language (English / Simplified Chinese).
+Features: all diagnostic tools, live output, stop/copy/save, a live latency chart, latency shown in the menu bar, and a **health history** (runs the diagnosis in the background on a schedule and shows on a timeline when, and at which layer, the network had problems; pick the interval in the menu bar → Automatic health check; records are kept for 14 days). The UI follows the system language (English / Simplified Chinese).
 If the build fails on your toolchain, please open an issue.
 Development: `cd NetDoctorApp && NETDOCTOR_PATH=../netdoctor swift run`

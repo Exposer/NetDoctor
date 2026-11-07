@@ -7,11 +7,11 @@ private let termBg = Color(red: 0.07, green: 0.08, blue: 0.10)
 struct ContentView: View {
     @StateObject private var store = RunnerStore()
     @EnvironmentObject var monitor: LatencyMonitor
-    @State private var selection: String? = "quick"
+    @ObservedObject private var nav = Navigation.shared
 
     var body: some View {
         NavigationSplitView {
-            List(selection: $selection) {
+            List(selection: $nav.selection) {
                 Section("Diagnostics") {
                     ForEach(Tool.all) { t in
                         Label(LocalizedStringKey(t.title), systemImage: t.icon).tag(Optional(t.id))
@@ -19,13 +19,16 @@ struct ContentView: View {
                 }
                 Section("Monitoring") {
                     Label("Live latency", systemImage: "chart.xyaxis.line").tag(Optional("monitor"))
+                    Label("Health history", systemImage: "waveform.path.ecg").tag(Optional("health"))
                 }
             }
             .navigationSplitViewColumnWidth(min: 170, ideal: 200, max: 260)
         } detail: {
-            if selection == "monitor" {
+            if nav.selection == "monitor" {
                 MonitorView()
-            } else if let t = Tool.all.first(where: { $0.id == selection }) {
+            } else if nav.selection == "health" {
+                HealthHistoryView()
+            } else if let t = Tool.all.first(where: { $0.id == nav.selection }) {
                 ToolView(runner: store.runner(for: t))
             } else {
                 Text("Select a tool on the left").foregroundStyle(.secondary)
