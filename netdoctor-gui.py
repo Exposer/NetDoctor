@@ -134,6 +134,7 @@ ZH = {
     "Pings every favorite and alerts when one goes down.": "逐个 ping 收藏的主机,有主机掉线时提醒。",
     "Slow above (ms)": "慢于(毫秒)",
     "Notify": "桌面通知",
+    "No verdict (is the NetDoctor server still running?)": "没有拿到结论(NetDoctor 服务还在运行吗?)",
     "Notifications are blocked by the browser": "浏览器已阻止通知",
     "Trend": "趋势",
     "Status": "状态",
@@ -612,11 +613,11 @@ if(k>=0)for(let i=k+1;i<lines.length;i++){const m=lines[i].match(/^\[(FAIL| OK |
 return{cls:'bad',text:'?'}}
 async function acTick(){if(acbusy)return;acbusy=true;clearTimeout(acto);renderAc();const t0=Date.now();let out='',state='ok';
 try{const r=await fetch('/run',{method:'POST',headers:{'X-Token':TOKEN},body:JSON.stringify({cmd:'doctor',values:{},admin:false,lang})});if(!r.ok)state='failed';out=await r.text()}catch(e){state='failed';out=String(e)}
-const v=acVerdict(out);if(v.cls!='ok')state='failed';
+let v=acVerdict(out);const noRes=v.text=='?';if(noRes)v={cls:'warn',text:t('No verdict (is the NetDoctor server still running?)')};if(v.cls!='ok')state='failed';
 addHist({cmd:'doctor',values:{},admin:false,state,sec:+((Date.now()-t0)/1000).toFixed(1),out});
 aclog.unshift({ts:Date.now(),cls:v.cls,text:v.text,hid:hist.length?hist[0].id:null});aclog=aclog.slice(0,50);
-if(accls!==null&&accls!==v.cls&&$('#acnote').checked&&'Notification' in window&&Notification.permission=='granted'){try{new Notification('NetDoctor',{body:t('Network verdict: %s').replace('%s',v.text)})}catch(e){}}
-accls=v.cls;acbusy=false;acUpdateTitle();renderAc();if(acrun)acto=setTimeout(acTick,acmin*60000)}
+if(!noRes&&accls!==null&&accls!==v.cls&&$('#acnote').checked&&'Notification' in window&&Notification.permission=='granted'){try{new Notification('NetDoctor',{body:t('Network verdict: %s').replace('%s',v.text)})}catch(e){}}
+if(!noRes)accls=v.cls;acbusy=false;acUpdateTitle();renderAc();if(acrun)acto=setTimeout(acTick,acmin*60000)}
 function acUpdateTitle(){if(!wlrun)document.title=(acrun&&accls=='bad'?'⚠ ':'')+BASE_TITLE()}
 async function acNotifyChange(cb){if(!cb.checked)return;if(!('Notification' in window)){cb.checked=false;return}
 if(Notification.permission=='default'){try{await Notification.requestPermission()}catch(e){}}
