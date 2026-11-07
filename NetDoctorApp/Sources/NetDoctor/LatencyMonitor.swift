@@ -11,8 +11,17 @@ struct Sample: Identifiable {
 final class LatencyMonitor: ObservableObject {
     @Published var samples: [Sample] = []
     // Samples of the old target must not be mixed into the chart of the new one.
-    @Published var target = "1.1.1.1" { didSet { if target != oldValue { samples.removeAll() } } }
+    @Published var target = "1.1.1.1" { didSet { if target != oldValue { clear() } } }
     @Published var running = false
+    /// Notify when the connection drops (3 failed pings in a row) and when it comes back.
+    @Published var notifyOnLoss = UserDefaults.standard.bool(forKey: "notifyOnLoss") {
+        didSet { UserDefaults.standard.set(notifyOnLoss, forKey: "notifyOnLoss"); if notifyOnLoss { Notifier.requestAuthorization() } }
+    }
+    /// Longer than the chart's 180 samples, so an export covers up to two hours.
+    private(set) var history: [Sample] = []
+    private let maxHistory = 7200
+    private var lossStreak = 0
+    private var outageStart: Date?
 
     private var timer: Timer?
     private let maxSamples = 180
@@ -45,7 +54,35 @@ final class LatencyMonitor: ObservableObject {
     }
 
     func stop() { timer?.invalidate(); timer = nil; running = false }
-    func clear() { samples.removeAll() }
+    func clear() { samples.removeAll(); history.removeAll(); lossStreak = 0; outageStart = nil }
+
+    /// CSV of everything recorded since the last Clear / target change: ISO-8601 time, target, latency (empty = lost), lost flag.
+    func csv() -> String {
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var out = "time,target,latency_ms,lost\n"
+        let t = target.trimmingCharacters(in: .whitespaces)
+        for s in history { out += "\(f.string(from: s.time)),\(t),\(s.ms.map { String(format: "%.3f", $0) } ?? ""),\(s.ms == nil ? 1 : 0)\n" }
+        return out
+    }
+
+    private func record(_ s: Sample) {
+        samples.append(s)
+        if samples.count > maxSamples { samples.removeFirst(samples.count - maxSamples) }
+        history.append(s)
+        if history.count > maxHistory { history.removeFirst(history.count - maxHistory) }
+        if s.ms == nil {
+            lossStreak += 1
+            if lossStreak == 3 {
+                outageStart = s.time
+                if notifyOnLoss { Notifier.post(title: loc("Network connection lost"), body: String(format: loc("%@ is not answering."), target)) }
+            }
+        } else {
+            if let t = outageStart, notifyOnLoss {
+                Notifier.post(title: loc("Network is back"), body: String(format: loc("%@ answers again after about %d s."), target, Int(s.time.timeIntervalSince(t)) + 3))
+            }
+            lossStreak = 0; outageStart = nil
+        }
+    }
 
     private func tick() {
         guard !inFlight else { return }
@@ -73,8 +110,7 @@ final class LatencyMonitor: ObservableObject {
                 guard self.running else { return }
                 // The target was edited while this ping was in flight: the result belongs to the old target.
                 guard self.target.trimmingCharacters(in: .whitespaces) == host else { return }
-                self.samples.append(Sample(time: Date(), ms: ms))
-                if self.samples.count > self.maxSamples { self.samples.removeFirst(self.samples.count - self.maxSamples) }
+                self.record(Sample(time: Date(), ms: ms))
             }
         }
     }

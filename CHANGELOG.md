@@ -7,6 +7,7 @@
 ## [未发布]
 
 ### 新增
+- App 菜单栏增强:**立即体检**(后台运行 `doctor`,在菜单里显示结论并发系统通知)、**断网时发送通知**(连续 3 次 ping 失败时提醒,恢复后再提醒并给出中断时长)、**登录时自动打开**(系统登录项)。实时延迟页新增 **导出 CSV**(最近最多 2 小时的逐秒记录:时间、目标、延迟、是否丢包)。
 - `netdoctor speed` 现在会给出结论:解析 `networkQuality` 的响应性(RPM),判断是否存在缓冲膨胀(例如“上传满载时延迟很高,有人上传时视频会议会卡”),并给出 SQM / 限速建议;上传带宽过低时也会提醒。读不到数据时明确说明而不是瞎猜。
 - `netdoctor lan` 增加“名称”和“厂商”列:没有名字的设备向网关做反向 DNS 解析;识别手机的随机(私有)MAC;系统没有自带 OUI 库,所以厂商从 `~/.netdoctor/oui.txt`、nmap 或 Wireshark 的库读取,都没有时只标随机 MAC,不猜厂商。
 - 开发工具:`scripts/check.py`(工具列表、翻译、链接、版本与更新日志一致性检查)、`scripts/test-cli.sh`(78 个无网络、无 sudo 的 CLI 测试)、`scripts/package-app.sh`(构建通用架构 App、签名、校验、打包)、`scripts/release-notes.sh`;GitHub Actions:`ci.yml` 每次推送 / PR 自动检查并构建 App,`release.yml` 推送 `v*` 标签时自动校验版本、构建并发布 release。`netdoctor` 支持 `NETDOCTOR_SOURCE_ONLY=1` 作为函数库被 source(仅供测试)。

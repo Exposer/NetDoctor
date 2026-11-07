@@ -96,3 +96,15 @@
 "DHCP / IP address" = "DHCP / IP address";
 "Check the DHCP lease and spot a self-assigned 169.254 address (DHCP failed)" = "Check the DHCP lease and spot a self-assigned 169.254 address (DHCP failed)";
 "Hide personal info (public IP, MAC, Wi-Fi name, host name)" = "Hide personal info (public IP, MAC, Wi-Fi name, host name)";
+"Run health check" = "Run health check";
+"Checking…" = "Checking…";
+"Notify when the connection drops" = "Notify when the connection drops";
+"Open at login" = "Open at login";
+"Export CSV…" = "Export CSV…";
+"Could not run the health check" = "Could not run the health check";
+"Network check: OK" = "Network check: OK";
+"Network check: problem found" = "Network check: problem found";
+"Network connection lost" = "Network connection lost";
+"%@ is not answering." = "%@ is not answering.";
+"Network is back" = "Network is back";
+"%@ answers again after about %d s." = "%@ answers again after about %d s.";

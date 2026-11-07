@@ -96,3 +96,15 @@
 "DHCP / IP address" = "DHCP / IP 地址";
 "Check the DHCP lease and spot a self-assigned 169.254 address (DHCP failed)" = "查看 DHCP 租约, 识别 169.254 自分配地址 (DHCP 失败)";
 "Hide personal info (public IP, MAC, Wi-Fi name, host name)" = "隐藏个人信息(公网 IP、MAC、Wi-Fi 名称、主机名)";
+"Run health check" = "立即体检";
+"Checking…" = "正在体检…";
+"Notify when the connection drops" = "断网时发送通知";
+"Open at login" = "登录时自动打开";
+"Export CSV…" = "导出 CSV…";
+"Could not run the health check" = "无法运行体检";
+"Network check: OK" = "网络体检:正常";
+"Network check: problem found" = "网络体检:发现问题";
+"Network connection lost" = "网络连接中断";
+"%@ is not answering." = "%@ 没有应答。";
+"Network is back" = "网络已恢复";
+"%@ answers again after about %d s." = "%@ 约 %d 秒后恢复应答。";

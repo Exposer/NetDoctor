@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import UniformTypeIdentifiers
 
 private let termBg = Color(red: 0.07, green: 0.08, blue: 0.10)
 
@@ -131,6 +132,7 @@ struct MonitorView: View {
                 Button(LocalizedStringKey(m.running ? "Stop" : "Start")) { m.running ? m.stop() : m.start() }
                     .buttonStyle(.borderedProminent)
                 Button("Clear") { m.clear() }
+                Button("Export CSV…") { exportCSV() }.disabled(m.history.isEmpty)
                 Spacer()
             }
             HStack(spacing: 12) {
@@ -158,6 +160,15 @@ struct MonitorView: View {
             Spacer(minLength: 0)
         }
         .padding(16)
+    }
+
+    private func exportCSV() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.commaSeparatedText]
+        let f = DateFormatter(); f.dateFormat = "yyyyMMdd-HHmmss"
+        panel.nameFieldStringValue = "netdoctor-latency-\(f.string(from: Date())).csv"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        try? m.csv().write(to: url, atomically: true, encoding: .utf8)
     }
 
     private func stat(_ title: LocalizedStringKey, _ value: String, warn: Bool = false) -> some View {
